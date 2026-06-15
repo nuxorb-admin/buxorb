@@ -1,0 +1,143 @@
+@import "tailwindcss";
+
+/* =========================================================
+   nUXorb — Tema editorial (inspirado en overland / SENDA)
+   Paleta arena · teal tinta · naranja · amarillo
+   ========================================================= */
+@theme {
+  --color-sand: #f1f3f2; /* fondo principal (gris claro) */
+  --color-sand-2: #ffffff; /* tarjetas / superficies */
+  --color-ink: #16302b; /* carbón verdoso (ORB / secciones oscuras) */
+  --color-ink-2: #1f433b; /* carbón más claro */
+  --color-black: #10211d; /* casi negro verdoso (footer) */
+  --color-orange: #ff5c00; /* acento (chispa) */
+  --color-orange-dark: #e24f00;
+  --color-teal: #159b8a; /* color de marca dominante */
+  --color-teal-dark: #0e7567;
+  --color-gray: #d9d9d9; /* gris neutro del logo */
+  --color-muted: #5c6b66; /* texto secundario */
+
+  --font-display: "Anton", "Arial Narrow", sans-serif;
+  --font-brand: "Montserrat", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Space Mono", ui-monospace, monospace;
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+
+  --ease-out-back: cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+html {
+  scroll-behavior: smooth;
+  scroll-padding-top: 80px;
+}
+
+body {
+  background-color: var(--color-sand);
+  /* cuadrícula sutil (como la presentación de marca) */
+  background-image:
+    linear-gradient(to right, rgba(22, 48, 43, 0.05) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(22, 48, 43, 0.05) 1px, transparent 1px);
+  background-size: 44px 44px;
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: var(--color-orange);
+  color: #fff;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+}
+
+@layer components {
+  .container-x {
+    @apply mx-auto w-full max-w-[1240px] px-6;
+  }
+
+  /* Etiqueta monospace tipo "00 — Bienvenido" */
+  .label {
+    @apply font-mono text-xs font-normal uppercase tracking-[0.18em] text-muted;
+  }
+  .label-light {
+    @apply font-mono text-xs uppercase tracking-[0.18em] text-white/55;
+  }
+
+  /* Titulares display gigantes */
+  .display {
+    @apply font-display uppercase leading-[0.9] tracking-[0.005em];
+  }
+  /* Palabra en contorno (outline) */
+  .outline-word {
+    color: transparent;
+    -webkit-text-stroke: 2px var(--color-ink);
+  }
+  .outline-word-light {
+    color: transparent;
+    -webkit-text-stroke: 2px rgba(255, 255, 255, 0.85);
+  }
+  /* Palabra acentuada en cursiva teal (color de marca) */
+  .accent-word {
+    @apply italic text-teal;
+  }
+
+  /* Botones */
+  .btn {
+    @apply inline-flex cursor-pointer items-center justify-center gap-2.5 whitespace-nowrap border-2 border-transparent px-6 py-3 font-mono text-xs font-bold uppercase tracking-[0.12em] no-underline transition-all duration-200;
+  }
+  .btn-lg {
+    @apply px-8 py-4 text-sm;
+  }
+  .btn-primary {
+    @apply bg-teal text-white hover:bg-teal-dark;
+  }
+  .btn-orange {
+    @apply bg-orange text-white hover:bg-orange-dark;
+  }
+  .btn-dark {
+    @apply bg-ink text-white hover:bg-black;
+  }
+  .btn-outline {
+    @apply border-ink/30 bg-transparent text-ink hover:border-ink;
+  }
+  .btn-outline-light {
+    @apply border-white/35 bg-transparent text-white hover:border-white hover:bg-white/10;
+  }
+
+  /* Pills de filtro */
+  .pill {
+    @apply cursor-pointer border border-ink/20 bg-transparent px-4 py-2 font-mono text-[0.7rem] font-bold uppercase tracking-[0.12em] text-ink/70 transition-colors hover:border-ink/50;
+  }
+  .pill-active {
+    @apply border-ink bg-ink text-white;
+  }
+
+  /* Especificación monospace en tarjetas */
+  .spec {
+    @apply font-mono text-[0.78rem] tracking-tight text-muted;
+  }
+}
+
+/* Reveal on scroll */
+.reveal {
+  opacity: 0;
+  transform: translateY(24px);
+  transition:
+    opacity 0.7s var(--ease-out-back),
+    transform 0.7s var(--ease-out-back);
+}
+.reveal.is-visible {
+  opacity: 1;
+  transform: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .reveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+}

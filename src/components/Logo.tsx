@@ -1,35 +1,31 @@
 interface LogoProps {
   variant?: "light" | "dark";
   className?: string;
-  showMark?: boolean;
+  /** Muestra la tagline + subrayado naranja (lockup completo). */
+  tagline?: boolean;
 }
 
-/** Marca NUXORB: círculos superpuestos + wordmark (NUX teal · ORB carbón). */
-export default function Logo({ variant = "light", className = "", showMark = true }: LogoProps) {
-  const orb = variant === "light" ? "#16302b" : "#ffffff";
+/** Logo NUXORB — wordmark (NUX teal · ORB carbón). */
+export default function Logo({ variant = "light", className = "", tagline = false }: LogoProps) {
+  const orb = variant === "light" ? "text-ink" : "text-white";
   return (
-    <span className={`inline-flex items-center gap-2.5 ${className}`}>
-      {showMark && (
-        <svg
-          viewBox="0 0 96 56"
-          className="h-7 w-12 flex-none"
-          xmlns="http://www.w3.org/2000/svg"
-          aria-hidden="true"
-        >
-          <circle cx="28" cy="28" r="26" fill="#159b8a" />
-          <circle cx="48" cy="28" r="22" fill="#16302b" />
-          <circle cx="62" cy="28" r="18" fill="#ffffff" />
-          <circle cx="72" cy="28" r="15" fill="#d9d9d9" />
-          <circle cx="80" cy="28" r="12" fill="#ff5c00" />
-        </svg>
-      )}
-      <span
-        className="font-brand text-xl font-semibold tracking-[0.12em]"
-        style={{ letterSpacing: "0.12em" }}
-      >
+    <span className={`inline-flex flex-col ${className}`}>
+      <span className="font-brand text-[1.35rem] font-medium leading-none tracking-[0.18em]">
         <span className="text-teal">NUX</span>
-        <span style={{ color: orb }}>ORB</span>
+        <span className={orb}>ORB</span>
       </span>
+      {tagline && (
+        <>
+          <span
+            className={`mt-2 font-brand text-[0.58rem] font-medium uppercase tracking-[0.22em] ${
+              variant === "light" ? "text-ink/75" : "text-white/65"
+            }`}
+          >
+            El núcleo inteligente de tu operación.
+          </span>
+          <span className="mt-2.5 h-[3px] w-10 bg-orange" />
+        </>
+      )}
     </span>
   );
 }

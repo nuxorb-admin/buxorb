@@ -34,11 +34,8 @@ export default function Footer() {
       <div className="container-x">
         <div className="grid gap-10 border-b border-white/10 pb-12 sm:grid-cols-2 md:grid-cols-[1.6fr_1fr_1fr_1fr]">
           <div>
-            <Logo variant="dark" />
-            <p className="mt-4 max-w-[300px] font-mono text-[0.72rem] uppercase tracking-[0.16em] text-white/40">
-              Be curious · Construye.
-            </p>
-            <p className="mt-3 max-w-[300px] text-sm">
+            <Logo variant="dark" tagline />
+            <p className="mt-5 max-w-[300px] text-sm">
               Tecnología e IA para PYMEs en México. Sin formularios eternos, sin esperas.
             </p>
           </div>

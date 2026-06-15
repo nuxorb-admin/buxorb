@@ -5,7 +5,6 @@ const links = [
   { id: "servicios", label: "Servicios" },
   { id: "proceso", label: "Proceso" },
   { id: "planes", label: "Planes" },
-  { id: "nosotros", label: "Nosotros" },
   { id: "contacto", label: "Contacto" },
 ];
 

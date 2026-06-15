@@ -15,7 +15,7 @@ const cols = [
     items: [
       { label: "Proceso", href: "#proceso" },
       { label: "Planes", href: "#planes" },
-      { label: "Nosotros", href: "#nosotros" },
+      { label: "Contacto", href: "#contacto" },
     ],
   },
   {

@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none">
+  <defs>
+    <radialGradient id="og" cx="55%" cy="28%" r="65%">
+      <stop offset="0%"   stop-color="#FFBA2E"/>
+      <stop offset="40%"  stop-color="#F97316"/>
+      <stop offset="100%" stop-color="#DC2020"/>
+    </radialGradient>
+    <radialGradient id="tl" cx="38%" cy="72%" r="68%">
+      <stop offset="0%"   stop-color="#34EDD4"/>
+      <stop offset="45%"  stop-color="#0891B2"/>
+      <stop offset="100%" stop-color="#0B4A5E"/>
+    </radialGradient>
+    <radialGradient id="hl" cx="35%" cy="30%" r="50%">
+      <stop offset="0%"  stop-color="white" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="white" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <!-- Teal band (back) -->
+  <path d="M18 62 Q10 82 30 90 Q50 98 70 88 Q88 78 88 60 Q88 44 76 38 Q62 32 50 42 Q36 52 28 48 Q18 44 18 62Z" fill="url(#tl)"/>
+  <!-- Orange band (front top) -->
+  <path d="M10 36 Q8 18 26 10 Q46 2 66 10 Q84 18 86 34 Q88 48 74 54 Q60 60 50 52 Q38 44 28 50 Q16 56 10 48 Q6 42 10 36Z" fill="url(#og)"/>
+  <!-- Inner hole -->
+  <ellipse cx="50" cy="74" rx="11" ry="7" fill="#06111A" opacity="0.82"/>
+  <!-- Highlight -->
+  <ellipse cx="38" cy="24" rx="14" ry="8" fill="url(#hl)" transform="rotate(-15 38 24)"/>
+</svg>

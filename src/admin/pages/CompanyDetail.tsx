@@ -51,11 +51,17 @@ const PRODUCT_LINE_LABELS: Record<ProductLine, string> = {
   erp: "ERP",
 };
 
+const TENANT_BASE_DOMAIN = import.meta.env.VITE_TENANT_BASE_DOMAIN || "nuxorb.com";
+
+function portalHost(subdomain: string) {
+  return `${subdomain}.${TENANT_BASE_DOMAIN}`;
+}
+
 function portalUrl(subdomain: string) {
   if (import.meta.env.DEV) {
     return `${window.location.origin}/?tenant=${subdomain}`;
   }
-  return `https://${subdomain}.nuxorb.com`;
+  return `https://${portalHost(subdomain)}`;
 }
 
 export default function CompanyDetail() {
@@ -216,7 +222,7 @@ export default function CompanyDetail() {
               rel="noreferrer"
               className="mt-2 inline-block font-mono text-[0.7rem] text-teal hover:underline"
             >
-              Ver portal → {company.subdomain}.nuxorb.com
+              Ver portal → {portalHost(company.subdomain)}
             </a>
           )}
         </div>

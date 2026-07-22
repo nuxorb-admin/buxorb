@@ -1,22 +1,14 @@
-# nUXorb — Sitio web
+# Nuxorb
 
-Sitio de **nUXorb**, agencia de tecnología e IA para PYMEs en México.
-Diseño editorial *overland* (inspirado en sitios tipo SENDA 4×4): tipografía display
-condensada, etiquetas monospace, paleta arena / teal tinta / naranja, secciones numeradas
-y textura topográfica.
+Plataforma modular de administración para PyMEs mexicanas (Tesorería, Compras y
+Proveedores, Gestión de Personal, Ventas y CxC). Este repo contiene la landing
+de marketing, el CRM interno del equipo y un demo funcional del producto.
 
-Construido con **React 19 + TypeScript + Vite 6 + Tailwind CSS v4**.
+**Para entender qué es cada cosa, cómo está armado y qué falta por construir,
+ver [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) — léelo antes de tocar
+código.**
 
-## Stack
-
-| Herramienta | Uso |
-|---|---|
-| **React 19** | UI por componentes |
-| **TypeScript** | Tipado estático |
-| **Vite 6** | Dev server y build |
-| **Tailwind CSS v4** | Estilos (tema CSS-first en `src/index.css`) |
-
-> Página única (one-page) con navegación por anclas y scroll suave. No usa router.
+Construido con **React 19 + TypeScript + Vite 6 + Tailwind CSS v4 + Supabase**.
 
 ## Scripts
 
@@ -27,39 +19,20 @@ npm run build    # producción → /dist
 npm run preview  # previsualizar el build
 ```
 
-## Estructura
+## Setup
 
-```
-.
-├── index.html                 # entrada de Vite + fuentes (Anton, Space Mono, Inter)
-├── public/
-│   ├── favicon.svg            # asterisco de marca
-│   └── topo.svg               # textura topográfica de fondo
-├── src/
-│   ├── main.tsx · App.tsx     # entrada + ensamblado de secciones
-│   ├── index.css              # Tailwind v4 + tema (paleta, fuentes) + utilidades
-│   ├── data/content.ts        # contenido (servicios, proceso, planes, equipo…)
-│   └── components/
-│       ├── Navbar.tsx · Footer.tsx · Logo.tsx · Reveal.tsx
-│       ├── ui/                # Asterisk, Counter
-│       └── sections/          # Hero, Stats, Servicios, Proceso, Planes,
-│                              #   Nosotros, Contacto, CtaFinal
-└── vite.config.ts
+```bash
+cp .env.example .env.local   # completar con credenciales reales (ver docs/ARCHITECTURE.md)
 ```
 
-## Secciones (one-page)
+Correr [`supabase/schema.sql`](./supabase/schema.sql) en el SQL Editor de tu
+proyecto de Supabase antes del primer `npm run dev`.
 
-`00` Hero · `01` Servicios (con filtros) · `02` Proceso (interactivo) ·
-`03` Planes · `04` Nosotros · `05` Contacto · CTA final.
+## Documentación
 
-## Paleta
-
-Arena `#ebe3d2` · Teal tinta `#14302a` · Naranja `#ff5c00` · Teal `#14a08c` ·
-Amarillo `#f7e15c` (definida como tema en `src/index.css`).
-
-## Pendientes de personalizar
-
-- Correo real (`hola@nuxorb.com`) y número de WhatsApp (`https://wa.me/...`).
-- El formulario de contacto es una demo en el cliente; conéctalo a un servicio
-  (Formspree, Resend, Supabase…) en `src/components/sections/Contacto.tsx → submit`.
-- Las fotos reales pueden reemplazar la consola de IA del hero y los fondos si lo deseas.
+- [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) — estado real del repo: las
+  3 superficies (landing, `/admin`, demo del SaaS), routing, modelo de datos,
+  variables de entorno, limitaciones y seguridad conocidas.
+- [`docs/ARQUITECTURA.md`](./docs/ARQUITECTURA.md) — visión de producto a
+  futuro (SaaS multi-tenant real con subdominios, monorepo, aislamiento por
+  cliente). Es referencia de vocabulario, no describe lo que existe hoy.

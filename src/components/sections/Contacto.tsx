@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from "react";
 import Asterisk from "../ui/Asterisk";
+import { supabase } from "../../lib/supabase";
 
 const serviceOptions = [
   "Agente IA / Chatbot",
@@ -20,6 +21,8 @@ const labelClass =
 export default function Contacto() {
   const [form, setForm] = useState(initial);
   const [sent, setSent] = useState(false);
+  const [error, setError] = useState(false);
+  const [sending, setSending] = useState(false);
 
   function update(
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>,
@@ -27,9 +30,24 @@ export default function Contacto() {
     setForm({ ...form, [e.target.name]: e.target.value });
   }
 
-  function submit(e: FormEvent) {
+  async function submit(e: FormEvent) {
     e.preventDefault();
-    // Demo sin backend — conecta aquí Formspree / Resend / Supabase.
+    setSending(true);
+    setError(false);
+    const { error } = await supabase.from("leads").insert({
+      name: form.nombre,
+      email: form.email,
+      company_name: form.negocio,
+      service: form.servicio,
+      message: form.mensaje,
+      source: "web",
+      stage: "nuevo",
+    });
+    setSending(false);
+    if (error) {
+      setError(true);
+      return;
+    }
     setSent(true);
     setForm(initial);
   }
@@ -55,6 +73,11 @@ export default function Contacto() {
             {sent && (
               <div className="mb-6 flex items-center gap-2 border border-teal/40 bg-teal/10 px-4 py-3 font-mono text-[0.72rem] uppercase tracking-[0.1em] text-teal">
                 <Asterisk className="h-3.5 w-3.5" color="#14a08c" /> Recibido. Te contactamos pronto.
+              </div>
+            )}
+            {error && (
+              <div className="mb-6 border border-orange/40 bg-orange/10 px-4 py-3 font-mono text-[0.72rem] uppercase tracking-[0.1em] text-orange">
+                No se pudo enviar. Intenta de nuevo o escríbenos a hola@nuxorb.com.
               </div>
             )}
             <div className="grid gap-5 sm:grid-cols-2">
@@ -84,8 +107,8 @@ export default function Contacto() {
               <label htmlFor="mensaje" className={labelClass}>Cuéntanos más</label>
               <textarea id="mensaje" name="mensaje" rows={4} value={form.mensaje} onChange={update} placeholder="¿Qué proceso quieres mejorar o automatizar?" className={`${fieldClass} resize-y`} />
             </div>
-            <button type="submit" className="btn btn-primary btn-lg mt-6 w-full">
-              Enviar y cotizar →
+            <button type="submit" disabled={sending} className="btn btn-primary btn-lg mt-6 w-full disabled:opacity-60">
+              {sending ? "Enviando…" : "Enviar y cotizar →"}
             </button>
           </form>
 

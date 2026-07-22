@@ -5,15 +5,18 @@ interface LogoProps {
   tagline?: boolean;
 }
 
-/** Logo NUXORB — wordmark (NUX teal · ORB carbón). */
+/**
+ * Logo NUXORB. En fondos claros usa el lockup completo (logo-full.png);
+ * en fondos oscuros el wordmark "NUXORB" (azul marino) casi no se lee,
+ * así que se usa solo el ícono de la esfera (logo-orb.png).
+ */
 export default function Logo({ variant = "light", className = "", tagline = false }: LogoProps) {
-  const orb = variant === "light" ? "text-ink" : "text-white";
+  const src = variant === "dark" ? "/images/logo-orb.png" : "/images/logo-full.png";
+  const heightClass = variant === "dark" ? "h-8" : "h-9";
+
   return (
     <span className={`inline-flex flex-col ${className}`}>
-      <span className="font-brand text-[1.35rem] font-medium leading-none tracking-[0.18em]">
-        <span className="text-teal">NUX</span>
-        <span className={orb}>ORB</span>
-      </span>
+      <img src={src} alt="Nuxorb" className={`${heightClass} w-auto object-contain`} />
       {tagline && (
         <>
           <span

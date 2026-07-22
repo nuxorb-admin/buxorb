@@ -7,15 +7,16 @@
 @theme {
   --color-sand: #f1f3f2; /* fondo principal (gris claro) */
   --color-sand-2: #ffffff; /* tarjetas / superficies */
-  --color-ink: #16302b; /* carbón verdoso (ORB / secciones oscuras) */
-  --color-ink-2: #1f433b; /* carbón más claro */
-  --color-black: #10211d; /* casi negro verdoso (footer) */
-  --color-orange: #ff5c00; /* acento (chispa) */
-  --color-orange-dark: #e24f00;
-  --color-teal: #159b8a; /* color de marca dominante */
-  --color-teal-dark: #0e7567;
-  --color-gray: #d9d9d9; /* gris neutro del logo */
-  --color-muted: #5c6b66; /* texto secundario */
+  --color-ink: #0d2726; /* carbón verdoso (ORB / secciones oscuras) */
+  --color-ink-2: #123735; /* carbón más claro */
+  --color-black: #091c1b; /* casi negro verdoso (footer) */
+  --color-orange: #fe5d03; /* acento (chispa) */
+  --color-orange-dark: #e25303;
+  --color-teal: #039084; /* color de marca dominante */
+  --color-teal-dark: #026c63;
+  --color-mint: #6af6e4; /* acento claro (chispa fría del logo) */
+  --color-gray: #dddddd; /* gris neutro del logo */
+  --color-muted: #57655f; /* texto secundario */
 
   --font-display: "Anton", "Arial Narrow", sans-serif;
   --font-brand: "Montserrat", ui-sans-serif, system-ui, sans-serif;

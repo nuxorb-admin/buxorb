@@ -65,30 +65,45 @@ function getTenantSlug(): string | null {
 No hay middleware de servidor (es una SPA estática): la detección es 100% en el
 cliente, por eso el chequeo de subdominio pasa *antes* de montar `<Routes>`.
 
-## El demo del SaaS (`src/product/`)
+## Los 3 sistemas: SaaS, CRM, ERP (`src/product/`)
 
-Un solo conjunto de páginas, compartido por dos puntos de entrada:
+Nuxorb va a vender tres productos distintos, cada uno con sus propios módulos.
+`TenantPortal.tsx` decide cuál mostrarle a una empresa según su
+`companies.product_line`. Hoy cada sistema tiene **un solo módulo real** — el
+resto es fuera de alcance hasta que el equipo de desarrollo lo construya.
 
-- **`/demo-saas`** (`src/demo-saas/DemoGateWrapper.tsx`) — gate de contraseña
-  compartida (`VITE_DEMO_SAAS_PASSPHRASE`, sin cuentas reales), aislado por
-  `session_id` (uuid en `localStorage`, `src/demo-saas/useDemoSession.ts`). Para
-  prospectos que todavía no son un registro en el CRM.
-- **`<subdomain>.app.nuxorb.com`** (`src/product/TenantPortal.tsx`) — busca la
-  empresa en `companies` por `subdomain`, trae sus `company_modules` activos, y
-  muestra **solo esos módulos** (no los 4 siempre). Aislado por `company_id` real.
+| Sistema | Módulo de referencia | Archivo | Estado |
+|---|---|---|---|
+| SaaS | Tesorería | `src/product/pages/Tesoreria.tsx` | **Funcional** — CRUD real contra `demo_treasury_entries`, filtrado por `scopeId` |
+| SaaS | Compras / Personal / Ventas | `src/product/pages/{Compras,Personal,Ventas}.tsx` | Maqueta — datos fijos de `src/product/sampleData.ts` |
+| CRM | Pipeline de Ventas | `src/product/pages/crm/PipelineVentas.tsx` | **Funcional** — kanban real contra `demo_crm_deals` (reusa `admin/components/KanbanBoard.tsx`) |
+| ERP | Inventario | `src/product/pages/erp/Inventario.tsx` | **Funcional** — ledger real contra `demo_erp_inventory_movements` |
 
-Ambos renderizan `src/product/ProductLayout.tsx` (sidebar + `<Outlet
-context={{scopeId}}/>`) y las mismas 4 páginas de módulo:
+Cada sistema tiene dos puntos de entrada que renderizan las mismas páginas,
+solo cambia el `scopeId`:
 
-| Módulo | Archivo | Estado |
-|---|---|---|
-| Tesorería | `src/product/pages/Tesoreria.tsx` | **Funcional** — CRUD real contra `demo_treasury_entries`, filtrado por `scopeId` |
-| Compras y Proveedores | `src/product/pages/Compras.tsx` | Maqueta — datos fijos de `src/product/sampleData.ts` |
-| Gestión de Personal | `src/product/pages/Personal.tsx` | Maqueta |
-| Ventas y CxC | `src/product/pages/Ventas.tsx` | Maqueta |
+- **Demo genérico** (`/demo-saas`, `/demo-crm`, `/demo-erp` —
+  `src/demo-saas/`, `src/demo-crm/`, `src/demo-erp/`) — gate de contraseña
+  compartida (`VITE_DEMO_SAAS_PASSPHRASE`, la misma para los 3), aislado por
+  `session_id` (uuid en `localStorage`, `src/demo-saas/useDemoSession.ts`,
+  reusado por los 3). Para prospectos que todavía no son un registro en el CRM.
+- **Portal real** (`<subdomain>.app.nuxorb.com` — `src/product/TenantPortal.tsx`)
+  — busca la empresa por `subdomain`, ve su `product_line`, y muestra el
+  sistema correspondiente con `scopeId = company.id` (datos propios,
+  persistentes, no compartidos con el demo genérico).
+  - **SaaS**: pasa por `TenantAuthProvider`/`TenantLogin` — login real, con
+    roles (`company_roles`/`company_role_modules`) que deciden qué módulos ve
+    cada usuario. Ver sección de usuarios abajo.
+  - **CRM / ERP**: todavía **sin login** (esos sistemas no tienen su propio
+    `company_users`/roles construido) — cualquiera con la URL del subdominio
+    ve el módulo de esa empresa. Aceptable mientras sea solo demo interno; si
+    algún día se le entrega a un cliente real hay que construirle su propio
+    login antes, siguiendo el patrón de SaaS.
 
-`scopeId` es lo único que cambia entre el demo genérico y un tenant real —
-mismo componente, misma tabla, distinto valor de filtro.
+El SaaS usa `src/product/ProductLayout.tsx` (sidebar con varios módulos +
+`<Outlet context={{scopeId}}/>`). CRM y ERP, al tener un solo módulo cada uno,
+usan `src/product/SingleModuleShell.tsx` (header simple, sin sidebar de
+navegación) en vez de `ProductLayout`.
 
 ## Subdominios por cliente
 
@@ -127,7 +142,9 @@ número — nunca se edita uno ya aplicado.
 | `company_roles` | Roles definidos por cada empresa (ej. "Administrador", "Cajero") | Equipo: todo. Miembros: lectura propia. Owner de esa empresa: escritura |
 | `company_role_modules` | Qué módulos puede ver cada rol (many-to-many rol↔módulo) | Igual que `company_roles` |
 | `company_users` | Usuarios de una empresa: `user_id` (auth.users) + `role_id` + `is_owner`. El primer usuario de cada empresa (el que se le entrega al cliente) es `is_owner = true` | Igual que `company_roles` |
-| `demo_treasury_entries` | Movimientos del único módulo funcional (Tesorería), filtrados por `scope_id` | **Abierta a `anon` y `authenticated`** — ver advertencia de seguridad abajo |
+| `demo_treasury_entries` | Movimientos del módulo Tesorería (SaaS), filtrados por `scope_id` | **Abierta a `anon` y `authenticated`** — ver advertencia de seguridad abajo |
+| `demo_crm_deals` | Prospectos del Pipeline de Ventas (CRM), filtrados por `scope_id` | Igual que `demo_treasury_entries` |
+| `demo_erp_inventory_movements` | Movimientos de Inventario (ERP), filtrados por `scope_id` | Igual que `demo_treasury_entries` |
 
 ### Equipo interno vs. cuentas de clientes — `is_team_member()`
 
@@ -222,14 +239,58 @@ src/
 │   ├── components/CompanyUsersRoles.tsx  # roles + usuarios de una empresa (compartido con el portal)
 │   └── pages/                 # Dashboard, Leads, Companies, CompanyDetail,
 │                               #   Tasks, Team, Login
-├── demo-saas/                 # gate de contraseña compartida + sesión de demo genérico
-├── product/                   # módulos del SaaS, compartidos por /demo-saas y el portal
-│   ├── ProductLayout.tsx · TenantPortal.tsx
-│   ├── TenantAuthProvider.tsx · TenantLogin.tsx   # login real del portal (kind='client')
-│   └── pages/                 # Tesoreria (real), Compras/Personal/Ventas (maqueta), UsersRoles
+├── demo-saas/                 # gate de contraseña compartida + sesión de demo (reusado por los 3 sistemas)
+├── demo-crm/ · demo-erp/      # wrappers del gate para /demo-crm y /demo-erp
+├── product/                   # módulos de los 3 sistemas, compartidos por los demos y el portal
+│   ├── ProductLayout.tsx       # shell con sidebar (SaaS, varios módulos)
+│   ├── SingleModuleShell.tsx    # shell de un solo módulo (CRM, ERP)
+│   ├── TenantPortal.tsx          # decide sistema por product_line + arma scopeId
+│   ├── TenantAuthProvider.tsx · TenantLogin.tsx   # login real del portal SaaS (kind='client')
+│   └── pages/
+│       ├── Tesoreria.tsx (real) · Compras/Personal/Ventas.tsx (maqueta) · UsersRoles.tsx
+│       ├── crm/PipelineVentas.tsx (real)
+│       └── erp/Inventario.tsx (real)
 └── lib/                       # supabase.ts, database.types.ts, slugify.ts
 
 supabase/migrations/           # DDL + RLS, numerado, idempotente
 supabase/functions/create-company-user/  # Edge Function: crea usuarios de empresa (service role)
 docs/ARQUITECTURA.md           # visión a futuro (multi-tenant real, fuera de alcance hoy)
 ```
+
+## Cómo pedirle a Claude Code que siga construyendo cada sistema
+
+**Antes de escribir el prompt: pega o menciona este archivo
+(`docs/ARCHITECTURE.md`)** — le da a Claude Code el contexto completo (qué es
+real, qué es maqueta, dónde vive cada cosa) sin que tenga que adivinar.
+
+El patrón de referencia es siempre el módulo que ya es real en cada sistema
+(Tesorería en SaaS, Pipeline de Ventas en CRM, Inventario en ERP). Cualquier
+módulo nuevo debería seguir la misma receta:
+
+1. Tabla en Supabase con RLS, aislada por `scope_id` (o el esquema que se
+   decida cuando el sistema pase a producción real).
+2. Página en `src/product/pages/<sistema>/<Modulo>.tsx` que reciba `scopeId`
+   como prop y haga CRUD directo con `supabase.from(...)`.
+3. Migración nueva en `supabase/migrations/000N_....sql` — siguiente número,
+   nunca editar una ya aplicada.
+4. Conectarla a la navegación del sistema (agregar el módulo a
+   `ProductLayout`'s `MODULE_NAV` si es SaaS; para CRM/ERP con un solo módulo,
+   ver cómo `TenantPortal.tsx` monta `SingleModuleShell`).
+
+**Ejemplos de instrucciones:**
+
+> Agrega el módulo de Compras y Proveedores real (con su propia tabla en
+> Supabase) al sistema ERP, siguiendo el mismo patrón que
+> `src/product/pages/erp/Inventario.tsx`. Debe [describir campos/flujo].
+
+> El módulo de Compras y Proveedores en `src/product/pages/Compras.tsx` es
+> maqueta con datos de `sampleData.ts`. Hazlo funcional: crea la tabla en
+> Supabase (nueva migración), conéctalo con `scopeId` igual que
+> `src/product/pages/Tesoreria.tsx`, y quita los datos de ejemplo.
+
+> En `src/product/pages/crm/PipelineVentas.tsx`, agrega [campo/función].
+
+> CRM/ERP no tienen su propio sistema de usuarios y roles todavía — sigue el
+> patrón que ya existe para SaaS (`company_roles`, `company_role_modules`,
+> `company_users`, la Edge Function `create-company-user`,
+> `src/product/TenantAuthProvider.tsx`) y constrúyelo para [CRM|ERP].

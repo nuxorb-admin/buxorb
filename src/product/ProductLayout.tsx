@@ -6,7 +6,13 @@ export interface ProductContext {
   scopeId: string;
 }
 
-export const MODULE_NAV: { to: string; label: string; module: CompanyModuleName }[] = [
+export interface ModuleNavItem {
+  to: string;
+  label: string;
+  module: CompanyModuleName;
+}
+
+export const SAAS_MODULE_NAV: ModuleNavItem[] = [
   { to: "tesoreria", label: "Tesorería", module: "tesoreria" },
   { to: "compras", label: "Compras y Proveedores", module: "compras_proveedores" },
   { to: "personal", label: "Gestión de Personal", module: "gestion_personal" },
@@ -16,6 +22,7 @@ export const MODULE_NAV: { to: string; label: string; module: CompanyModuleName 
 export default function ProductLayout({
   title,
   scopeId,
+  moduleNav = SAAS_MODULE_NAV,
   activeModules,
   extraNav = [],
   exitLabel = "Salir del demo",
@@ -23,14 +30,16 @@ export default function ProductLayout({
 }: {
   title: string;
   scopeId: string;
-  /** Si se omite, se muestran los 4 módulos (demo genérico). Si se da, solo los activos. */
+  /** Catálogo de módulos de este sistema (SaaS/CRM/ERP). Por defecto, los 4 de SaaS. */
+  moduleNav?: ModuleNavItem[];
+  /** Si se omite, se muestran todos los de moduleNav (demo genérico). Si se da, solo los activos. */
   activeModules?: CompanyModuleName[];
   /** Links adicionales al final del nav (ej. "Usuarios y roles" para el owner de un tenant). */
   extraNav?: { to: string; label: string }[];
   exitLabel?: string;
   onExit?: () => void;
 }) {
-  const items = activeModules ? MODULE_NAV.filter((m) => activeModules.includes(m.module)) : MODULE_NAV;
+  const items = activeModules ? moduleNav.filter((m) => activeModules.includes(m.module)) : moduleNav;
 
   return (
     <div className="min-h-screen bg-sand text-ink lg:flex">

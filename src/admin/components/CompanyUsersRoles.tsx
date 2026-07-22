@@ -16,6 +16,8 @@ const MODULE_LABELS: Record<CompanyModuleName, string> = {
   compras_proveedores: "Compras y Proveedores",
   gestion_personal: "Gestión de Personal",
   ventas_cxc: "Ventas y CxC",
+  crm_pipeline_ventas: "Pipeline de Ventas",
+  erp_inventario: "Inventario",
 };
 
 interface UserRow extends CompanyUser {

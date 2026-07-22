@@ -2,8 +2,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { supabase } from "../lib/supabase";
 import type { CompanyModuleName, ProductLine } from "../lib/database.types";
-import ProductLayout, { MODULE_NAV } from "./ProductLayout";
-import SingleModuleShell from "./SingleModuleShell";
+import ProductLayout, { type ModuleNavItem } from "./ProductLayout";
 import Tesoreria from "./pages/Tesoreria";
 import Compras from "./pages/Compras";
 import Personal from "./pages/Personal";
@@ -34,6 +33,20 @@ function FullscreenMessage({ children }: { children: ReactNode }) {
   );
 }
 
+// Catálogo de módulos por línea de producto. SaaS tiene 4 módulos con
+// suscripción real (company_modules); CRM y ERP todavía tienen un único
+// módulo cada uno, sin concepto de tier/suscripción — siempre está activo.
+const SYSTEM_MODULE_NAV: Record<ProductLine, ModuleNavItem[]> = {
+  saas: [
+    { to: "tesoreria", label: "Tesorería", module: "tesoreria" },
+    { to: "compras", label: "Compras y Proveedores", module: "compras_proveedores" },
+    { to: "personal", label: "Gestión de Personal", module: "gestion_personal" },
+    { to: "ventas", label: "Ventas y CxC", module: "ventas_cxc" },
+  ],
+  crm: [{ to: "pipeline", label: "Pipeline de Ventas", module: "crm_pipeline_ventas" }],
+  erp: [{ to: "inventario", label: "Inventario", module: "erp_inventario" }],
+};
+
 export default function TenantPortal({ slug }: { slug: string }) {
   const [tenant, setTenant] = useState<TenantInfo | null | undefined>(undefined);
 
@@ -56,26 +69,6 @@ export default function TenantPortal({ slug }: { slug: string }) {
     return <FullscreenMessage>No encontramos ningún cliente con este subdominio.</FullscreenMessage>;
   }
 
-  // CRM y ERP todavía no tienen su propio sistema de usuarios/roles (eso
-  // solo existe para SaaS) — su portal queda sin login por ahora, pero con
-  // los datos propios de esta empresa (scopeId = tenant.id), no compartidos
-  // con el demo genérico.
-  if (tenant.product_line === "crm") {
-    return (
-      <SingleModuleShell companyLabel={tenant.name} moduleLabel="Pipeline de Ventas">
-        <PipelineVentas scopeId={tenant.id} />
-      </SingleModuleShell>
-    );
-  }
-
-  if (tenant.product_line === "erp") {
-    return (
-      <SingleModuleShell companyLabel={tenant.name} moduleLabel="Inventario">
-        <Inventario scopeId={tenant.id} />
-      </SingleModuleShell>
-    );
-  }
-
   return (
     <TenantAuthProvider>
       <TenantPortalGate tenant={tenant} />
@@ -89,6 +82,8 @@ function TenantPortalGate({ tenant }: { tenant: TenantInfo }) {
   const [activeModules, setActiveModules] = useState<CompanyModuleName[]>([]);
   const [allowedModules, setAllowedModules] = useState<CompanyModuleName[]>([]);
   const [modulesLoaded, setModulesLoaded] = useState(false);
+
+  const moduleNav = SYSTEM_MODULE_NAV[tenant.product_line];
 
   useEffect(() => {
     if (!session) {
@@ -110,13 +105,23 @@ function TenantPortalGate({ tenant }: { tenant: TenantInfo }) {
         return;
       }
 
-      const [{ data: modulesData }, { data: roleModuleData }] = await Promise.all([
-        supabase.from("company_modules").select("module").eq("company_id", tenant.id).eq("active", true),
-        memberRow.role_id
-          ? supabase.from("company_role_modules").select("module").eq("role_id", memberRow.role_id)
-          : Promise.resolve({ data: [] as { module: CompanyModuleName }[] }),
-      ]);
-      const active = (modulesData ?? []).map((m) => m.module as CompanyModuleName);
+      let active: CompanyModuleName[];
+      if (tenant.product_line === "saas") {
+        const { data: modulesData } = await supabase
+          .from("company_modules")
+          .select("module")
+          .eq("company_id", tenant.id)
+          .eq("active", true);
+        active = (modulesData ?? []).map((m) => m.module as CompanyModuleName);
+      } else {
+        // CRM/ERP todavía no tienen suscripción por módulo — su único
+        // módulo siempre está activo.
+        active = moduleNav.map((m) => m.module);
+      }
+
+      const { data: roleModuleData } = memberRow.role_id
+        ? await supabase.from("company_role_modules").select("module").eq("role_id", memberRow.role_id)
+        : { data: [] as { module: CompanyModuleName }[] };
       const roleModules = (roleModuleData ?? []).map((m) => m.module as CompanyModuleName);
 
       // Se calculan primero los módulos y hasta el final se marca membership +
@@ -130,7 +135,8 @@ function TenantPortalGate({ tenant }: { tenant: TenantInfo }) {
     }
 
     loadMembership();
-  }, [session, tenant.id]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session, tenant.id, tenant.product_line]);
 
   if (loading) return <FullscreenMessage>Cargando…</FullscreenMessage>;
   if (!session) return <TenantLogin companyName={tenant.name} />;
@@ -155,7 +161,7 @@ function TenantPortalGate({ tenant }: { tenant: TenantInfo }) {
   }
 
   const navModules = membership.isOwner ? activeModules : allowedModules;
-  const firstActive = MODULE_NAV.find((m) => navModules.includes(m.module));
+  const firstActive = moduleNav.find((m) => navModules.includes(m.module));
   const extraNav = membership.isOwner ? [{ to: "usuarios", label: "Usuarios y roles" }] : [];
 
   return (
@@ -165,6 +171,7 @@ function TenantPortalGate({ tenant }: { tenant: TenantInfo }) {
           <ProductLayout
             title={tenant.name}
             scopeId={tenant.id}
+            moduleNav={moduleNav}
             activeModules={navModules}
             extraNav={extraNav}
             exitLabel="Cerrar sesión"
@@ -184,10 +191,16 @@ function TenantPortalGate({ tenant }: { tenant: TenantInfo }) {
             )
           }
         />
-        <Route path="tesoreria" element={<Tesoreria />} />
-        <Route path="compras" element={<Compras />} />
-        <Route path="personal" element={<Personal />} />
-        <Route path="ventas" element={<Ventas />} />
+        {tenant.product_line === "saas" && (
+          <>
+            <Route path="tesoreria" element={<Tesoreria />} />
+            <Route path="compras" element={<Compras />} />
+            <Route path="personal" element={<Personal />} />
+            <Route path="ventas" element={<Ventas />} />
+          </>
+        )}
+        {tenant.product_line === "crm" && <Route path="pipeline" element={<PipelineVentas scopeId={tenant.id} />} />}
+        {tenant.product_line === "erp" && <Route path="inventario" element={<Inventario scopeId={tenant.id} />} />}
         {membership.isOwner && (
           <Route
             path="usuarios"

@@ -91,19 +91,25 @@ solo cambia el `scopeId`:
   — busca la empresa por `subdomain`, ve su `product_line`, y muestra el
   sistema correspondiente con `scopeId = company.id` (datos propios,
   persistentes, no compartidos con el demo genérico).
-  - **SaaS**: pasa por `TenantAuthProvider`/`TenantLogin` — login real, con
-    roles (`company_roles`/`company_role_modules`) que deciden qué módulos ve
-    cada usuario. Ver sección de usuarios abajo.
-  - **CRM / ERP**: todavía **sin login** (esos sistemas no tienen su propio
-    `company_users`/roles construido) — cualquiera con la URL del subdominio
-    ve el módulo de esa empresa. Aceptable mientras sea solo demo interno; si
-    algún día se le entrega a un cliente real hay que construirle su propio
-    login antes, siguiendo el patrón de SaaS.
+  - **Los 3 sistemas** (SaaS, CRM, ERP) pasan por `TenantAuthProvider`/
+    `TenantLogin` — login real, con roles (`company_roles`/
+    `company_role_modules`) que deciden qué módulos ve cada usuario. Las tres
+    líneas comparten las mismas tablas: `company_role_modules.module` acepta
+    tanto los 4 identificadores de SaaS como `crm_pipeline_ventas` y
+    `erp_inventario`. Ver sección de usuarios abajo.
+  - Diferencia entre líneas: en SaaS los módulos "activos" salen de
+    `company_modules` (hay tiers/suscripción real). CRM y ERP todavía no
+    tienen ese concepto — su único módulo está siempre activo (hardcodeado en
+    `TenantPortal.tsx`'s `SYSTEM_MODULE_NAV`); el rol de cada usuario sigue
+    decidiendo si lo ve o no.
 
 El SaaS usa `src/product/ProductLayout.tsx` (sidebar con varios módulos +
-`<Outlet context={{scopeId}}/>`). CRM y ERP, al tener un solo módulo cada uno,
-usan `src/product/SingleModuleShell.tsx` (header simple, sin sidebar de
-navegación) en vez de `ProductLayout`.
+`<Outlet context={{scopeId}}/>`), pasándole su propio `moduleNav`. CRM y ERP,
+al tener un solo módulo cada uno, usan el mismo `ProductLayout` con un
+`moduleNav` de una sola entrada — la sidebar simplemente muestra un único
+link. `src/product/SingleModuleShell.tsx` sigue existiendo pero ya solo la
+usan los demos genéricos sin login (`/demo-crm`, `/demo-erp`), no el portal
+real.
 
 ## Subdominios por cliente
 
@@ -183,9 +189,11 @@ página "Usuarios y roles" del portal del tenant) vía
 - **Compras, Personal y Ventas no tienen lógica de negocio** — son vistas con
   datos fijos, no leen ni escriben nada. No prometerle a un cliente real que
   esos módulos "funcionan".
-- **`product_line` (CRM/ERP) no tiene módulos definidos todavía** — el selector
-  existe en `CompanyDetail.tsx`, pero si una empresa no es `saas` solo se
-  muestra un aviso ("se define cuando esa línea se construya").
+- **`product_line` (CRM/ERP) no tiene tiers/suscripción definidos todavía** —
+  el selector de "Suscripción Nuxorb" existe solo para SaaS en
+  `CompanyDetail.tsx`; si una empresa es CRM o ERP se muestra un aviso ("se
+  define cuando esa línea se construya"), pero **sí** tiene login y "Usuarios
+  y roles" ya construidos, igual que SaaS.
 - El correo de la empresa vive en GoDaddy, fuera del control de Vercel — no
   tocar los nameservers raíz de `nuxorb.com` (ver sección de subdominios).
 
@@ -242,10 +250,10 @@ src/
 ├── demo-saas/                 # gate de contraseña compartida + sesión de demo (reusado por los 3 sistemas)
 ├── demo-crm/ · demo-erp/      # wrappers del gate para /demo-crm y /demo-erp
 ├── product/                   # módulos de los 3 sistemas, compartidos por los demos y el portal
-│   ├── ProductLayout.tsx       # shell con sidebar (SaaS, varios módulos)
-│   ├── SingleModuleShell.tsx    # shell de un solo módulo (CRM, ERP)
-│   ├── TenantPortal.tsx          # decide sistema por product_line + arma scopeId
-│   ├── TenantAuthProvider.tsx · TenantLogin.tsx   # login real del portal SaaS (kind='client')
+│   ├── ProductLayout.tsx       # shell con sidebar, moduleNav configurable por sistema
+│   ├── SingleModuleShell.tsx    # shell de un solo módulo, solo para los demos sin login
+│   ├── TenantPortal.tsx          # decide sistema por product_line + login + arma scopeId
+│   ├── TenantAuthProvider.tsx · TenantLogin.tsx   # login real del portal, los 3 sistemas (kind='client')
 │   └── pages/
 │       ├── Tesoreria.tsx (real) · Compras/Personal/Ventas.tsx (maqueta) · UsersRoles.tsx
 │       ├── crm/PipelineVentas.tsx (real)
@@ -273,9 +281,10 @@ módulo nuevo debería seguir la misma receta:
    como prop y haga CRUD directo con `supabase.from(...)`.
 3. Migración nueva en `supabase/migrations/000N_....sql` — siguiente número,
    nunca editar una ya aplicada.
-4. Conectarla a la navegación del sistema (agregar el módulo a
-   `ProductLayout`'s `MODULE_NAV` si es SaaS; para CRM/ERP con un solo módulo,
-   ver cómo `TenantPortal.tsx` monta `SingleModuleShell`).
+4. Conectarla a la navegación del sistema: agregar el módulo al `moduleNav`
+   correspondiente en `TenantPortal.tsx`'s `SYSTEM_MODULE_NAV` (y si es un
+   módulo de pago real, no solo un módulo más gratis, considerar si esa línea
+   ya necesita su propio concepto de `company_modules`/tiers como SaaS).
 
 **Ejemplos de instrucciones:**
 
@@ -290,7 +299,8 @@ módulo nuevo debería seguir la misma receta:
 
 > En `src/product/pages/crm/PipelineVentas.tsx`, agrega [campo/función].
 
-> CRM/ERP no tienen su propio sistema de usuarios y roles todavía — sigue el
-> patrón que ya existe para SaaS (`company_roles`, `company_role_modules`,
-> `company_users`, la Edge Function `create-company-user`,
-> `src/product/TenantAuthProvider.tsx`) y constrúyelo para [CRM|ERP].
+> CRM/ERP ya tienen login (mismo patrón que SaaS: `company_roles`,
+> `company_role_modules`, `company_users`, la Edge Function
+> `create-company-user`, `src/product/TenantAuthProvider.tsx`). Si un sistema
+> nuevo necesita un concepto de tiers/suscripción como el de SaaS
+> (`company_modules`), constrúyelo siguiendo ese mismo patrón.

@@ -4,7 +4,13 @@ export type LeadStage = "nuevo" | "contactado" | "calificado" | "propuesta" | "g
 export type TaskStatus = "todo" | "in_progress" | "in_review" | "done";
 export type TaskPriority = "low" | "medium" | "high" | "urgent";
 export type NoteEntityType = "lead" | "company" | "task";
-export type CompanyModuleName = "tesoreria" | "compras_proveedores" | "gestion_personal" | "ventas_cxc";
+export type CompanyModuleName =
+  | "tesoreria"
+  | "compras_proveedores"
+  | "gestion_personal"
+  | "ventas_cxc"
+  | "crm_pipeline_ventas"
+  | "erp_inventario";
 export type CompanyModuleTier = "essential" | "professional" | "enterprise";
 export type CompanyAddonName =
   | "checador_basico"

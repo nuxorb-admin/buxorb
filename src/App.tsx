@@ -11,12 +11,41 @@ import Companies from "./admin/pages/Companies";
 import CompanyDetail from "./admin/pages/CompanyDetail";
 import Tasks from "./admin/pages/Tasks";
 import Team from "./admin/pages/Team";
+import DemoGateWrapper from "./demo-saas/DemoGateWrapper";
+import TenantPortal from "./product/TenantPortal";
+import Tesoreria from "./product/pages/Tesoreria";
+import Compras from "./product/pages/Compras";
+import Personal from "./product/pages/Personal";
+import Ventas from "./product/pages/Ventas";
+
+function getTenantSlug(): string | null {
+  if (import.meta.env.DEV) {
+    const fromQuery = new URLSearchParams(window.location.search).get("tenant");
+    if (fromQuery) return fromQuery;
+  }
+  const host = window.location.hostname;
+  const parts = host.split(".");
+  if (parts.length > 2 && parts[0] !== "www") return parts[0];
+  return null;
+}
 
 export default function App() {
+  const tenantSlug = getTenantSlug();
+  if (tenantSlug) {
+    return <TenantPortal slug={tenantSlug} />;
+  }
+
   return (
     <AuthProvider>
       <Routes>
         <Route path="/" element={<MarketingSite />} />
+        <Route path="/demo-saas" element={<DemoGateWrapper />}>
+          <Route index element={<Navigate to="tesoreria" replace />} />
+          <Route path="tesoreria" element={<Tesoreria />} />
+          <Route path="compras" element={<Compras />} />
+          <Route path="personal" element={<Personal />} />
+          <Route path="ventas" element={<Ventas />} />
+        </Route>
         <Route path="/admin/login" element={<Login />} />
         <Route
           path="/admin"

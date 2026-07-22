@@ -2,19 +2,19 @@ import Logo from "./Logo";
 
 const cols = [
   {
-    title: "Servicio",
+    title: "Módulos",
     items: [
-      { label: "Agentes IA", href: "#servicios" },
-      { label: "Software a medida", href: "#servicios" },
-      { label: "Plataformas web", href: "#servicios" },
-      { label: "Automatizaciones", href: "#servicios" },
+      { label: "Tesorería", href: "#modulos" },
+      { label: "Compras y Proveedores", href: "#modulos" },
+      { label: "Gestión de Personal", href: "#modulos" },
+      { label: "Ventas y CxC", href: "#modulos" },
     ],
   },
   {
     title: "Empresa",
     items: [
-      { label: "Proceso", href: "#proceso" },
-      { label: "Planes", href: "#planes" },
+      { label: "El problema", href: "#problema" },
+      { label: "Niveles", href: "#niveles" },
       { label: "Contacto", href: "#contacto" },
     ],
   },
@@ -36,7 +36,8 @@ export default function Footer() {
           <div>
             <Logo variant="dark" tagline />
             <p className="mt-5 max-w-[300px] text-sm">
-              Tecnología e IA para PYMEs en México. Sin formularios eternos, sin esperas.
+              Plataforma modular de administración para PyMEs mexicanas. Tesorería, compras,
+              personal y ventas, con IA y automatización incluidas.
             </p>
           </div>
           {cols.map((c) => (

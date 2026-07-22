@@ -4,6 +4,19 @@ export type LeadStage = "nuevo" | "contactado" | "calificado" | "propuesta" | "g
 export type TaskStatus = "todo" | "in_progress" | "in_review" | "done";
 export type TaskPriority = "low" | "medium" | "high" | "urgent";
 export type NoteEntityType = "lead" | "company" | "task";
+export type CompanyModuleName = "tesoreria" | "compras_proveedores" | "gestion_personal" | "ventas_cxc";
+export type CompanyModuleTier = "essential" | "professional" | "enterprise";
+export type CompanyAddonName =
+  | "checador_basico"
+  | "portal_empleado"
+  | "ptu"
+  | "conciliacion_pdf_ampliada"
+  | "lectura_tickets_ampliada"
+  | "inventario"
+  | "timbrado_cfdi"
+  | "chatbot_cobranza";
+export type ProductLine = "saas" | "crm" | "erp";
+export type TreasuryEntryType = "ingreso" | "egreso";
 
 export interface Profile {
   id: string;
@@ -18,6 +31,8 @@ export interface Company {
   name: string;
   website: string | null;
   notes: string | null;
+  subdomain: string | null;
+  product_line: ProductLine;
   created_by: string | null;
   created_at: string;
 }
@@ -73,6 +88,39 @@ export interface Note {
   entity_id: string;
   author_id: string | null;
   body: string;
+  created_at: string;
+}
+
+export interface CompanyModule {
+  id: string;
+  company_id: string;
+  module: CompanyModuleName;
+  tier: CompanyModuleTier;
+  seats: number;
+  active: boolean;
+  started_at: string;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CompanyAddon {
+  id: string;
+  company_id: string;
+  addon: CompanyAddonName;
+  active: boolean;
+  notes: string | null;
+  created_at: string;
+}
+
+export interface TreasuryEntry {
+  id: string;
+  scope_id: string;
+  type: TreasuryEntryType;
+  concept: string;
+  category: string;
+  amount: number;
+  entry_date: string;
   created_at: string;
 }
 

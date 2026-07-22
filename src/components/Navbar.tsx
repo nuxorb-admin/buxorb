@@ -2,9 +2,9 @@ import { useEffect, useState } from "react";
 import Logo from "./Logo";
 
 const links = [
-  { id: "servicios", label: "Servicios" },
+  { id: "modulos", label: "Módulos" },
+  { id: "niveles", label: "Niveles" },
   { id: "proceso", label: "Proceso" },
-  { id: "planes", label: "Planes" },
   { id: "contacto", label: "Contacto" },
 ];
 

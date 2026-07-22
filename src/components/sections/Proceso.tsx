@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { processSteps } from "../../data/content";
+import { processSteps } from "../../data/modules";
 
 export default function Proceso() {
   const [sel, setSel] = useState(0);
@@ -10,13 +10,13 @@ export default function Proceso() {
       <div className="container-x">
         <div className="mb-4 flex items-center gap-3">
           <span className="h-px w-10 bg-white/40" />
-          <span className="label-light">02 — Cómo trabajamos</span>
+          <span className="label-light">05 — Cómo empiezas</span>
         </div>
         <h2 className="display max-w-[16ch] text-[clamp(2.5rem,7vw,5.5rem)] text-white">
-          Del brief a <span className="accent-word">producción</span>.
+          Del diagnóstico a <span className="accent-word">operando</span>.
         </h2>
         <p className="mt-6 max-w-[520px] text-[1.05rem] text-white/70">
-          Un proceso claro y documentado. Sabes en qué etapa estás y qué recibes en cada paso.
+          Un onboarding claro y acompañado. Sabes en qué etapa estás y qué recibes en cada paso.
         </p>
 
         <div className="mt-12 grid gap-10 lg:grid-cols-[1fr_1fr]">
@@ -85,7 +85,7 @@ export default function Proceso() {
             {/* barra de progreso del proceso */}
             <div className="mt-8">
               <div className="mb-2 flex justify-between font-mono text-[0.62rem] uppercase tracking-[0.14em] text-white/40">
-                <span>Avance del proyecto</span>
+                <span>Avance del onboarding</span>
                 <span>{Math.round(((sel + 1) / processSteps.length) * 100)}%</span>
               </div>
               <div className="h-1.5 w-full overflow-hidden bg-white/10">

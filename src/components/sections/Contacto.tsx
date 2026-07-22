@@ -3,11 +3,10 @@ import Asterisk from "../ui/Asterisk";
 import { supabase } from "../../lib/supabase";
 
 const serviceOptions = [
-  "Agente IA / Chatbot",
-  "Software a medida (ERP/CRM)",
-  "Plataforma web",
-  "App móvil",
-  "Automatizaciones",
+  "Tesorería",
+  "Compras y Proveedores",
+  "Gestión de Personal",
+  "Ventas y CxC",
   "Aún no lo sé / Diagnóstico",
 ];
 
@@ -57,7 +56,7 @@ export default function Contacto() {
       <div className="container-x">
         <div className="mb-4 flex items-center gap-3">
           <span className="h-px w-10 bg-ink/40" />
-          <span className="label">04 — Cotiza</span>
+          <span className="label">06 — Cotiza</span>
         </div>
         <h2 className="display max-w-[16ch] text-[clamp(2.5rem,7vw,5.5rem)]">
           Cinco datos. <span className="accent-word">sin vueltas</span>.

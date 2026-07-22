@@ -18,7 +18,7 @@ export default function CtaFinal() {
 
       <div className="container-x relative flex flex-col items-start justify-between gap-10 lg:flex-row lg:items-center">
         <h2 className="display max-w-[14ch] text-[clamp(2.8rem,8vw,6.5rem)] text-white">
-          Empecemos <span className="italic">esta semana</span>.
+          Pon tu negocio <span className="italic">en orden</span>.
         </h2>
         <div className="flex flex-shrink-0 flex-wrap gap-4">
           <a href="#contacto" className="btn btn-dark btn-lg">Agendar diagnóstico →</a>

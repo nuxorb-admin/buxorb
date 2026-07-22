@@ -1,10 +1,11 @@
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import Hero from "../components/sections/Hero";
-import Stats from "../components/sections/Stats";
-import Servicios from "../components/sections/Servicios";
+import Problema from "../components/sections/Problema";
+import Solucion from "../components/sections/Solucion";
+import Modulos from "../components/sections/Modulos";
+import Niveles from "../components/sections/Niveles";
 import Proceso from "../components/sections/Proceso";
-import Planes from "../components/sections/Planes";
 import Contacto from "../components/sections/Contacto";
 import CtaFinal from "../components/sections/CtaFinal";
 
@@ -14,10 +15,11 @@ export default function MarketingSite() {
       <Navbar />
       <main>
         <Hero />
-        <Stats />
-        <Servicios />
+        <Problema />
+        <Solucion />
+        <Modulos />
+        <Niveles />
         <Proceso />
-        <Planes />
         <Contacto />
         <CtaFinal />
       </main>

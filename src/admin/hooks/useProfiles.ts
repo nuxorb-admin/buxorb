@@ -10,6 +10,7 @@ export function useProfiles() {
     supabase
       .from("profiles")
       .select("*")
+      .eq("kind", "team")
       .order("full_name")
       .then(({ data }) => {
         setProfiles(data ?? []);

@@ -107,23 +107,51 @@ mismo componente, misma tabla, distinto valor de filtro.
 
 ## Modelo de datos (Supabase, un solo schema `public`)
 
-Definición completa en [`supabase/schema.sql`](../supabase/schema.sql) — es el
-archivo de referencia para instalaciones nuevas; el proyecto actual se fue
-migrando con `ALTER TABLE` / `CREATE TABLE IF NOT EXISTS` sueltos a medida que se
-agregaban features (revisar el archivo antes de asumir que el schema en vivo
-coincide 100%).
+Definición completa en [`supabase/migrations/`](../supabase/migrations/) —
+archivos numerados, en orden (`0001_...sql`, `0002_...`, etc.), cada uno
+idempotente (`if not exists` / `drop policy if exists` + `create`) para que se
+puedan volver a correr sin tronar aunque parte ya esté aplicada. Cualquier
+cambio de aquí en adelante se agrega como un archivo nuevo con el siguiente
+número — nunca se edita uno ya aplicado.
 
 | Tabla | Para qué | RLS |
 |---|---|---|
-| `profiles` | Espejo de `auth.users`, un registro por miembro del equipo (nombre, rol) | Equipo autenticado lee todo; cada quien edita solo el suyo |
-| `companies` | Empresas del CRM. También son los "tenants": `subdomain` + `product_line` (`saas`\|`crm`\|`erp`) | Equipo: todo. Público (`anon`): solo lectura de filas con `subdomain is not null` (para el portal) |
+| `profiles` | Espejo de `auth.users`. `kind` (`team`\|`client`) distingue cuenta del equipo vs. cuenta de un cliente — **todo lo demás depende de esto** (ver seguridad abajo) | Equipo autenticado lee todo; cada quien edita solo el suyo |
+| `companies` | Empresas del CRM. También son los "tenants": `subdomain`, `product_line` (`saas`\|`crm`\|`erp`), `max_users` | Equipo: todo. Público (`anon`): solo lectura de filas con `subdomain is not null` (para el login del portal) |
 | `contacts` | Personas de contacto de una empresa | Equipo: todo |
 | `leads` | Pipeline de ventas (kanban por etapa) | Equipo: todo. Público: `insert` desde el formulario de contacto de la landing |
 | `tasks` | Tareas estilo Jira (kanban por status) | Equipo: todo |
 | `notes` | Timeline de comentarios, polimórfico (`lead`\|`company`\|`task`) | Equipo: todo |
-| `company_modules` | Qué módulo del SaaS + qué nivel (essential/professional/enterprise) tiene contratado cada empresa | Equipo: todo. Público: solo lectura de módulos `active=true` de empresas con `subdomain` |
+| `company_modules` | Qué módulo del SaaS + qué nivel (essential/professional/enterprise) tiene contratado cada empresa | Equipo: todo. Miembros de esa empresa: lectura propia. Público: solo módulos `active=true` de empresas con `subdomain` (login del portal) |
 | `company_addons` | Los 8 productos adicionales del pricing, por empresa | Equipo: todo |
+| `company_roles` | Roles definidos por cada empresa (ej. "Administrador", "Cajero") | Equipo: todo. Miembros: lectura propia. Owner de esa empresa: escritura |
+| `company_role_modules` | Qué módulos puede ver cada rol (many-to-many rol↔módulo) | Igual que `company_roles` |
+| `company_users` | Usuarios de una empresa: `user_id` (auth.users) + `role_id` + `is_owner`. El primer usuario de cada empresa (el que se le entrega al cliente) es `is_owner = true` | Igual que `company_roles` |
 | `demo_treasury_entries` | Movimientos del único módulo funcional (Tesorería), filtrados por `scope_id` | **Abierta a `anon` y `authenticated`** — ver advertencia de seguridad abajo |
+
+### Equipo interno vs. cuentas de clientes — `is_team_member()`
+
+Desde que el portal de cada tenant tiene login real (usuarios creados vía la
+Edge Function `create-company-user`), existen cuentas de **clientes** en el
+mismo proyecto de Supabase Auth que las del equipo interno. Por eso ninguna
+policy del CRM usa `to authenticated using (true)` — todas usan
+`is_team_member()` (lee `profiles.kind = 'team'`), y `RequireAuth.tsx` en
+`/admin` hace la misma verificación del lado del cliente como defensa en
+profundidad. Un usuario de una empresa (`kind = 'client'`) solo puede leer/
+escribir lo de **su propia empresa**, vía `is_company_member()` /
+`is_company_owner()`.
+
+### Edge Function: `create-company-user`
+
+`supabase/functions/create-company-user/` — crear una cuenta de Supabase Auth
+requiere la *service role key*, que nunca debe llegar al navegador. Esta
+función (Deno, corre en el servidor de Supabase) recibe `{ company_id, email,
+full_name, role_id, is_owner }`, valida que quien llama sea del equipo o el
+owner de esa empresa, genera una contraseña temporal, crea el usuario, marca
+su `profiles.kind = 'client'`, y lo liga en `company_users`. Se llama desde
+`CompanyUsersRoles.tsx` (usado tanto en `/admin/companies/:id` como en la
+página "Usuarios y roles" del portal del tenant) vía
+`supabase.functions.invoke("create-company-user", ...)`.
 
 ## ⚠️ Seguridad / limitaciones conocidas
 
@@ -167,10 +195,18 @@ Para probar un subdominio de tenant en local, sin DNS: agregar `?tenant=<slug>`
 a la URL (ej. `http://localhost:4321/?tenant=chino`) — solo funciona en modo
 `DEV`.
 
-Correr [`supabase/schema.sql`](../supabase/schema.sql) en el SQL Editor del
-proyecto de Supabase para una instalación nueva. Para un proyecto ya existente,
-comparar contra el schema en vivo y aplicar solo lo que falte (columnas/tablas
-con `IF NOT EXISTS`, policies con `DROP POLICY IF EXISTS` antes de recrearlas).
+Correr las migraciones de [`supabase/migrations/`](../supabase/migrations/)
+en orden, en el SQL Editor del proyecto de Supabase. Si ya vinculaste el
+proyecto con el CLI (`npx supabase link --project-ref <ref>`), también se
+puede con `npx supabase db push` — como cada archivo es idempotente, es
+seguro correrlo aunque parte ya esté aplicada.
+
+La Edge Function se despliega aparte (no la corre `db push`):
+```bash
+npx supabase functions deploy create-company-user
+```
+No hace falta configurar ningún secreto — Supabase le inyecta automáticamente
+`SUPABASE_URL` y `SUPABASE_SERVICE_ROLE_KEY` a toda Edge Function.
 
 ## Mapa de archivos clave
 
@@ -181,16 +217,19 @@ src/
 ├── components/sections/       # Hero, Problema, Solucion, Modulos, Niveles,
 │                               #   Proceso, Contacto, CtaFinal
 ├── data/modules.ts            # copy + pricing de los 4 módulos, tiers, addons
-├── admin/                     # CRM interno (protegido por Supabase Auth)
+├── admin/                     # CRM interno (protegido por Supabase Auth, kind='team')
 │   ├── AuthProvider.tsx · RequireAuth.tsx · AdminLayout.tsx
+│   ├── components/CompanyUsersRoles.tsx  # roles + usuarios de una empresa (compartido con el portal)
 │   └── pages/                 # Dashboard, Leads, Companies, CompanyDetail,
 │                               #   Tasks, Team, Login
-├── demo-saas/                 # gate de contraseña compartida + sesión de demo
-├── product/                   # módulos del SaaS, compartidos por el demo
+├── demo-saas/                 # gate de contraseña compartida + sesión de demo genérico
+├── product/                   # módulos del SaaS, compartidos por /demo-saas y el portal
 │   ├── ProductLayout.tsx · TenantPortal.tsx
-│   └── pages/                 # Tesoreria (real), Compras/Personal/Ventas (maqueta)
+│   ├── TenantAuthProvider.tsx · TenantLogin.tsx   # login real del portal (kind='client')
+│   └── pages/                 # Tesoreria (real), Compras/Personal/Ventas (maqueta), UsersRoles
 └── lib/                       # supabase.ts, database.types.ts, slugify.ts
 
-supabase/schema.sql            # DDL + RLS de referencia
+supabase/migrations/           # DDL + RLS, numerado, idempotente
+supabase/functions/create-company-user/  # Edge Function: crea usuarios de empresa (service role)
 docs/ARQUITECTURA.md           # visión a futuro (multi-tenant real, fuera de alcance hoy)
 ```

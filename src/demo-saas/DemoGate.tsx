@@ -2,7 +2,15 @@ import { useState, type FormEvent } from "react";
 import Logo from "../components/Logo";
 import { unlockDemo } from "./useDemoSession";
 
-export default function DemoGate({ onUnlock }: { onUnlock: () => void }) {
+export default function DemoGate({
+  onUnlock,
+  title = "Demo SaaS",
+  subtitle = "Vista previa para prospectos",
+}: {
+  onUnlock: () => void;
+  title?: string;
+  subtitle?: string;
+}) {
   const [passphrase, setPassphrase] = useState("");
   const [error, setError] = useState(false);
 
@@ -21,10 +29,8 @@ export default function DemoGate({ onUnlock }: { onUnlock: () => void }) {
     <div className="flex min-h-screen items-center justify-center bg-ink px-6">
       <div className="w-full max-w-sm border border-white/10 bg-black/30 p-8">
         <Logo variant="dark" />
-        <h1 className="mt-8 font-display text-3xl uppercase text-white">Demo SaaS</h1>
-        <p className="mt-2 font-mono text-xs uppercase tracking-[0.14em] text-white/50">
-          Vista previa para prospectos
-        </p>
+        <h1 className="mt-8 font-display text-3xl uppercase text-white">{title}</h1>
+        <p className="mt-2 font-mono text-xs uppercase tracking-[0.14em] text-white/50">{subtitle}</p>
 
         <form onSubmit={submit} className="mt-8 space-y-4">
           {error && (

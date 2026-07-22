@@ -17,12 +17,16 @@ export type CompanyAddonName =
   | "chatbot_cobranza";
 export type ProductLine = "saas" | "crm" | "erp";
 export type TreasuryEntryType = "ingreso" | "egreso";
+export type ProfileKind = "team" | "client";
+export type CrmDealStage = "prospecto" | "contactado" | "propuesta" | "ganado" | "perdido";
+export type ErpMovementType = "entrada" | "salida";
 
 export interface Profile {
   id: string;
   email: string;
   full_name: string | null;
   role: ProfileRole;
+  kind: ProfileKind;
   created_at: string;
 }
 
@@ -33,7 +37,29 @@ export interface Company {
   notes: string | null;
   subdomain: string | null;
   product_line: ProductLine;
+  max_users: number;
   created_by: string | null;
+  created_at: string;
+}
+
+export interface CompanyRole {
+  id: string;
+  company_id: string;
+  name: string;
+  created_at: string;
+}
+
+export interface CompanyRoleModule {
+  role_id: string;
+  module: CompanyModuleName;
+}
+
+export interface CompanyUser {
+  id: string;
+  company_id: string;
+  user_id: string;
+  role_id: string | null;
+  is_owner: boolean;
   created_at: string;
 }
 
@@ -121,6 +147,26 @@ export interface TreasuryEntry {
   category: string;
   amount: number;
   entry_date: string;
+  created_at: string;
+}
+
+export interface CrmDeal {
+  id: string;
+  scope_id: string;
+  name: string;
+  value: number;
+  stage: CrmDealStage;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ErpInventoryMovement {
+  id: string;
+  scope_id: string;
+  sku: string;
+  concept: string;
+  type: ErpMovementType;
+  quantity: number;
   created_at: string;
 }
 

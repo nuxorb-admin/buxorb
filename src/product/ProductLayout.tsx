@@ -17,12 +17,17 @@ export default function ProductLayout({
   title,
   scopeId,
   activeModules,
+  extraNav = [],
+  exitLabel = "Salir del demo",
   onExit,
 }: {
   title: string;
   scopeId: string;
   /** Si se omite, se muestran los 4 módulos (demo genérico). Si se da, solo los activos. */
   activeModules?: CompanyModuleName[];
+  /** Links adicionales al final del nav (ej. "Usuarios y roles" para el owner de un tenant). */
+  extraNav?: { to: string; label: string }[];
+  exitLabel?: string;
   onExit?: () => void;
 }) {
   const items = activeModules ? MODULE_NAV.filter((m) => activeModules.includes(m.module)) : MODULE_NAV;
@@ -41,10 +46,25 @@ export default function ProductLayout({
             {title}
           </p>
           <nav className="mt-4 flex gap-1 overflow-x-auto border-t border-white/10 px-5 py-2 lg:mt-6 lg:flex-col lg:overflow-visible lg:border-none lg:px-0 lg:py-0">
-            {items.length === 0 && (
+            {items.length === 0 && extraNav.length === 0 && (
               <p className="font-mono text-[0.68rem] text-white/40">Sin módulos activos.</p>
             )}
             {items.map((item) => (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                className={({ isActive }) =>
+                  `whitespace-nowrap border-l-2 px-3 py-2.5 font-mono text-[0.72rem] font-bold uppercase tracking-[0.12em] transition-colors ${
+                    isActive
+                      ? "border-orange bg-white/5 text-white"
+                      : "border-transparent text-white/50 hover:text-white"
+                  }`
+                }
+              >
+                {item.label}
+              </NavLink>
+            ))}
+            {extraNav.map((item) => (
               <NavLink
                 key={item.to}
                 to={item.to}
@@ -67,7 +87,7 @@ export default function ProductLayout({
               onClick={onExit}
               className="font-mono text-[0.66rem] uppercase tracking-[0.12em] text-white/40 hover:text-orange"
             >
-              Salir del demo
+              {exitLabel}
             </button>
           </div>
         )}

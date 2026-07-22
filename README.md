@@ -25,8 +25,10 @@ npm run preview  # previsualizar el build
 cp .env.example .env.local   # completar con credenciales reales (ver docs/ARCHITECTURE.md)
 ```
 
-Correr [`supabase/schema.sql`](./supabase/schema.sql) en el SQL Editor de tu
-proyecto de Supabase antes del primer `npm run dev`.
+Correr las migraciones en orden — `supabase/migrations/0001_...sql`,
+`0002_...`, etc. — en el SQL Editor de tu proyecto de Supabase antes del
+primer `npm run dev` (o `npx supabase db push` si ya vinculaste el proyecto
+con el CLI, ver [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md)).
 
 ## Documentación
 

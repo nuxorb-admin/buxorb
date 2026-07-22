@@ -16,6 +16,7 @@ import NotesTimeline from "../components/NotesTimeline";
 import Modal from "../components/Modal";
 import FieldInput from "../components/FieldInput";
 import Badge from "../components/Badge";
+import CompanyUsersRoles from "../components/CompanyUsersRoles";
 import { useAuth } from "../AuthProvider";
 
 const MODULE_ORDER: CompanyModuleName[] = [
@@ -226,6 +227,18 @@ export default function CompanyDetail() {
             </a>
           )}
         </div>
+        <div>
+          <label className="mb-1 block font-mono text-[0.62rem] font-bold uppercase tracking-[0.12em] text-muted">
+            Máximo de usuarios
+          </label>
+          <input
+            type="number"
+            min={1}
+            value={company.max_users}
+            onChange={(e) => updateCompany({ max_users: Number(e.target.value) || 1 })}
+            className="w-full border border-ink/15 bg-sand-2 px-3 py-2 font-sans text-sm text-ink focus:border-teal focus:outline-none"
+          />
+        </div>
       </div>
 
       {company.product_line === "saas" ? (
@@ -289,6 +302,16 @@ export default function CompanyDetail() {
               );
             })}
           </div>
+
+          <h2 className="mb-3 mt-8 font-mono text-xs font-bold uppercase tracking-[0.12em] text-muted">
+            Usuarios y roles
+          </h2>
+          <CompanyUsersRoles
+            companyId={company.id}
+            activeModules={moduleSubs.filter((m) => m.active).map((m) => m.module)}
+            maxUsers={company.max_users}
+            canManage
+          />
         </div>
       ) : (
         <div className="mt-8 border border-dashed border-ink/20 bg-sand-2 p-5">

@@ -63,6 +63,16 @@ export type ReciboNominaEstado = "calculado" | "ajustado" | "cerrado";
 export type FiniquitoTipo = "finiquito" | "liquidacion";
 export type TablaFiscalTipo = "isr_mensual" | "uma" | "imss_obrero";
 
+export type ProspectoOrigen = "referido" | "web" | "redes" | "otro";
+export type OportunidadEstado = "nuevo" | "contactado" | "negociacion" | "ganada" | "perdida";
+export type TasaIva = "16" | "0" | "exento";
+export type CotizacionEstado = "borrador" | "enviada" | "aceptada" | "rechazada" | "vencida";
+export type CondicionPago = "contado" | "credito";
+export type PedidoEstado = "abierto" | "facturado_parcial" | "facturado" | "cancelado";
+export type FacturaEstado = "pendiente" | "parcial" | "pagada" | "vencida" | "cancelada";
+export type CobroTipo = "anticipo" | "parcial" | "total";
+export type CobroOrigen = "modulo" | "tesoreria";
+
 export interface Profile {
   id: string;
   email: string;
@@ -534,6 +544,193 @@ export interface TablaFiscal {
   vigencia_desde: string;
   vigencia_hasta: string | null;
   contenido: unknown;
+  created_at: string;
+}
+
+export interface Cliente {
+  id: string;
+  company_id: string;
+  razon_social: string;
+  nombre_comercial: string | null;
+  rfc: string | null;
+  regimen_fiscal: string | null;
+  uso_cfdi: string | null;
+  codigo_postal_fiscal: string | null;
+  email: string | null;
+  telefono: string | null;
+  dias_credito: number;
+  activo: boolean;
+  created_at: string;
+}
+
+export interface Prospecto {
+  id: string;
+  company_id: string;
+  nombre: string;
+  contacto_nombre: string | null;
+  contacto_telefono: string | null;
+  contacto_correo: string | null;
+  origen: ProspectoOrigen;
+  notas: string | null;
+  created_at: string;
+}
+
+export interface EtapaPipeline {
+  id: string;
+  company_id: string;
+  nombre: string;
+  orden: number;
+  created_at: string;
+}
+
+export interface MotivoPerdida {
+  id: string;
+  company_id: string;
+  nombre: string;
+  created_at: string;
+}
+
+export interface Oportunidad {
+  id: string;
+  company_id: string;
+  prospecto_id: string | null;
+  cliente_id: string | null;
+  descripcion: string;
+  monto_estimado: number | null;
+  moneda: string;
+  estado: OportunidadEstado;
+  etapa_id: string | null;
+  responsable_usuario_id: string | null;
+  motivo_perdida_id: string | null;
+  fecha_estimada_cierre: string | null;
+  created_at: string;
+}
+
+export interface ProductoServicio {
+  id: string;
+  company_id: string;
+  nombre: string;
+  descripcion: string | null;
+  unidad: string;
+  precio_unitario: number;
+  tasa_iva: TasaIva;
+  activo: boolean;
+  created_at: string;
+}
+
+export interface VentasSettings {
+  company_id: string;
+  umbral_descuento_pct: number;
+}
+
+export interface Cotizacion {
+  id: string;
+  company_id: string;
+  oportunidad_id: string | null;
+  cliente_id: string | null;
+  prospecto_id: string | null;
+  version: number;
+  fecha_emision: string;
+  vigencia_hasta: string | null;
+  estado: CotizacionEstado;
+  subtotal: number;
+  descuento_total: number;
+  iva: number;
+  total: number;
+  requiere_aprobacion: boolean;
+  aprobada_por: string | null;
+  created_by: string | null;
+  created_at: string;
+}
+
+export interface CotizacionDetalle {
+  id: string;
+  cotizacion_id: string;
+  producto_servicio_id: string | null;
+  descripcion: string;
+  cantidad: number;
+  precio_unitario: number;
+  descuento_pct: number;
+  importe: number;
+}
+
+export interface Pedido {
+  id: string;
+  company_id: string;
+  cotizacion_id: string | null;
+  cliente_id: string;
+  fecha: string;
+  condicion_pago: CondicionPago;
+  dias_credito: number;
+  fecha_compromiso: string | null;
+  estado: PedidoEstado;
+  subtotal: number;
+  iva: number;
+  total: number;
+  created_at: string;
+}
+
+export interface PedidoDetalle {
+  id: string;
+  pedido_id: string;
+  producto_servicio_id: string | null;
+  descripcion: string;
+  cantidad: number;
+  precio_unitario: number;
+  descuento_pct: number;
+  importe: number;
+  cantidad_facturada: number;
+}
+
+export interface AnticipoPedido {
+  id: string;
+  pedido_id: string;
+  monto: number;
+  fecha: string;
+  factura_id: string | null;
+  created_at: string;
+}
+
+export interface Factura {
+  id: string;
+  company_id: string;
+  pedido_id: string | null;
+  cliente_id: string;
+  folio_interno: string;
+  fecha_emision: string;
+  condicion: CondicionPago;
+  fecha_vencimiento: string | null;
+  subtotal: number;
+  iva: number;
+  total: number;
+  saldo_pendiente: number;
+  estado: FacturaEstado;
+  timbrada: boolean;
+  uuid_cfdi: string | null;
+  archivo_xml: string | null;
+  archivo_pdf: string | null;
+  created_at: string;
+}
+
+export interface FacturaDetalle {
+  id: string;
+  factura_id: string;
+  producto_servicio_id: string | null;
+  descripcion: string;
+  cantidad: number;
+  precio_unitario: number;
+  descuento_pct: number;
+  importe: number;
+}
+
+export interface Cobro {
+  id: string;
+  factura_id: string;
+  fecha: string;
+  monto: number;
+  tipo: CobroTipo;
+  referencia: string | null;
+  origen: CobroOrigen;
   created_at: string;
 }
 

@@ -16,7 +16,7 @@ import TenantPortal from "./product/TenantPortal";
 import TesoreriaDemo from "./product/pages/TesoreriaDemo";
 import ComprasDemo from "./product/pages/ComprasDemo";
 import PersonalDemo from "./product/pages/PersonalDemo";
-import Ventas from "./product/pages/Ventas";
+import VentasDemo from "./product/pages/VentasDemo";
 
 function getTenantSlug(): string | null {
   if (import.meta.env.DEV) {
@@ -44,7 +44,7 @@ export default function App() {
           <Route path="tesoreria" element={<TesoreriaDemo />} />
           <Route path="compras" element={<ComprasDemo />} />
           <Route path="personal" element={<PersonalDemo />} />
-          <Route path="ventas" element={<Ventas />} />
+          <Route path="ventas" element={<VentasDemo />} />
         </Route>
         <Route path="/admin/login" element={<Login />} />
         <Route

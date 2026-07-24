@@ -26,6 +26,10 @@ export type TreasuryEntryType = "ingreso" | "egreso";
 export type ProfileKind = "team" | "client";
 export type CrmDealStage = "prospecto" | "contactado" | "propuesta" | "ganado" | "perdido";
 export type ErpMovementType = "entrada" | "salida";
+export type TreasuryCategoryKind = "ingreso" | "egreso" | "ambos";
+export type TreasuryMovementSource = "manual" | "csv_import" | "bank_import" | "ai_statement";
+export type TreasuryStatementMethod = "manual" | "ai";
+export type TreasuryStatementStatus = "uploaded" | "reviewed";
 
 export interface Profile {
   id: string;
@@ -173,6 +177,53 @@ export interface ErpInventoryMovement {
   concept: string;
   type: ErpMovementType;
   quantity: number;
+  created_at: string;
+}
+
+export interface TreasuryAccount {
+  id: string;
+  company_id: string;
+  name: string;
+  bank_name: string | null;
+  last4: string | null;
+  opening_balance: number;
+  bank_import_enabled: boolean;
+  created_at: string;
+}
+
+export interface TreasuryCategory {
+  id: string;
+  company_id: string;
+  name: string;
+  kind: TreasuryCategoryKind;
+  created_at: string;
+}
+
+export interface TreasuryMovement {
+  id: string;
+  company_id: string;
+  account_id: string;
+  type: TreasuryEntryType;
+  concept: string;
+  category: string;
+  amount: number;
+  entry_date: string;
+  source: TreasuryMovementSource;
+  reconciled: boolean;
+  created_by: string | null;
+  created_at: string;
+}
+
+export interface TreasuryStatementImport {
+  id: string;
+  company_id: string;
+  account_id: string | null;
+  period_month: string;
+  method: TreasuryStatementMethod;
+  file_name: string | null;
+  status: TreasuryStatementStatus;
+  extracted_count: number;
+  created_by: string | null;
   created_at: string;
 }
 

@@ -15,7 +15,7 @@ import DemoGateWrapper from "./demo-saas/DemoGateWrapper";
 import DemoCrmGateWrapper from "./demo-crm/GateWrapper";
 import DemoErpGateWrapper from "./demo-erp/GateWrapper";
 import TenantPortal from "./product/TenantPortal";
-import Tesoreria from "./product/pages/Tesoreria";
+import TesoreriaDemo from "./product/pages/TesoreriaDemo";
 import Compras from "./product/pages/Compras";
 import Personal from "./product/pages/Personal";
 import Ventas from "./product/pages/Ventas";
@@ -43,7 +43,7 @@ export default function App() {
         <Route path="/" element={<MarketingSite />} />
         <Route path="/demo-saas" element={<DemoGateWrapper />}>
           <Route index element={<Navigate to="tesoreria" replace />} />
-          <Route path="tesoreria" element={<Tesoreria />} />
+          <Route path="tesoreria" element={<TesoreriaDemo />} />
           <Route path="compras" element={<Compras />} />
           <Route path="personal" element={<Personal />} />
           <Route path="ventas" element={<Ventas />} />

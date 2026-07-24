@@ -15,7 +15,7 @@ import DemoGateWrapper from "./demo-saas/DemoGateWrapper";
 import TenantPortal from "./product/TenantPortal";
 import TesoreriaDemo from "./product/pages/TesoreriaDemo";
 import ComprasDemo from "./product/pages/ComprasDemo";
-import Personal from "./product/pages/Personal";
+import PersonalDemo from "./product/pages/PersonalDemo";
 import Ventas from "./product/pages/Ventas";
 
 function getTenantSlug(): string | null {
@@ -43,7 +43,7 @@ export default function App() {
           <Route index element={<Navigate to="tesoreria" replace />} />
           <Route path="tesoreria" element={<TesoreriaDemo />} />
           <Route path="compras" element={<ComprasDemo />} />
-          <Route path="personal" element={<Personal />} />
+          <Route path="personal" element={<PersonalDemo />} />
           <Route path="ventas" element={<Ventas />} />
         </Route>
         <Route path="/admin/login" element={<Login />} />

@@ -41,6 +41,28 @@ export type RecepcionTipo = "total" | "parcial";
 export type FacturaEstadoMatch = "ok" | "con_diferencias";
 export type TicketCompraEstado = "procesando" | "confirmado" | "error";
 
+export type TipoContrato = "indeterminado" | "determinado" | "prueba";
+export type PeriodicidadPago = "semanal" | "catorcenal" | "quincenal";
+export type EmpleadoEstado = "activo" | "baja";
+export type MotivoBaja = "renuncia" | "despido" | "termino_contrato";
+export type IncidenciaTipo =
+  | "falta"
+  | "retardo"
+  | "hora_extra"
+  | "permiso_con_goce"
+  | "permiso_sin_goce"
+  | "incapacidad"
+  | "vacaciones"
+  | "prima_dominical";
+export type IncidenciaOrigen = "manual" | "template" | "checador";
+export type IncidenciaEstado = "registrada" | "aplicada_en_nomina";
+export type ConceptoNominaTipo = "percepcion" | "deduccion";
+export type ConceptoNominaOrigen = "calculado" | "capturado" | "incidencia";
+export type PeriodoNominaEstado = "abierto" | "calculado" | "cerrado";
+export type ReciboNominaEstado = "calculado" | "ajustado" | "cerrado";
+export type FiniquitoTipo = "finiquito" | "liquidacion";
+export type TablaFiscalTipo = "isr_mensual" | "uma" | "imss_obrero";
+
 export interface Profile {
   id: string;
   email: string;
@@ -385,6 +407,134 @@ export interface UsoLecturaTickets {
   company_id: string;
   periodo: string;
   veces_usado: number;
+}
+
+export interface DepartamentoPersonal {
+  id: string;
+  company_id: string;
+  nombre: string;
+  created_at: string;
+}
+
+export interface Empleado {
+  id: string;
+  company_id: string;
+  nombre_completo: string;
+  rfc: string | null;
+  curp: string | null;
+  nss: string | null;
+  fecha_ingreso: string;
+  tipo_contrato: TipoContrato;
+  fecha_fin_contrato: string | null;
+  sueldo_diario: number;
+  periodicidad_pago: PeriodicidadPago;
+  departamento_id: string | null;
+  cuenta_deposito: string | null;
+  estado: EmpleadoEstado;
+  fecha_baja: string | null;
+  motivo_baja: MotivoBaja | null;
+  created_at: string;
+}
+
+export interface DocumentoEmpleado {
+  id: string;
+  empleado_id: string;
+  nombre: string;
+  tipo: string | null;
+  created_at: string;
+}
+
+export interface HistorialSueldo {
+  id: string;
+  empleado_id: string;
+  sueldo_diario: number;
+  fecha_efectiva: string;
+  created_at: string;
+}
+
+export interface Incidencia {
+  id: string;
+  empleado_id: string;
+  tipo: IncidenciaTipo;
+  fecha: string;
+  horas: number | null;
+  folio_incapacidad: string | null;
+  origen: IncidenciaOrigen;
+  estado: IncidenciaEstado;
+  created_by: string | null;
+  aprobado_por: string | null;
+  created_at: string;
+}
+
+export interface SaldoVacaciones {
+  id: string;
+  empleado_id: string;
+  aniversario: number;
+  dias_derecho: number;
+  dias_gozados: number;
+  created_at: string;
+}
+
+export interface ConceptoNomina {
+  id: string;
+  clave: string;
+  nombre: string;
+  tipo: ConceptoNominaTipo;
+  integra_sbc: boolean;
+  origen: ConceptoNominaOrigen;
+  created_at: string;
+}
+
+export interface PeriodoNomina {
+  id: string;
+  company_id: string;
+  periodicidad: PeriodicidadPago;
+  fecha_inicio: string;
+  fecha_fin: string;
+  fecha_pago: string;
+  estado: PeriodoNominaEstado;
+  created_at: string;
+}
+
+export interface ReciboNomina {
+  id: string;
+  periodo_id: string;
+  empleado_id: string;
+  total_percepciones: number;
+  total_deducciones: number;
+  neto: number;
+  estado: ReciboNominaEstado;
+  created_at: string;
+}
+
+export interface ReciboDetalle {
+  id: string;
+  recibo_id: string;
+  concepto_id: string;
+  tipo: ConceptoNominaTipo;
+  monto: number;
+  origen: ConceptoNominaOrigen;
+}
+
+export interface Finiquito {
+  id: string;
+  empleado_id: string;
+  tipo: FiniquitoTipo;
+  desglose: Record<string, unknown>;
+  isr_separacion: number;
+  neto: number;
+  fecha: string;
+  created_at: string;
+}
+
+export interface TablaFiscal {
+  id: string;
+  tipo: TablaFiscalTipo;
+  periodicidad: string | null;
+  vigencia_desde: string;
+  vigencia_hasta: string | null;
+  contenido: unknown;
+  created_at: string;
 }
 
 export interface Database {

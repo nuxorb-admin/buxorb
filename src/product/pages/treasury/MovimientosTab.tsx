@@ -16,7 +16,7 @@ function money(n: number) {
 
 const MODULE_LABELS: Record<string, string> = {
   compras: "Compras y Proveedores",
-  gestion_personal: "Gestión de Personal",
+  personal: "Gestión de Personal",
   ventas_cxc: "Ventas y CxC",
 };
 

@@ -335,6 +335,11 @@ export default function CompanyDetail() {
         <CompanyUsersRoles
           companyId={company.id}
           activeModules={activeModulesFor(company, moduleSubs)}
+          moduleSeats={
+            company.product_line === "saas"
+              ? Object.fromEntries(moduleSubs.map((m) => [m.module, m.seats]))
+              : undefined
+          }
           maxUsers={company.max_users}
           canManage
         />

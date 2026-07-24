@@ -4,10 +4,12 @@ import type { CompanyModuleName } from "../../lib/database.types";
 export default function UsersRoles({
   companyId,
   activeModules,
+  moduleSeats,
   maxUsers,
 }: {
   companyId: string;
   activeModules: CompanyModuleName[];
+  moduleSeats?: Partial<Record<CompanyModuleName, number>>;
   maxUsers: number;
 }) {
   return (
@@ -17,7 +19,13 @@ export default function UsersRoles({
         Administra quién entra a tu sistema y qué módulos puede ver cada quien.
       </p>
       <div className="mt-6">
-        <CompanyUsersRoles companyId={companyId} activeModules={activeModules} maxUsers={maxUsers} canManage />
+        <CompanyUsersRoles
+          companyId={companyId}
+          activeModules={activeModules}
+          moduleSeats={moduleSeats}
+          maxUsers={maxUsers}
+          canManage
+        />
       </div>
     </div>
   );

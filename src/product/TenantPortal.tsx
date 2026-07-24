@@ -81,6 +81,7 @@ function TenantPortalGate({ tenant }: { tenant: TenantInfo }) {
   const [membership, setMembership] = useState<Membership | null | undefined>(undefined);
   const [activeModules, setActiveModules] = useState<CompanyModuleName[]>([]);
   const [allowedModules, setAllowedModules] = useState<CompanyModuleName[]>([]);
+  const [moduleSeats, setModuleSeats] = useState<Partial<Record<CompanyModuleName, number>>>({});
   const [modulesLoaded, setModulesLoaded] = useState(false);
 
   const moduleNav = SYSTEM_MODULE_NAV[tenant.product_line];
@@ -109,14 +110,16 @@ function TenantPortalGate({ tenant }: { tenant: TenantInfo }) {
       if (tenant.product_line === "saas") {
         const { data: modulesData } = await supabase
           .from("company_modules")
-          .select("module")
+          .select("module, seats")
           .eq("company_id", tenant.id)
           .eq("active", true);
         active = (modulesData ?? []).map((m) => m.module as CompanyModuleName);
+        setModuleSeats(Object.fromEntries((modulesData ?? []).map((m) => [m.module, m.seats])));
       } else {
         // CRM/ERP todavía no tienen suscripción por módulo — su único
-        // módulo siempre está activo.
+        // módulo siempre está activo, sin concepto de seats.
         active = moduleNav.map((m) => m.module);
+        setModuleSeats({});
       }
 
       const { data: roleModuleData } = memberRow.role_id
@@ -204,7 +207,14 @@ function TenantPortalGate({ tenant }: { tenant: TenantInfo }) {
         {membership.isOwner && (
           <Route
             path="usuarios"
-            element={<UsersRoles companyId={tenant.id} activeModules={activeModules} maxUsers={tenant.max_users} />}
+            element={
+              <UsersRoles
+                companyId={tenant.id}
+                activeModules={activeModules}
+                moduleSeats={moduleSeats}
+                maxUsers={tenant.max_users}
+              />
+            }
           />
         )}
       </Route>

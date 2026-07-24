@@ -27,11 +27,14 @@ interface UserRow extends CompanyUser {
 export default function CompanyUsersRoles({
   companyId,
   activeModules,
+  moduleSeats,
   maxUsers,
   canManage,
 }: {
   companyId: string;
   activeModules: CompanyModuleName[];
+  /** Tope de usuarios por módulo (de company_modules.seats). Un módulo sin entrada aquí no tiene tope. */
+  moduleSeats?: Partial<Record<CompanyModuleName, number>>;
   maxUsers: number;
   /** true si quien ve esto puede crear/editar roles y usuarios (equipo, o el owner de esta empresa) */
   canManage: boolean;
@@ -82,8 +85,32 @@ export default function CompanyUsersRoles({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [companyId]);
 
+  // Cuántos usuarios ya tienen acceso a un módulo (el owner siempre ve todo,
+  // el resto lo tiene si su rol incluye el módulo). excludeRoleId sirve para
+  // recalcular "si además le doy este módulo a todo el rol X" sin contar dos
+  // veces a los usuarios de ese mismo rol.
+  function moduleHolderCount(module: CompanyModuleName, excludeRoleId?: string): number {
+    return users.filter((u) => {
+      if (u.is_owner) return true;
+      if (!u.role_id || u.role_id === excludeRoleId) return false;
+      return (roleModules[u.role_id] ?? []).includes(module);
+    }).length;
+  }
+
   async function toggleRoleModule(roleId: string, module: CompanyModuleName, on: boolean) {
+    setError(null);
     if (on) {
+      const seatCap = moduleSeats?.[module];
+      if (seatCap !== undefined) {
+        const currentHolders = moduleHolderCount(module, roleId);
+        const roleUserCount = users.filter((u) => !u.is_owner && u.role_id === roleId).length;
+        if (currentHolders + roleUserCount > seatCap) {
+          setError(
+            `No hay seats suficientes de ${MODULE_LABELS[module]}: se necesitan ${currentHolders + roleUserCount}, el nivel contratado incluye ${seatCap}.`,
+          );
+          return;
+        }
+      }
       await supabase.from("company_role_modules").insert({ role_id: roleId, module });
     } else {
       await supabase.from("company_role_modules").delete().eq("role_id", roleId).eq("module", module);
@@ -94,6 +121,14 @@ export default function CompanyUsersRoles({
   async function ensureAdminRole(): Promise<string> {
     const existing = roles.find((r) => r.name === "Administrador");
     if (existing) return existing.id;
+
+    for (const module of activeModules) {
+      const seatCap = moduleSeats?.[module];
+      if (seatCap !== undefined && moduleHolderCount(module) + 1 > seatCap) {
+        throw new Error(`No hay seats suficientes de ${MODULE_LABELS[module]} para crear el usuario admin.`);
+      }
+    }
+
     const { data, error: insertError } = await supabase
       .from("company_roles")
       .insert({ company_id: companyId, name: "Administrador" })
@@ -110,7 +145,25 @@ export default function CompanyUsersRoles({
 
   async function createUser(form: { email: string; full_name: string; role_id: string }, isOwner: boolean) {
     setError(null);
-    const roleId = isOwner ? await ensureAdminRole() : form.role_id;
+
+    if (!isOwner && form.role_id) {
+      for (const module of roleModules[form.role_id] ?? []) {
+        const seatCap = moduleSeats?.[module];
+        if (seatCap !== undefined && moduleHolderCount(module) + 1 > seatCap) {
+          setError(`No hay seats suficientes de ${MODULE_LABELS[module]} para agregar este usuario.`);
+          return;
+        }
+      }
+    }
+
+    let roleId: string;
+    try {
+      roleId = isOwner ? await ensureAdminRole() : form.role_id;
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "No se pudo crear el usuario admin");
+      return;
+    }
+
     const { data, error: fnError } = await supabase.functions.invoke("create-company-user", {
       body: { company_id: companyId, email: form.email, full_name: form.full_name, role_id: roleId, is_owner: isOwner },
     });
@@ -153,6 +206,7 @@ export default function CompanyUsersRoles({
               <div className="mt-2 flex flex-wrap gap-3">
                 {activeModules.map((m) => {
                   const on = (roleModules[r.id] ?? []).includes(m);
+                  const seatCap = moduleSeats?.[m];
                   return (
                     <label key={m} className="flex items-center gap-1.5 font-mono text-[0.68rem] text-muted">
                       <input
@@ -162,6 +216,11 @@ export default function CompanyUsersRoles({
                         onChange={(e) => toggleRoleModule(r.id, m, e.target.checked)}
                       />
                       {MODULE_LABELS[m]}
+                      {seatCap !== undefined && (
+                        <span className="text-[0.6rem] text-muted/70">
+                          ({moduleHolderCount(m)}/{seatCap})
+                        </span>
+                      )}
                     </label>
                   );
                 })}

@@ -12,8 +12,6 @@ import CompanyDetail from "./admin/pages/CompanyDetail";
 import Tasks from "./admin/pages/Tasks";
 import Team from "./admin/pages/Team";
 import DemoGateWrapper from "./demo-saas/DemoGateWrapper";
-import DemoCrmGateWrapper from "./demo-crm/GateWrapper";
-import DemoErpGateWrapper from "./demo-erp/GateWrapper";
 import TenantPortal from "./product/TenantPortal";
 import TesoreriaDemo from "./product/pages/TesoreriaDemo";
 import Compras from "./product/pages/Compras";
@@ -48,8 +46,6 @@ export default function App() {
           <Route path="personal" element={<Personal />} />
           <Route path="ventas" element={<Ventas />} />
         </Route>
-        <Route path="/demo-crm" element={<DemoCrmGateWrapper />} />
-        <Route path="/demo-erp" element={<DemoErpGateWrapper />} />
         <Route path="/admin/login" element={<Login />} />
         <Route
           path="/admin"

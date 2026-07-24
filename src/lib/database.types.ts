@@ -8,9 +8,7 @@ export type CompanyModuleName =
   | "tesoreria"
   | "compras_proveedores"
   | "gestion_personal"
-  | "ventas_cxc"
-  | "crm_pipeline_ventas"
-  | "erp_inventario";
+  | "ventas_cxc";
 export type CompanyModuleTier = "essential" | "professional" | "enterprise";
 export type CompanyAddonName =
   | "checador_basico"
@@ -21,11 +19,9 @@ export type CompanyAddonName =
   | "inventario"
   | "timbrado_cfdi"
   | "chatbot_cobranza";
-export type ProductLine = "saas" | "crm" | "erp";
+export type ProductLine = "saas";
 export type TreasuryEntryType = "ingreso" | "egreso";
 export type ProfileKind = "team" | "client";
-export type CrmDealStage = "prospecto" | "contactado" | "propuesta" | "ganado" | "perdido";
-export type ErpMovementType = "entrada" | "salida";
 export type TreasuryCategoryKind = "ingreso" | "egreso" | "ambos";
 export type TreasuryMovementSource = "manual" | "csv_import" | "bank_import" | "ai_statement";
 export type TreasuryStatementMethod = "manual" | "ai";
@@ -157,26 +153,6 @@ export interface TreasuryEntry {
   category: string;
   amount: number;
   entry_date: string;
-  created_at: string;
-}
-
-export interface CrmDeal {
-  id: string;
-  scope_id: string;
-  name: string;
-  value: number;
-  stage: CrmDealStage;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface ErpInventoryMovement {
-  id: string;
-  scope_id: string;
-  sku: string;
-  concept: string;
-  type: ErpMovementType;
-  quantity: number;
   created_at: string;
 }
 

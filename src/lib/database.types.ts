@@ -23,9 +23,23 @@ export type ProductLine = "saas";
 export type TreasuryEntryType = "ingreso" | "egreso";
 export type ProfileKind = "team" | "client";
 export type TreasuryCategoryKind = "ingreso" | "egreso" | "ambos";
-export type TreasuryMovementSource = "manual" | "csv_import" | "bank_import" | "ai_statement";
+export type TreasuryMovementSource = "manual" | "csv_import" | "bank_import" | "ai_statement" | "mov_confirmado";
 export type TreasuryStatementMethod = "manual" | "ai";
 export type TreasuryStatementStatus = "uploaded" | "reviewed";
+
+export type MovEsperadoTipo = "ingreso" | "egreso";
+export type MovEsperadoEstado = "pendiente" | "vinculado" | "cancelado";
+
+export type ProveedorEstado = "activo" | "inactivo";
+export type CompraCondicionPago = "contado" | "credito";
+export type CompraEstado = "borrador" | "pendiente_aprobacion" | "aprobada" | "recibida" | "pagada" | "cancelada";
+export type CompraOrigen = "manual" | "xml_cfdi" | "ticket_ia" | "requisicion";
+export type RequisicionEstado = "pendiente" | "aprobada" | "rechazada" | "convertida_en_compra";
+export type ReglaAprobacionTipo = "monto" | "departamento";
+export type AprobacionResultado = "aprobada" | "rechazada";
+export type RecepcionTipo = "total" | "parcial";
+export type FacturaEstadoMatch = "ok" | "con_diferencias";
+export type TicketCompraEstado = "procesando" | "confirmado" | "error";
 
 export interface Profile {
   id: string;
@@ -201,6 +215,176 @@ export interface TreasuryStatementImport {
   extracted_count: number;
   created_by: string | null;
   created_at: string;
+}
+
+export interface MovEsperado {
+  id: string;
+  company_id: string;
+  tipo: MovEsperadoTipo;
+  monto: number;
+  moneda: string;
+  fecha_esperada: string;
+  estado: MovEsperadoEstado;
+  modulo_origen: string;
+  referencia_id: string | null;
+  concepto: string | null;
+  created_at: string;
+}
+
+export interface MovConfirmado {
+  id: string;
+  mov_esperado_id: string;
+  company_id: string;
+  treasury_movement_id: string | null;
+  fecha_real: string;
+  monto: number;
+  created_at: string;
+}
+
+export interface Proveedor {
+  id: string;
+  company_id: string;
+  razon_social: string;
+  rfc: string | null;
+  contacto_nombre: string | null;
+  contacto_telefono: string | null;
+  contacto_correo: string | null;
+  clabe: string | null;
+  dias_credito_default: number;
+  categoria_gasto_default: string | null;
+  estado: ProveedorEstado;
+  created_at: string;
+}
+
+export interface EvaluacionProveedor {
+  id: string;
+  proveedor_id: string;
+  calificacion: number;
+  notas: string | null;
+  usuario_id: string | null;
+  fecha: string;
+}
+
+export interface Departamento {
+  id: string;
+  company_id: string;
+  nombre: string;
+  created_at: string;
+}
+
+export interface ComprasSettings {
+  company_id: string;
+  aprobacion_activada: boolean;
+}
+
+export interface Compra {
+  id: string;
+  company_id: string;
+  folio: string;
+  proveedor_id: string;
+  fecha: string;
+  subtotal: number;
+  iva: number;
+  total: number;
+  moneda: string;
+  condicion_pago: CompraCondicionPago;
+  dias_credito: number | null;
+  fecha_estimada_pago: string | null;
+  departamento_id: string | null;
+  estado: CompraEstado;
+  origen: CompraOrigen;
+  created_by: string | null;
+  created_at: string;
+}
+
+export interface CompraDetalle {
+  id: string;
+  compra_id: string;
+  descripcion: string;
+  cantidad: number;
+  precio_unitario: number;
+  importe: number;
+  cantidad_recibida: number;
+}
+
+export interface Requisicion {
+  id: string;
+  company_id: string;
+  solicitante_id: string | null;
+  departamento_id: string | null;
+  justificacion: string | null;
+  fecha: string;
+  estado: RequisicionEstado;
+  compra_id: string | null;
+  created_at: string;
+}
+
+export interface ReglaAprobacion {
+  id: string;
+  company_id: string;
+  tipo: ReglaAprobacionTipo;
+  umbral_monto: number | null;
+  departamento_id: string | null;
+  aprobador_user_id: string;
+  orden_nivel: number;
+  created_at: string;
+}
+
+export interface AprobacionCompra {
+  id: string;
+  compra_id: string;
+  aprobador_user_id: string;
+  nivel: number;
+  resultado: AprobacionResultado;
+  comentario: string | null;
+  fecha: string;
+}
+
+export interface Recepcion {
+  id: string;
+  compra_id: string;
+  fecha: string;
+  tipo: RecepcionTipo;
+  notas: string | null;
+  created_at: string;
+}
+
+export interface FacturaCompra {
+  id: string;
+  compra_id: string;
+  uuid_fiscal: string | null;
+  rfc_emisor: string | null;
+  fecha_emision: string | null;
+  subtotal: number | null;
+  iva: number | null;
+  total: number | null;
+  estado_match: FacturaEstadoMatch | null;
+  created_at: string;
+}
+
+export interface TicketCompra {
+  id: string;
+  compra_id: string | null;
+  resultado_ia: Record<string, unknown> | null;
+  confianza: number | null;
+  estado: TicketCompraEstado;
+  created_at: string;
+}
+
+export interface PagoCompra {
+  id: string;
+  compra_id: string;
+  fecha: string;
+  monto: number;
+  referencia: string | null;
+  created_at: string;
+}
+
+export interface UsoLecturaTickets {
+  id: string;
+  company_id: string;
+  periodo: string;
+  veces_usado: number;
 }
 
 export interface Database {

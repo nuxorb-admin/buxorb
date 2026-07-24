@@ -1,25 +1,41 @@
 import { useState, type FormEvent } from "react";
 import { supabase } from "../../../lib/supabase";
-import type { TreasuryAccount, TreasuryCategory, TreasuryEntryType, TreasuryMovement } from "../../../lib/database.types";
+import type {
+  MovEsperado,
+  TreasuryAccount,
+  TreasuryCategory,
+  TreasuryEntryType,
+  TreasuryMovement,
+} from "../../../lib/database.types";
 import CsvImportModal from "./CsvImportModal";
+import Modal from "../../../admin/components/Modal";
 
 function money(n: number) {
   return n.toLocaleString("es-MX", { style: "currency", currency: "MXN", maximumFractionDigits: 0 });
 }
+
+const MODULE_LABELS: Record<string, string> = {
+  compras: "Compras y Proveedores",
+  gestion_personal: "Gestión de Personal",
+  ventas_cxc: "Ventas y CxC",
+};
 
 export default function MovimientosTab({
   companyId,
   accounts,
   categories,
   movements,
+  proyectados,
   reload,
 }: {
   companyId: string;
   accounts: TreasuryAccount[];
   categories: TreasuryCategory[];
   movements: TreasuryMovement[];
+  proyectados: MovEsperado[];
   reload: () => void;
 }) {
+  const [linking, setLinking] = useState<MovEsperado | null>(null);
   const [saving, setSaving] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [form, setForm] = useState({
@@ -55,6 +71,39 @@ export default function MovimientosTab({
 
   return (
     <div>
+      {proyectados.length > 0 && (
+        <div className="mb-6">
+          <h3 className="mb-3 font-mono text-[0.68rem] font-bold uppercase tracking-[0.1em] text-muted">
+            Proyectados
+          </h3>
+          <div className="divide-y divide-ink/10 border border-ink/10 bg-sand-2">
+            {proyectados.map((p) => (
+              <div key={p.id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+                <div>
+                  <p className="text-sm font-semibold text-ink">{p.concepto || "Movimiento proyectado"}</p>
+                  <p className="font-mono text-[0.66rem] uppercase tracking-[0.06em] text-muted">
+                    {MODULE_LABELS[p.modulo_origen] ?? p.modulo_origen} ·{" "}
+                    {new Date(p.fecha_esperada).toLocaleDateString("es-MX")}
+                  </p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className={`font-mono text-sm font-bold ${p.tipo === "ingreso" ? "text-teal" : "text-orange"}`}>
+                    {p.tipo === "ingreso" ? "+" : "-"}
+                    {money(Number(p.monto))}
+                  </span>
+                  <button
+                    onClick={() => setLinking(p)}
+                    className="font-mono text-[0.62rem] uppercase tracking-[0.08em] text-teal hover:underline"
+                  >
+                    Registrar como real
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="mb-3 flex items-center justify-between">
         <h3 className="font-mono text-[0.68rem] font-bold uppercase tracking-[0.1em] text-muted">Movimientos</h3>
         <button
@@ -152,6 +201,114 @@ export default function MovimientosTab({
           onImported={reload}
         />
       )}
+
+      {linking && (
+        <LinkProyectadoModal
+          companyId={companyId}
+          accounts={accounts}
+          proyectado={linking}
+          onClose={() => setLinking(null)}
+          onLinked={reload}
+        />
+      )}
     </div>
+  );
+}
+
+function LinkProyectadoModal({
+  companyId,
+  accounts,
+  proyectado,
+  onClose,
+  onLinked,
+}: {
+  companyId: string;
+  accounts: TreasuryAccount[];
+  proyectado: MovEsperado;
+  onClose: () => void;
+  onLinked: () => void;
+}) {
+  const [form, setForm] = useState({
+    concept: proyectado.concepto || "Movimiento proyectado",
+    amount: String(proyectado.monto),
+    entry_date: proyectado.fecha_esperada,
+    account_id: accounts[0]?.id ?? "",
+  });
+  const [saving, setSaving] = useState(false);
+
+  async function confirm(e: FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    const { data: movement } = await supabase
+      .from("treasury_movements")
+      .insert({
+        company_id: companyId,
+        account_id: form.account_id,
+        type: proyectado.tipo,
+        concept: form.concept.trim(),
+        category: "otros",
+        amount: Number(form.amount),
+        entry_date: form.entry_date,
+        source: "mov_confirmado",
+      })
+      .select()
+      .single();
+
+    await supabase.from("mov_confirmados").insert({
+      mov_esperado_id: proyectado.id,
+      company_id: companyId,
+      treasury_movement_id: movement?.id ?? null,
+      fecha_real: form.entry_date,
+      monto: Number(form.amount),
+    });
+    await supabase.from("mov_esperados").update({ estado: "vinculado" }).eq("id", proyectado.id);
+
+    setSaving(false);
+    onLinked();
+    onClose();
+  }
+
+  return (
+    <Modal title="Registrar como real" onClose={onClose}>
+      <form onSubmit={confirm} className="space-y-3">
+        <input
+          value={form.concept}
+          onChange={(e) => setForm({ ...form, concept: e.target.value })}
+          placeholder="Concepto"
+          className="w-full border border-ink/15 bg-sand-2 px-3 py-2 text-sm text-ink focus:border-teal focus:outline-none"
+        />
+        {accounts.length > 1 && (
+          <select
+            value={form.account_id}
+            onChange={(e) => setForm({ ...form, account_id: e.target.value })}
+            className="w-full border border-ink/15 bg-sand-2 px-3 py-2 text-sm text-ink focus:border-teal focus:outline-none"
+          >
+            {accounts.map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.name}
+              </option>
+            ))}
+          </select>
+        )}
+        <input
+          type="number"
+          min="0"
+          step="0.01"
+          value={form.amount}
+          onChange={(e) => setForm({ ...form, amount: e.target.value })}
+          placeholder="Monto"
+          className="w-full border border-ink/15 bg-sand-2 px-3 py-2 text-sm text-ink focus:border-teal focus:outline-none"
+        />
+        <input
+          type="date"
+          value={form.entry_date}
+          onChange={(e) => setForm({ ...form, entry_date: e.target.value })}
+          className="w-full border border-ink/15 bg-sand-2 px-3 py-2 text-sm text-ink focus:border-teal focus:outline-none"
+        />
+        <button type="submit" disabled={saving} className="btn btn-primary w-full">
+          {saving ? "Guardando…" : "Confirmar movimiento real"}
+        </button>
+      </form>
+    </Modal>
   );
 }

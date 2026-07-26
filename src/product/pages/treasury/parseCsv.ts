@@ -1,3 +1,28 @@
+import ExcelJS from "exceljs";
+
+// Lee la primera hoja de un .xlsx tal cual la exporta el banco y la regresa
+// como filas de texto, en el mismo formato que parseCsv — así el modal de
+// importación bancaria (CsvImportModal) puede mapear columnas sin importar
+// si el archivo es CSV o Excel. Punto de entrada genérico para cuando un
+// cliente active la automatización de un banco específico (ver
+// bankParsers.ts): mientras no haya un parser a la medida, esto ya deja leer
+// el archivo "tal cual" y mapear columnas a mano.
+export async function parseXlsxToRows(file: File): Promise<string[][]> {
+  const wb = new ExcelJS.Workbook();
+  await wb.xlsx.load(await file.arrayBuffer());
+  const sheet = wb.worksheets[0];
+  const rows: string[][] = [];
+  sheet.eachRow((row) => {
+    const cells: string[] = [];
+    row.eachCell({ includeEmpty: true }, (cell) => {
+      const v = cell.value;
+      cells.push(v instanceof Date ? v.toISOString().slice(0, 10) : String(v ?? ""));
+    });
+    if (cells.some((c) => c.trim() !== "")) rows.push(cells);
+  });
+  return rows;
+}
+
 // Parser CSV ligero, sin dependencias — soporta comillas y comas dentro de
 // campos entrecomillados. Suficiente para plantillas propias y exports de
 // banco, que son tabulares simples.

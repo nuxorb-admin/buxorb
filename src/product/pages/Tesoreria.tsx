@@ -59,6 +59,7 @@ export default function Tesoreria() {
             categories={categories}
             movements={movements}
             proyectados={proyectados}
+            limits={limits}
             reload={reload}
           />
         )}

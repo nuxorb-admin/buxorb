@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { supabase } from "../../../lib/supabase";
 import type { TreasuryAccount } from "../../../lib/database.types";
 import type { TreasuryTierLimits } from "./limits";
@@ -17,8 +17,13 @@ export default function CuentasTab({
   limits: TreasuryTierLimits;
   reload: () => void;
 }) {
+  const [userId, setUserId] = useState<string | null>(null);
   const [showNew, setShowNew] = useState(false);
   const [importAccount, setImportAccount] = useState<TreasuryAccount | null>(null);
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => setUserId(data.user?.id ?? null));
+  }, []);
 
   const bankEnabledCount = accounts.filter((a) => a.bank_import_enabled).length;
   const atAccountCap = accounts.length >= limits.maxAccounts;
@@ -101,6 +106,7 @@ export default function CuentasTab({
           companyId={companyId}
           accountId={importAccount.id}
           source="bank_import"
+          userId={userId}
           onClose={() => setImportAccount(null)}
           onImported={reload}
         />

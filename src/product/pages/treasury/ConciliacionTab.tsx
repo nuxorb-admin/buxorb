@@ -1,4 +1,4 @@
-import { useState, type ChangeEvent } from "react";
+import { useEffect, useState, type ChangeEvent } from "react";
 import { supabase } from "../../../lib/supabase";
 import type { TreasuryAccount, TreasuryMovement, TreasuryStatementImport } from "../../../lib/database.types";
 import type { TreasuryTierLimits } from "./limits";
@@ -33,6 +33,11 @@ export default function ConciliacionTab({
   reload: () => void;
 }) {
   const [showNew, setShowNew] = useState(false);
+  const [userId, setUserId] = useState<string | null>(null);
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => setUserId(data.user?.id ?? null));
+  }, []);
 
   const usedThisMonth = imports.filter((i) => i.period_month.slice(0, 7) === currentPeriod().slice(0, 7)).length;
   const atQuota = usedThisMonth >= limits.maxStatementImportsPerMonth;
@@ -111,6 +116,7 @@ export default function ConciliacionTab({
           companyId={companyId}
           accounts={accounts}
           allowAi={limits.aiParsing}
+          userId={userId}
           onClose={() => setShowNew(false)}
           onDone={reload}
         />
@@ -123,12 +129,14 @@ function NewReconciliationModal({
   companyId,
   accounts,
   allowAi,
+  userId,
   onClose,
   onDone,
 }: {
   companyId: string;
   accounts: TreasuryAccount[];
   allowAi: boolean;
+  userId: string | null;
   onClose: () => void;
   onDone: () => void;
 }) {
@@ -176,6 +184,7 @@ function NewReconciliationModal({
       method: "manual",
       file_name: file?.name ?? null,
       status: "reviewed",
+      created_by: userId,
     });
     setSaving(false);
     onDone();
@@ -196,6 +205,7 @@ function NewReconciliationModal({
         entry_date: t.date,
         source: "ai_statement",
         reconciled: true,
+        created_by: userId,
       })),
     );
     await supabase.from("treasury_statement_imports").insert({
@@ -205,6 +215,7 @@ function NewReconciliationModal({
       file_name: file?.name ?? null,
       status: "reviewed",
       extracted_count: proposed.length,
+      created_by: userId,
     });
     setSaving(false);
     onDone();

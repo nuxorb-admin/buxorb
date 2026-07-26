@@ -1,7 +1,7 @@
 import { useState, type ChangeEvent } from "react";
 import { supabase } from "../../../lib/supabase";
 import Modal from "../../../admin/components/Modal";
-import { parseCsv } from "./parseCsv";
+import { parseCsv, parseXlsxToRows } from "./parseCsv";
 
 const TYPE_BY_SIGN = "__sign__";
 
@@ -12,11 +12,16 @@ interface Mapping {
   type: number | typeof TYPE_BY_SIGN;
 }
 
+// Mapeo genérico de columnas: sirve para leer el archivo del banco "tal
+// cual" (CSV o Excel) mientras no exista un parser a la medida para ese
+// banco en bankParsers.ts. Cuando se active uno, este modal deja de usarse
+// para ese banco puntual.
 export default function CsvImportModal({
   title,
   companyId,
   accountId,
   source,
+  userId,
   onClose,
   onImported,
 }: {
@@ -24,6 +29,7 @@ export default function CsvImportModal({
   companyId: string;
   accountId: string;
   source: "csv_import" | "bank_import";
+  userId: string | null;
   onClose: () => void;
   onImported: () => void;
 }) {
@@ -39,6 +45,15 @@ export default function CsvImportModal({
   async function onFile(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
+    setError(null);
+    if (file.name.toLowerCase().endsWith(".xlsx")) {
+      try {
+        setRows(await parseXlsxToRows(file));
+      } catch {
+        setError("No se pudo leer el archivo Excel");
+      }
+      return;
+    }
     const text = await file.text();
     setRows(parseCsv(text));
   }
@@ -66,6 +81,7 @@ export default function CsvImportModal({
         amount: Math.abs(amount) || 0,
         entry_date: r[mapping.date] || new Date().toISOString().slice(0, 10),
         source,
+        created_by: userId,
       };
     });
 
@@ -90,11 +106,11 @@ export default function CsvImportModal({
 
         <div>
           <label className="mb-1 block font-mono text-[0.62rem] font-bold uppercase tracking-[0.12em] text-muted">
-            Archivo CSV
+            Archivo del banco (CSV o Excel)
           </label>
           <input
             type="file"
-            accept=".csv,text/csv"
+            accept=".csv,text/csv,.xlsx"
             onChange={onFile}
             className="w-full border border-ink/15 bg-sand-2 px-3 py-2 font-sans text-sm text-ink"
           />

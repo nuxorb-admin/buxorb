@@ -41,7 +41,7 @@ export default function Tasks() {
 
   async function load() {
     setLoading(true);
-    const { data } = await supabase.from("tasks").select("*").order("created_at", { ascending: false });
+    const { data } = await supabase.schema("nuxorb").from("tasks").select("*").order("created_at", { ascending: false });
     setTasks(data ?? []);
     setLoading(false);
   }
@@ -65,7 +65,7 @@ export default function Tasks() {
 
   async function handleMove(id: string, status: string) {
     setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, status: status as TaskStatus } : t)));
-    await supabase.from("tasks").update({ status }).eq("id", id);
+    await supabase.schema("nuxorb").from("tasks").update({ status }).eq("id", id);
   }
 
   return (
@@ -171,7 +171,7 @@ function NewTaskModal({
   async function submit(e: FormEvent) {
     e.preventDefault();
     setSaving(true);
-    await supabase.from("tasks").insert({
+    await supabase.schema("nuxorb").from("tasks").insert({
       title: form.title,
       description: form.description || null,
       assignee_id: form.assignee_id || null,
@@ -264,12 +264,12 @@ function TaskDetailModal({
   async function update(patch: Partial<Task>) {
     const updated = { ...task, ...patch };
     onUpdated(updated);
-    await supabase.from("tasks").update(patch).eq("id", task.id);
+    await supabase.schema("nuxorb").from("tasks").update(patch).eq("id", task.id);
   }
 
   async function remove() {
     if (!confirm("¿Eliminar esta tarea?")) return;
-    await supabase.from("tasks").delete().eq("id", task.id);
+    await supabase.schema("nuxorb").from("tasks").delete().eq("id", task.id);
     onDeleted(task.id);
   }
 

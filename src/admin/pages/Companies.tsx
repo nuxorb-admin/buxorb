@@ -14,7 +14,7 @@ async function generateUniqueSubdomain(name: string): Promise<string> {
   let n = 2;
   // eslint-disable-next-line no-constant-condition
   while (true) {
-    const { data } = await supabase.from("companies").select("id").eq("subdomain", candidate).maybeSingle();
+    const { data } = await supabase.schema("nuxorb").from("companies").select("id").eq("subdomain", candidate).maybeSingle();
     if (!data) return candidate;
     candidate = `${base}-${n}`;
     n++;
@@ -31,8 +31,8 @@ export default function Companies() {
   async function load() {
     setLoading(true);
     const [{ data }, { data: modules }] = await Promise.all([
-      supabase.from("companies").select("*").order("name"),
-      supabase.from("company_modules").select("company_id").eq("active", true),
+      supabase.schema("nuxorb").from("companies").select("*").order("name"),
+      supabase.schema("nuxorb").from("company_modules").select("company_id").eq("active", true),
     ]);
     setCompanies(data ?? []);
     const counts: Record<string, number> = {};
@@ -101,7 +101,7 @@ function NewCompanyModal({ onClose, onCreated }: { onClose: () => void; onCreate
     e.preventDefault();
     setSaving(true);
     const subdomain = await generateUniqueSubdomain(form.name);
-    await supabase.from("companies").insert({ ...form, subdomain, created_by: profile?.id });
+    await supabase.schema("nuxorb").from("companies").insert({ ...form, subdomain, created_by: profile?.id });
     setSaving(false);
     onCreated();
     onClose();

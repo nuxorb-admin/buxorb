@@ -42,7 +42,7 @@ Deno.serve(async (req) => {
     }
     const callerId = callerData.user.id;
 
-    const { data: callerProfile } = await admin.from("profiles").select("kind").eq("id", callerId).single();
+    const { data: callerProfile } = await admin.schema("nuxorb").from("profiles").select("kind").eq("id", callerId).single();
     const isTeam = callerProfile?.kind === "team";
 
     let isOwnerOfCompany = false;
@@ -64,7 +64,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    const { data: company } = await admin.from("companies").select("max_users").eq("id", company_id).single();
+    const { data: company } = await admin.schema("nuxorb").from("companies").select("max_users").eq("id", company_id).single();
     const { count } = await admin
       .from("company_users")
       .select("id", { count: "exact", head: true })
@@ -96,7 +96,7 @@ Deno.serve(async (req) => {
     const newUserId = created.user.id;
 
     // El trigger on_auth_user_created ya creó su profile con kind='team' por default — se corrige a 'client'.
-    await admin.from("profiles").update({ kind: "client", full_name }).eq("id", newUserId);
+    await admin.schema("nuxorb").from("profiles").update({ kind: "client", full_name }).eq("id", newUserId);
 
     const { error: linkError } = await admin.from("company_users").insert({
       company_id,

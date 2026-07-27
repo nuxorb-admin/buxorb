@@ -35,7 +35,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function loadProfile(userId: string) {
     setProfileLoading(true);
-    const { data } = await supabase.from("profiles").select("*").eq("id", userId).single();
+    const { data } = await supabase.schema("nuxorb").from("profiles").select("*").eq("id", userId).single();
     setProfile(data);
     setProfileLoading(false);
   }

@@ -8,7 +8,7 @@ export function useProfiles() {
 
   useEffect(() => {
     supabase
-      .from("profiles")
+      .schema("nuxorb").from("profiles")
       .select("*")
       .eq("kind", "team")
       .order("full_name")

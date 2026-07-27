@@ -24,7 +24,7 @@ export default function Leads() {
 
   async function load() {
     setLoading(true);
-    const { data } = await supabase.from("leads").select("*").order("created_at", { ascending: false });
+    const { data } = await supabase.schema("nuxorb").from("leads").select("*").order("created_at", { ascending: false });
     setLeads(data ?? []);
     setLoading(false);
   }
@@ -35,7 +35,7 @@ export default function Leads() {
 
   async function handleMove(id: string, stage: string) {
     setLeads((prev) => prev.map((l) => (l.id === id ? { ...l, stage: stage as Lead["stage"] } : l)));
-    await supabase.from("leads").update({ stage }).eq("id", id);
+    await supabase.schema("nuxorb").from("leads").update({ stage }).eq("id", id);
   }
 
   return (
@@ -101,7 +101,7 @@ function NewLeadModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
   async function submit(e: FormEvent) {
     e.preventDefault();
     setSaving(true);
-    await supabase.from("leads").insert({ ...form, source: "manual", stage: "nuevo" });
+    await supabase.schema("nuxorb").from("leads").insert({ ...form, source: "manual", stage: "nuevo" });
     setSaving(false);
     onCreated();
     onClose();

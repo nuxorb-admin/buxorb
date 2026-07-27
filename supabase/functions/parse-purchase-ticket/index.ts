@@ -62,7 +62,7 @@ Deno.serve(async (req) => {
     }
     const callerId = callerData.user.id;
 
-    const { data: callerProfile } = await admin.from("profiles").select("kind").eq("id", callerId).single();
+    const { data: callerProfile } = await admin.schema("nuxorb").from("profiles").select("kind").eq("id", callerId).single();
     const isTeam = callerProfile?.kind === "team";
 
     let isCompanyMember = false;
@@ -86,7 +86,7 @@ Deno.serve(async (req) => {
     // Lectura de tickets con IA es Essential y Professional (con distinto
     // límite mensual) — no se rechaza por nivel, pero sí se valida la cuota.
     const { data: moduleRow } = await admin
-      .from("company_modules")
+      .schema("nuxorb").from("company_modules")
       .select("tier")
       .eq("company_id", company_id)
       .eq("module", "compras_proveedores")

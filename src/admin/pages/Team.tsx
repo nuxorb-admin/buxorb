@@ -10,7 +10,7 @@ export default function Team() {
 
   useEffect(() => {
     supabase
-      .from("tasks")
+      .schema("nuxorb").from("tasks")
       .select("*")
       .neq("status", "done")
       .then(({ data }) => setTasks(data ?? []));

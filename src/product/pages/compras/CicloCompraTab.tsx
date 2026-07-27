@@ -608,7 +608,7 @@ function ReglasAprobacionModal({
     e.preventDefault();
     setError(null);
     setSaving(true);
-    const { data: profile } = await supabase.from("profiles").select("id").eq("email", aprobadorEmail).maybeSingle();
+    const { data: profile } = await supabase.schema("nuxorb").from("profiles").select("id").eq("email", aprobadorEmail).maybeSingle();
     if (!profile) {
       setError("No se encontró un usuario con ese correo dentro de la empresa");
       setSaving(false);

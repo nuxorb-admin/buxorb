@@ -43,7 +43,7 @@ export default function TenantPortal({ slug }: { slug: string }) {
   useEffect(() => {
     async function load() {
       const { data } = await supabase
-        .from("companies")
+        .schema("nuxorb").from("companies")
         .select("id, name, max_users")
         .eq("subdomain", slug)
         .maybeSingle();
@@ -95,7 +95,7 @@ function TenantPortalGate({ tenant }: { tenant: TenantInfo }) {
       }
 
       const { data: modulesData } = await supabase
-        .from("company_modules")
+        .schema("nuxorb").from("company_modules")
         .select("module, seats")
         .eq("company_id", tenant.id)
         .eq("active", true);

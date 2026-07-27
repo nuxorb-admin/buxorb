@@ -26,19 +26,19 @@ export default function Dashboard() {
     async function load() {
       const [{ count: newLeads }, { count: openTasks }, { count: myTasks }, { count: overdue }, { data: tasks }] =
         await Promise.all([
-          supabase.from("leads").select("*", { count: "exact", head: true }).eq("stage", "nuevo"),
-          supabase.from("tasks").select("*", { count: "exact", head: true }).neq("status", "done"),
+          supabase.schema("nuxorb").from("leads").select("*", { count: "exact", head: true }).eq("stage", "nuevo"),
+          supabase.schema("nuxorb").from("tasks").select("*", { count: "exact", head: true }).neq("status", "done"),
           supabase
-            .from("tasks")
+            .schema("nuxorb").from("tasks")
             .select("*", { count: "exact", head: true })
             .eq("assignee_id", profile!.id)
             .neq("status", "done"),
           supabase
-            .from("tasks")
+            .schema("nuxorb").from("tasks")
             .select("*", { count: "exact", head: true })
             .lt("due_date", today)
             .neq("status", "done"),
-          supabase.from("tasks").select("*").neq("status", "done"),
+          supabase.schema("nuxorb").from("tasks").select("*").neq("status", "done"),
         ]);
       setStats({
         newLeads: newLeads ?? 0,

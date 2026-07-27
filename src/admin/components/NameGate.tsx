@@ -16,7 +16,7 @@ export default function NameGate() {
     if (!trimmed) return;
     setSaving(true);
     setError(null);
-    const { error } = await supabase.from("profiles").update({ full_name: trimmed }).eq("id", profile!.id);
+    const { error } = await supabase.schema("nuxorb").from("profiles").update({ full_name: trimmed }).eq("id", profile!.id);
     setSaving(false);
     if (error) {
       setError("No se pudo guardar. Intenta de nuevo.");

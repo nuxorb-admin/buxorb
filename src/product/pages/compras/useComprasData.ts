@@ -53,7 +53,7 @@ export function useComprasData(companyId: string) {
     setLoading(true);
 
     const { data: moduleRow } = await supabase
-      .from("company_modules")
+      .schema("nuxorb").from("company_modules")
       .select("tier")
       .eq("company_id", companyId)
       .eq("module", "compras_proveedores")
@@ -122,7 +122,7 @@ export function useComprasData(companyId: string) {
 
     const userIds = (memberRows ?? []).map((u) => u.user_id);
     if (userIds.length > 0) {
-      const { data: profileRows } = await supabase.from("profiles").select("id, full_name, email").in("id", userIds);
+      const { data: profileRows } = await supabase.schema("nuxorb").from("profiles").select("id, full_name, email").in("id", userIds);
       setCompanyUsers(
         (profileRows ?? []).map((p) => ({ user_id: p.id, full_name: p.full_name, email: p.email })),
       );

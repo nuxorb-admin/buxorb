@@ -25,7 +25,7 @@ export function useTreasuryData(companyId: string) {
     setLoading(true);
 
     const { data: moduleRow } = await supabase
-      .from("company_modules")
+      .schema("nuxorb").from("company_modules")
       .select("tier")
       .eq("company_id", companyId)
       .eq("module", "tesoreria")

@@ -62,7 +62,7 @@ export default function CompanyUsersRoles({
         ? supabase.from("company_role_modules").select("role_id, module").in("role_id", roleIds)
         : Promise.resolve({ data: [] as CompanyRoleModule[] }),
       userIds.length
-        ? supabase.from("profiles").select("*").in("id", userIds)
+        ? supabase.schema("nuxorb").from("profiles").select("*").in("id", userIds)
         : Promise.resolve({ data: [] as Profile[] }),
     ]);
 

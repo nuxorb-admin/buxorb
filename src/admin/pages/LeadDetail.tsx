@@ -21,7 +21,7 @@ export default function LeadDetail() {
   async function load() {
     if (!id) return;
     setLoading(true);
-    const { data } = await supabase.from("leads").select("*").eq("id", id).single();
+    const { data } = await supabase.schema("nuxorb").from("leads").select("*").eq("id", id).single();
     setLead(data);
     setLoading(false);
   }
@@ -33,7 +33,7 @@ export default function LeadDetail() {
 
   useEffect(() => {
     supabase
-      .from("companies")
+      .schema("nuxorb").from("companies")
       .select("*")
       .order("name")
       .then(({ data }) => setCompanies(data ?? []));
@@ -42,13 +42,13 @@ export default function LeadDetail() {
   async function update(patch: Partial<Lead>) {
     if (!lead) return;
     setLead({ ...lead, ...patch });
-    await supabase.from("leads").update(patch).eq("id", lead.id);
+    await supabase.schema("nuxorb").from("leads").update(patch).eq("id", lead.id);
   }
 
   async function remove() {
     if (!lead) return;
     if (!confirm("¿Eliminar este lead?")) return;
-    await supabase.from("leads").delete().eq("id", lead.id);
+    await supabase.schema("nuxorb").from("leads").delete().eq("id", lead.id);
     navigate("/admin/leads");
   }
 

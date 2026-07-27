@@ -33,7 +33,7 @@ export default function Contacto() {
     e.preventDefault();
     setSending(true);
     setError(false);
-    const { error } = await supabase.from("leads").insert({
+    const { error } = await supabase.schema("nuxorb").from("leads").insert({
       name: form.nombre,
       email: form.email,
       company_name: form.negocio,

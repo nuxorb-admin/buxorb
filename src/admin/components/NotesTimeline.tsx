@@ -23,7 +23,7 @@ export default function NotesTimeline({
   async function load() {
     setLoading(true);
     const { data } = await supabase
-      .from("notes")
+      .schema("nuxorb").from("notes")
       .select("*, author:profiles(full_name, email)")
       .eq("entity_type", entityType)
       .eq("entity_id", entityId)
@@ -41,7 +41,7 @@ export default function NotesTimeline({
     e.preventDefault();
     if (!body.trim()) return;
     setSaving(true);
-    await supabase.from("notes").insert({
+    await supabase.schema("nuxorb").from("notes").insert({
       entity_type: entityType,
       entity_id: entityId,
       author_id: profile?.id,

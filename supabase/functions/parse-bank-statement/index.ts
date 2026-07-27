@@ -60,7 +60,7 @@ Deno.serve(async (req) => {
     }
     const callerId = callerData.user.id;
 
-    const { data: callerProfile } = await admin.from("profiles").select("kind").eq("id", callerId).single();
+    const { data: callerProfile } = await admin.schema("nuxorb").from("profiles").select("kind").eq("id", callerId).single();
     const isTeam = callerProfile?.kind === "team";
 
     let isCompanyMember = false;
@@ -84,7 +84,7 @@ Deno.serve(async (req) => {
     // La lectura por IA es exclusiva del nivel Professional — se valida
     // aquí también (no solo en la UI) como defensa adicional.
     const { data: moduleRow } = await admin
-      .from("company_modules")
+      .schema("nuxorb").from("company_modules")
       .select("tier")
       .eq("company_id", company_id)
       .eq("module", "tesoreria")

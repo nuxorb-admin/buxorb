@@ -94,11 +94,11 @@ export default function CompanyDetail() {
       { data: moduleData },
       { data: addonData },
     ] = await Promise.all([
-      supabase.from("companies").select("*").eq("id", id).single(),
-      supabase.from("contacts").select("*").eq("company_id", id).order("name"),
-      supabase.from("leads").select("*").eq("company_id", id).order("created_at", { ascending: false }),
-      supabase.from("company_modules").select("*").eq("company_id", id),
-      supabase.from("company_addons").select("*").eq("company_id", id),
+      supabase.schema("nuxorb").from("companies").select("*").eq("id", id).single(),
+      supabase.schema("nuxorb").from("contacts").select("*").eq("company_id", id).order("name"),
+      supabase.schema("nuxorb").from("leads").select("*").eq("company_id", id).order("created_at", { ascending: false }),
+      supabase.schema("nuxorb").from("company_modules").select("*").eq("company_id", id),
+      supabase.schema("nuxorb").from("company_addons").select("*").eq("company_id", id),
     ]);
     setCompany(companyData);
     setContacts(contactsData ?? []);
@@ -111,10 +111,10 @@ export default function CompanyDetail() {
   async function setModuleTier(module: CompanyModuleName, tier: CompanyModuleTier | "") {
     if (!company) return;
     if (tier === "") {
-      await supabase.from("company_modules").delete().eq("company_id", company.id).eq("module", module);
+      await supabase.schema("nuxorb").from("company_modules").delete().eq("company_id", company.id).eq("module", module);
     } else {
       await supabase
-        .from("company_modules")
+        .schema("nuxorb").from("company_modules")
         .upsert({ company_id: company.id, module, tier, seats: 1 }, { onConflict: "company_id,module" });
     }
     load();
@@ -123,7 +123,7 @@ export default function CompanyDetail() {
   async function setModuleSeats(module: CompanyModuleName, seats: number) {
     if (!company) return;
     await supabase
-      .from("company_modules")
+      .schema("nuxorb").from("company_modules")
       .update({ seats })
       .eq("company_id", company.id)
       .eq("module", module);
@@ -133,17 +133,17 @@ export default function CompanyDetail() {
   async function updateCompany(patch: Partial<Company>) {
     if (!company) return;
     setCompany({ ...company, ...patch });
-    await supabase.from("companies").update(patch).eq("id", company.id);
+    await supabase.schema("nuxorb").from("companies").update(patch).eq("id", company.id);
   }
 
   async function toggleAddon(addon: CompanyAddonName, active: boolean) {
     if (!company) return;
     if (active) {
       await supabase
-        .from("company_addons")
+        .schema("nuxorb").from("company_addons")
         .upsert({ company_id: company.id, addon, active: true }, { onConflict: "company_id,addon" });
     } else {
-      await supabase.from("company_addons").delete().eq("company_id", company.id).eq("addon", addon);
+      await supabase.schema("nuxorb").from("company_addons").delete().eq("company_id", company.id).eq("addon", addon);
     }
     load();
   }
@@ -156,7 +156,7 @@ export default function CompanyDetail() {
   async function remove() {
     if (!company) return;
     if (!confirm("¿Eliminar esta empresa?")) return;
-    await supabase.from("companies").delete().eq("id", company.id);
+    await supabase.schema("nuxorb").from("companies").delete().eq("id", company.id);
     navigate("/admin/companies");
   }
 
@@ -405,7 +405,7 @@ function NewContactModal({
   async function submit(e: FormEvent) {
     e.preventDefault();
     setSaving(true);
-    await supabase.from("contacts").insert({ ...form, company_id: companyId, created_by: profile?.id });
+    await supabase.schema("nuxorb").from("contacts").insert({ ...form, company_id: companyId, created_by: profile?.id });
     setSaving(false);
     onCreated();
     onClose();

@@ -50,7 +50,7 @@ export default function IncidenciasTab({
 
   async function aprobar(inc: Incidencia) {
     if (!userId) return;
-    await supabase.from("incidencias").update({ aprobado_por: userId }).eq("id", inc.id);
+    await supabase.from("hr_incidents").update({ aprobado_por: userId }).eq("id", inc.id);
     reload();
   }
 
@@ -178,7 +178,7 @@ function NewIncidenciaModal({
     e.preventDefault();
     if (!empleadoId) return;
     setSaving(true);
-    await supabase.from("incidencias").insert({
+    await supabase.from("hr_incidents").insert({
       empleado_id: empleadoId,
       tipo,
       fecha,
@@ -279,7 +279,7 @@ function ImportIncidenciasModal({
 
   async function confirm() {
     setSaving(true);
-    await supabase.from("incidencias").insert(
+    await supabase.from("hr_incidents").insert(
       matched.map((m) => ({
         empleado_id: m.empleado!.id,
         tipo: m.row[1] as IncidenciaTipo,

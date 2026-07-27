@@ -138,7 +138,7 @@ function NewEmpleadoModal({
   async function submit(e: FormEvent) {
     e.preventDefault();
     setSaving(true);
-    await supabase.from("empleados").insert({
+    await supabase.from("hr_employees").insert({
       company_id: companyId,
       nombre_completo: form.nombre_completo,
       rfc: form.rfc || null,
@@ -242,7 +242,7 @@ function ImportEmpleadosModal({ companyId, onClose, onImported }: { companyId: s
 
   async function confirm() {
     setSaving(true);
-    await supabase.from("empleados").insert(
+    await supabase.from("hr_employees").insert(
       dataRows
         .filter((r) => r[0]?.trim())
         .map((r) => ({
@@ -295,7 +295,7 @@ function DepartamentosModal({
     e.preventDefault();
     if (!nombre.trim()) return;
     setSaving(true);
-    await supabase.from("departamentos_personal").insert({ company_id: companyId, nombre: nombre.trim() });
+    await supabase.from("departments").insert({ company_id: companyId, nombre: nombre.trim() });
     setNombre("");
     setSaving(false);
     onSaved();
@@ -334,7 +334,7 @@ function BajaModal({ empleado, onClose, onSaved }: { empleado: Empleado; onClose
   async function submit(e: FormEvent) {
     e.preventDefault();
     setSaving(true);
-    await supabase.from("empleados").update({ estado: "baja", fecha_baja: fecha, motivo_baja: motivo }).eq("id", empleado.id);
+    await supabase.from("hr_employees").update({ estado: "baja", fecha_baja: fecha, motivo_baja: motivo }).eq("id", empleado.id);
     setSaving(false);
     onSaved();
     onClose();
@@ -382,8 +382,8 @@ function DetalleEmpleadoModal({
     const monto = Number(nuevoSueldo);
     if (!monto || monto === empleado.sueldo_diario) return;
     setSaving(true);
-    await supabase.from("historial_sueldo").insert({ empleado_id: empleado.id, sueldo_diario: monto });
-    await supabase.from("empleados").update({ sueldo_diario: monto }).eq("id", empleado.id);
+    await supabase.from("hr_salary_history").insert({ empleado_id: empleado.id, sueldo_diario: monto });
+    await supabase.from("hr_employees").update({ sueldo_diario: monto }).eq("id", empleado.id);
     setSaving(false);
     onSaved();
   }

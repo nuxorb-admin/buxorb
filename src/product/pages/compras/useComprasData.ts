@@ -18,11 +18,11 @@ import type {
 import { limitsForTier, type ComprasTierLimits } from "./limits";
 
 export interface CompraFull extends Compra {
-  compra_detalle: CompraDetalle[];
-  aprobaciones_compra: AprobacionCompra[];
-  recepciones: Recepcion[];
-  facturas_compra: FacturaCompra[];
-  pagos_compra: PagoCompra[];
+  procurement_order_items: CompraDetalle[];
+  procurement_order_approvals: AprobacionCompra[];
+  procurement_receipts: Recepcion[];
+  procurement_purchase_invoices: FacturaCompra[];
+  procurement_purchase_payments: PagoCompra[];
 }
 
 interface CompanyUserRow {
@@ -61,13 +61,13 @@ export function useComprasData(companyId: string) {
     setTier(moduleRow?.tier ?? null);
 
     let { data: settingsRow } = await supabase
-      .from("compras_settings")
+      .from("procurement_settings")
       .select("*")
       .eq("company_id", companyId)
       .maybeSingle();
     if (!settingsRow) {
       const { data: created } = await supabase
-        .from("compras_settings")
+        .from("procurement_settings")
         .insert({ company_id: companyId })
         .select()
         .single();
@@ -84,17 +84,17 @@ export function useComprasData(companyId: string) {
       { data: usoRow },
       { data: memberRows },
     ] = await Promise.all([
-      supabase.from("proveedores").select("*").eq("company_id", companyId).order("razon_social"),
-      supabase.from("departamentos").select("*").eq("company_id", companyId).order("nombre"),
+      supabase.from("procurement_suppliers").select("*").eq("company_id", companyId).order("razon_social"),
+      supabase.from("departments").select("*").eq("company_id", companyId).order("nombre"),
       supabase
-        .from("compras")
-        .select("*, compra_detalle(*), aprobaciones_compra(*), recepciones(*), facturas_compra(*), pagos_compra(*)")
+        .from("procurement_orders")
+        .select("*, procurement_order_items(*), procurement_order_approvals(*), procurement_receipts(*), procurement_purchase_invoices(*), procurement_purchase_payments(*)")
         .eq("company_id", companyId)
         .order("created_at", { ascending: false }),
-      supabase.from("requisiciones").select("*").eq("company_id", companyId).order("fecha", { ascending: false }),
-      supabase.from("reglas_aprobacion").select("*").eq("company_id", companyId).order("orden_nivel"),
+      supabase.from("procurement_requisitions").select("*").eq("company_id", companyId).order("fecha", { ascending: false }),
+      supabase.from("procurement_approval_rules").select("*").eq("company_id", companyId).order("orden_nivel"),
       supabase
-        .from("uso_lectura_tickets")
+        .from("procurement_ticket_reading_usage")
         .select("*")
         .eq("company_id", companyId)
         .eq("periodo", currentPeriod())
@@ -112,7 +112,7 @@ export function useComprasData(companyId: string) {
     const proveedorIds = (proveedorRows ?? []).map((p) => p.id);
     if (proveedorIds.length > 0) {
       const { data: evalRows } = await supabase
-        .from("evaluacion_proveedor")
+        .from("procurement_supplier_evaluations")
         .select("*")
         .in("proveedor_id", proveedorIds);
       setEvaluaciones(evalRows ?? []);
@@ -160,7 +160,7 @@ export function useComprasData(companyId: string) {
 export async function registrarUsoTicket(companyId: string) {
   const periodo = currentPeriod();
   const { data: existing } = await supabase
-    .from("uso_lectura_tickets")
+    .from("procurement_ticket_reading_usage")
     .select("*")
     .eq("company_id", companyId)
     .eq("periodo", periodo)
@@ -168,11 +168,11 @@ export async function registrarUsoTicket(companyId: string) {
 
   if (existing) {
     await supabase
-      .from("uso_lectura_tickets")
+      .from("procurement_ticket_reading_usage")
       .update({ veces_usado: existing.veces_usado + 1 })
       .eq("company_id", companyId)
       .eq("periodo", periodo);
   } else {
-    await supabase.from("uso_lectura_tickets").insert({ company_id: companyId, periodo, veces_usado: 1 });
+    await supabase.from("procurement_ticket_reading_usage").insert({ company_id: companyId, periodo, veces_usado: 1 });
   }
 }

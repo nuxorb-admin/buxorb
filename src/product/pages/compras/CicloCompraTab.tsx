@@ -20,7 +20,7 @@ const ESTADO_COLOR = {
 } as const;
 
 async function publicarProyectado(compra: CompraFull) {
-  await supabase.from("mov_esperados").insert({
+  await supabase.from("expected_movements").insert({
     company_id: compra.company_id,
     tipo: "egreso",
     monto: compra.total,
@@ -40,7 +40,7 @@ function nivelPendiente(compra: CompraFull, reglas: ReglaAprobacion[]): ReglaApr
     .sort((a, b) => a.orden_nivel - b.orden_nivel);
 
   for (const regla of aplicables) {
-    const yaAprobado = compra.aprobaciones_compra.some(
+    const yaAprobado = compra.procurement_order_approvals.some(
       (a) => a.nivel === regla.orden_nivel && a.resultado === "aprobada",
     );
     if (!yaAprobado) return regla;
@@ -82,13 +82,13 @@ export default function CicloCompraTab({
   }, []);
 
   async function toggleAprobacion(on: boolean) {
-    await supabase.from("compras_settings").update({ aprobacion_activada: on }).eq("company_id", companyId);
+    await supabase.from("procurement_settings").update({ aprobacion_activada: on }).eq("company_id", companyId);
     reload();
   }
 
   async function aprobar(compra: CompraFull, resultado: "aprobada" | "rechazada", nivel: number) {
     if (!userId) return;
-    await supabase.from("aprobaciones_compra").insert({
+    await supabase.from("procurement_order_approvals").insert({
       compra_id: compra.id,
       aprobador_user_id: userId,
       nivel,
@@ -96,7 +96,7 @@ export default function CicloCompraTab({
     });
 
     if (resultado === "rechazada") {
-      await supabase.from("compras").update({ estado: "cancelada" }).eq("id", compra.id);
+      await supabase.from("procurement_orders").update({ estado: "cancelada" }).eq("id", compra.id);
       reload();
       return;
     }
@@ -105,25 +105,25 @@ export default function CicloCompraTab({
       // ¿queda otro nivel pendiente? se resuelve al recargar y recalcular con
       // la nueva aprobación ya insertada — por simplicidad, se relee aquí.
       const { data: updated } = await supabase
-        .from("compras")
-        .select("*, aprobaciones_compra(*)")
+        .from("procurement_orders")
+        .select("*, procurement_order_approvals(*)")
         .eq("id", compra.id)
         .single();
-      const siguiente = updated ? nivelPendiente({ ...compra, aprobaciones_compra: updated.aprobaciones_compra }, reglasAprobacion) : null;
+      const siguiente = updated ? nivelPendiente({ ...compra, procurement_order_approvals: updated.procurement_order_approvals }, reglasAprobacion) : null;
       if (!siguiente) {
-        await supabase.from("compras").update({ estado: "aprobada" }).eq("id", compra.id);
+        await supabase.from("procurement_orders").update({ estado: "aprobada" }).eq("id", compra.id);
         await publicarProyectado(compra);
       }
     } else {
-      await supabase.from("compras").update({ estado: "aprobada" }).eq("id", compra.id);
+      await supabase.from("procurement_orders").update({ estado: "aprobada" }).eq("id", compra.id);
       await publicarProyectado(compra);
     }
     reload();
   }
 
   async function marcarRecibida(compra: CompraFull) {
-    await supabase.from("recepciones").insert({ compra_id: compra.id, tipo: "total" });
-    await supabase.from("compras").update({ estado: "recibida" }).eq("id", compra.id);
+    await supabase.from("procurement_receipts").insert({ compra_id: compra.id, tipo: "total" });
+    await supabase.from("procurement_orders").update({ estado: "recibida" }).eq("id", compra.id);
     reload();
   }
 
@@ -139,7 +139,7 @@ export default function CicloCompraTab({
       <p><b>Proveedor:</b> ${proveedor?.razon_social ?? ""}</p>
       <p><b>Fecha:</b> ${compra.fecha}</p>
       <table><thead><tr><th>Descripción</th><th>Cantidad</th><th>Precio unitario</th><th>Importe</th></tr></thead><tbody>
-      ${compra.compra_detalle.map((d) => `<tr><td>${d.descripcion}</td><td>${d.cantidad}</td><td>${money(d.precio_unitario)}</td><td>${money(d.importe)}</td></tr>`).join("")}
+      ${compra.procurement_order_items.map((d) => `<tr><td>${d.descripcion}</td><td>${d.cantidad}</td><td>${money(d.precio_unitario)}</td><td>${money(d.importe)}</td></tr>`).join("")}
       </tbody></table>
       <p style="text-align:right;margin-top:1rem;">Subtotal: ${money(compra.subtotal)}<br/>IVA: ${money(compra.iva)}<br/><b>Total: ${money(compra.total)}</b></p>
       <script>window.print()</script>
@@ -365,7 +365,7 @@ function NewCompraModal({
     const requiereAprobacion = settings.aprobacion_activada && companyUserCount > 1;
 
     const { data: compra } = await supabase
-      .from("compras")
+      .from("procurement_orders")
       .insert({
         company_id: companyId,
         folio,
@@ -385,7 +385,7 @@ function NewCompraModal({
       .single();
 
     if (compra) {
-      await supabase.from("compra_detalle").insert(
+      await supabase.from("procurement_order_items").insert(
         conceptos
           .filter((c) => c.descripcion.trim())
           .map((c) => ({
@@ -398,7 +398,7 @@ function NewCompraModal({
       );
 
       if (!requiereAprobacion) {
-        await supabase.from("mov_esperados").insert({
+        await supabase.from("expected_movements").insert({
           company_id: companyId,
           tipo: "egreso",
           monto: total,
@@ -542,7 +542,7 @@ function NewRequisicionModal({
   async function submit(e: FormEvent) {
     e.preventDefault();
     setSaving(true);
-    await supabase.from("requisiciones").insert({
+    await supabase.from("procurement_requisitions").insert({
       company_id: companyId,
       solicitante_id: userId,
       departamento_id: departamentoId || null,
@@ -614,7 +614,7 @@ function ReglasAprobacionModal({
       setSaving(false);
       return;
     }
-    await supabase.from("reglas_aprobacion").insert({
+    await supabase.from("procurement_approval_rules").insert({
       company_id: companyId,
       tipo,
       umbral_monto: tipo === "monto" ? Number(umbral) : null,

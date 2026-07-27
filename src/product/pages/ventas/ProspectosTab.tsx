@@ -71,18 +71,18 @@ export default function ProspectosTab({
     if (!clienteId && o.prospecto_id) {
       const prospecto = prospectos.find((p) => p.id === o.prospecto_id);
       const { data: cliente } = await supabase
-        .from("clientes")
+        .from("sales_customers")
         .insert({ company_id: companyId, razon_social: prospecto?.nombre ?? "Cliente nuevo", email: prospecto?.contacto_correo, telefono: prospecto?.contacto_telefono })
         .select()
         .single();
       clienteId = cliente?.id ?? null;
     }
-    await supabase.from("oportunidades").update({ estado: "ganada", cliente_id: clienteId }).eq("id", o.id);
+    await supabase.from("sales_opportunities").update({ estado: "ganada", cliente_id: clienteId }).eq("id", o.id);
     reload();
   }
 
   async function moverEtapa(oportunidadId: string, nuevaEtapaId: string) {
-    await supabase.from("oportunidades").update({ etapa_id: nuevaEtapaId }).eq("id", oportunidadId);
+    await supabase.from("sales_opportunities").update({ etapa_id: nuevaEtapaId }).eq("id", oportunidadId);
     reload();
   }
 
@@ -235,7 +235,7 @@ function NewProspectoModal({ companyId, onClose, onCreated }: { companyId: strin
   async function submit(e: FormEvent) {
     e.preventDefault();
     setSaving(true);
-    await supabase.from("prospectos").insert({
+    await supabase.from("sales_prospects").insert({
       company_id: companyId,
       nombre,
       contacto_nombre: contactoNombre || null,
@@ -335,7 +335,7 @@ function NewOportunidadModal({
   async function submit(e: FormEvent) {
     e.preventDefault();
     setSaving(true);
-    await supabase.from("oportunidades").insert({
+    await supabase.from("sales_opportunities").insert({
       company_id: companyId,
       prospecto_id: origenTipo === "prospecto" ? prospectoId || null : null,
       cliente_id: origenTipo === "cliente" ? clienteId || null : null,
@@ -465,7 +465,7 @@ function EtapasModal({
     e.preventDefault();
     if (!nombre.trim()) return;
     setSaving(true);
-    await supabase.from("etapas_pipeline").insert({ company_id: companyId, nombre: nombre.trim(), orden: etapas.length + 1 });
+    await supabase.from("sales_pipeline_stages").insert({ company_id: companyId, nombre: nombre.trim(), orden: etapas.length + 1 });
     setNombre("");
     setSaving(false);
     onSaved();
@@ -514,7 +514,7 @@ function MotivosModal({
     e.preventDefault();
     if (!nombre.trim()) return;
     setSaving(true);
-    await supabase.from("motivos_perdida").insert({ company_id: companyId, nombre: nombre.trim() });
+    await supabase.from("sales_loss_reasons").insert({ company_id: companyId, nombre: nombre.trim() });
     setNombre("");
     setSaving(false);
     onSaved();
@@ -565,7 +565,7 @@ function PerderModal({
     e.preventDefault();
     setSaving(true);
     await supabase
-      .from("oportunidades")
+      .from("sales_opportunities")
       .update({ estado: "perdida", motivo_perdida_id: limits.pipelineVisual ? motivoId || null : null })
       .eq("id", oportunidad.id);
     setSaving(false);

@@ -85,23 +85,23 @@ export default function CotizacionesTab({
 
   async function enviar(c: CotizacionFull) {
     if (c.requiere_aprobacion && !c.aprobada_por) return;
-    await supabase.from("cotizaciones").update({ estado: "enviada" }).eq("id", c.id);
+    await supabase.from("sales_quotes").update({ estado: "enviada" }).eq("id", c.id);
     reload();
   }
 
   async function aprobar(c: CotizacionFull) {
     if (!userId) return;
-    await supabase.from("cotizaciones").update({ aprobada_por: userId }).eq("id", c.id);
+    await supabase.from("sales_quotes").update({ aprobada_por: userId }).eq("id", c.id);
     reload();
   }
 
   async function marcarAceptada(c: CotizacionFull) {
-    await supabase.from("cotizaciones").update({ estado: "aceptada" }).eq("id", c.id);
+    await supabase.from("sales_quotes").update({ estado: "aceptada" }).eq("id", c.id);
     reload();
   }
 
   async function rechazar(c: CotizacionFull) {
-    await supabase.from("cotizaciones").update({ estado: "rechazada" }).eq("id", c.id);
+    await supabase.from("sales_quotes").update({ estado: "rechazada" }).eq("id", c.id);
     reload();
   }
 
@@ -109,7 +109,7 @@ export default function CotizacionesTab({
     if (!c.cliente_id) return;
     const cliente = clientes.find((cl) => cl.id === c.cliente_id);
     const { data: pedido } = await supabase
-      .from("pedidos")
+      .from("sales_orders")
       .insert({
         company_id: companyId,
         cotizacion_id: c.id,
@@ -123,8 +123,8 @@ export default function CotizacionesTab({
       .select()
       .single();
     if (pedido) {
-      await supabase.from("pedido_detalle").insert(
-        c.cotizacion_detalle.map((d) => ({
+      await supabase.from("sales_order_items").insert(
+        c.sales_quote_items.map((d) => ({
           pedido_id: pedido.id,
           producto_servicio_id: d.producto_servicio_id,
           descripcion: d.descripcion,
@@ -149,7 +149,7 @@ export default function CotizacionesTab({
       <p><b>Cliente:</b> ${nombreCliente(c)}</p>
       <p><b>Fecha:</b> ${c.fecha_emision}${c.vigencia_hasta ? ` · Vigente hasta ${c.vigencia_hasta}` : ""}</p>
       <table><thead><tr><th>Descripción</th><th>Cantidad</th><th>Precio unitario</th><th>Desc. %</th><th>Importe</th></tr></thead><tbody>
-      ${c.cotizacion_detalle.map((d) => `<tr><td>${d.descripcion}</td><td>${d.cantidad}</td><td>${money(d.precio_unitario)}</td><td>${d.descuento_pct}%</td><td>${money(d.importe)}</td></tr>`).join("")}
+      ${c.sales_quote_items.map((d) => `<tr><td>${d.descripcion}</td><td>${d.cantidad}</td><td>${money(d.precio_unitario)}</td><td>${d.descuento_pct}%</td><td>${money(d.importe)}</td></tr>`).join("")}
       </tbody></table>
       <p style="text-align:right;margin-top:1rem;">Subtotal: ${money(c.subtotal)}<br/>IVA: ${money(c.iva)}<br/><b>Total: ${money(c.total)}</b></p>
       <script>window.print()</script>
@@ -243,7 +243,7 @@ export default function CotizacionesTab({
       <div className="divide-y divide-ink/10 border border-ink/10 bg-white">
         {pedidos.length === 0 && <p className="p-4 font-mono text-xs text-muted">Sin pedidos todavía.</p>}
         {pedidos.map((p) => {
-          const anticipado = p.anticipos_pedido.reduce((s, a) => s + Number(a.monto), 0);
+          const anticipado = p.sales_order_advances.reduce((s, a) => s + Number(a.monto), 0);
           return (
             <div key={p.id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
               <div>
@@ -313,7 +313,7 @@ function NewProductoModal({ companyId, onClose, onCreated }: { companyId: string
   async function submit(e: FormEvent) {
     e.preventDefault();
     setSaving(true);
-    await supabase.from("productos_servicios").insert({
+    await supabase.from("sales_products_services").insert({
       company_id: companyId,
       nombre,
       descripcion: descripcion || null,
@@ -412,7 +412,7 @@ function NewCotizacionModal({
     const requiereAprobacion = limits.versionesCotizacionYAprobacionDescuentos && descuentoPct > settings.umbral_descuento_pct;
 
     const { data: cotizacion } = await supabase
-      .from("cotizaciones")
+      .from("sales_quotes")
       .insert({
         company_id: companyId,
         cliente_id: origenTipo === "cliente" ? clienteId || null : null,
@@ -429,7 +429,7 @@ function NewCotizacionModal({
       .single();
 
     if (cotizacion) {
-      await supabase.from("cotizacion_detalle").insert(
+      await supabase.from("sales_quote_items").insert(
         partidas
           .filter((p) => p.descripcion.trim())
           .map((p) => {
@@ -639,7 +639,7 @@ function NewPedidoModal({
     if (!clienteId) return;
     setSaving(true);
     const { data: pedido } = await supabase
-      .from("pedidos")
+      .from("sales_orders")
       .insert({
         company_id: companyId,
         cliente_id: clienteId,
@@ -653,7 +653,7 @@ function NewPedidoModal({
       .select()
       .single();
     if (pedido) {
-      await supabase.from("pedido_detalle").insert(
+      await supabase.from("sales_order_items").insert(
         partidas
           .filter((p) => p.descripcion.trim())
           .map((p) => {
@@ -796,7 +796,7 @@ function AnticipoModal({ pedido, onClose, onSaved }: { pedido: PedidoFull; onClo
     e.preventDefault();
     if (!Number(monto)) return;
     setSaving(true);
-    await supabase.from("anticipos_pedido").insert({ pedido_id: pedido.id, monto: Number(monto) });
+    await supabase.from("sales_order_advances").insert({ pedido_id: pedido.id, monto: Number(monto) });
     setSaving(false);
     onSaved();
     onClose();

@@ -21,17 +21,17 @@ import type {
 import { limitsForTier, type VentasTierLimits } from "./limits";
 
 export interface CotizacionFull extends Cotizacion {
-  cotizacion_detalle: CotizacionDetalle[];
+  sales_quote_items: CotizacionDetalle[];
 }
 
 export interface PedidoFull extends Pedido {
-  pedido_detalle: PedidoDetalle[];
-  anticipos_pedido: AnticipoPedido[];
+  sales_order_items: PedidoDetalle[];
+  sales_order_advances: AnticipoPedido[];
 }
 
 export interface FacturaFull extends Factura {
-  factura_detalle: FacturaDetalle[];
-  cobros: Cobro[];
+  sales_invoice_items: FacturaDetalle[];
+  sales_collections: Cobro[];
 }
 
 interface CompanyUserRow {
@@ -66,9 +66,9 @@ export function useVentasData(companyId: string) {
       .maybeSingle();
     setTier(moduleRow?.tier ?? null);
 
-    let { data: settingsRow } = await supabase.from("ventas_settings").select("*").eq("company_id", companyId).maybeSingle();
+    let { data: settingsRow } = await supabase.from("sales_settings").select("*").eq("company_id", companyId).maybeSingle();
     if (!settingsRow) {
-      const { data: created } = await supabase.from("ventas_settings").insert({ company_id: companyId }).select().single();
+      const { data: created } = await supabase.from("sales_settings").insert({ company_id: companyId }).select().single();
       settingsRow = created ?? settingsRow;
     }
     setSettings(settingsRow ?? { company_id: companyId, umbral_descuento_pct: 20 });
@@ -85,25 +85,25 @@ export function useVentasData(companyId: string) {
       { data: facturaRows },
       { data: memberRows },
     ] = await Promise.all([
-      supabase.from("clientes").select("*").eq("company_id", companyId).order("razon_social"),
-      supabase.from("prospectos").select("*").eq("company_id", companyId).order("created_at", { ascending: false }),
-      supabase.from("etapas_pipeline").select("*").eq("company_id", companyId).order("orden"),
-      supabase.from("motivos_perdida").select("*").eq("company_id", companyId).order("nombre"),
-      supabase.from("oportunidades").select("*").eq("company_id", companyId).order("created_at", { ascending: false }),
-      supabase.from("productos_servicios").select("*").eq("company_id", companyId).order("nombre"),
+      supabase.from("sales_customers").select("*").eq("company_id", companyId).order("razon_social"),
+      supabase.from("sales_prospects").select("*").eq("company_id", companyId).order("created_at", { ascending: false }),
+      supabase.from("sales_pipeline_stages").select("*").eq("company_id", companyId).order("orden"),
+      supabase.from("sales_loss_reasons").select("*").eq("company_id", companyId).order("nombre"),
+      supabase.from("sales_opportunities").select("*").eq("company_id", companyId).order("created_at", { ascending: false }),
+      supabase.from("sales_products_services").select("*").eq("company_id", companyId).order("nombre"),
       supabase
-        .from("cotizaciones")
-        .select("*, cotizacion_detalle(*)")
+        .from("sales_quotes")
+        .select("*, sales_quote_items(*)")
         .eq("company_id", companyId)
         .order("created_at", { ascending: false }),
       supabase
-        .from("pedidos")
-        .select("*, pedido_detalle(*), anticipos_pedido(*)")
+        .from("sales_orders")
+        .select("*, sales_order_items(*), sales_order_advances(*)")
         .eq("company_id", companyId)
         .order("created_at", { ascending: false }),
       supabase
-        .from("facturas")
-        .select("*, factura_detalle(*), cobros(*)")
+        .from("sales_invoices")
+        .select("*, sales_invoice_items(*), sales_collections(*)")
         .eq("company_id", companyId)
         .order("created_at", { ascending: false }),
       supabase.from("company_users").select("user_id").eq("company_id", companyId),

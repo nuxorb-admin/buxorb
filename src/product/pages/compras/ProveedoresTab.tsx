@@ -15,7 +15,7 @@ function historialFor(proveedorId: string, compras: CompraFull[]) {
   const del = compras.filter((c) => c.proveedor_id === proveedorId && c.estado !== "cancelada");
   const totalComprado = del.reduce((sum, c) => sum + Number(c.total), 0);
   const saldoPendiente = del.reduce((sum, c) => {
-    const pagado = c.pagos_compra.reduce((s, p) => s + Number(p.monto), 0);
+    const pagado = c.procurement_purchase_payments.reduce((s, p) => s + Number(p.monto), 0);
     return sum + Math.max(0, Number(c.total) - pagado);
   }, 0);
   return { count: del.length, totalComprado, saldoPendiente };
@@ -27,7 +27,7 @@ function cumplimiento(proveedorId: string, compras: CompraFull[]) {
   );
   if (recibidasOPagadas.length === 0) return null;
   const aTiempo = recibidasOPagadas.filter((c) => {
-    const recepcion = c.recepciones[0];
+    const recepcion = c.procurement_receipts[0];
     if (!recepcion || !c.fecha_estimada_pago) return true;
     return new Date(recepcion.fecha) <= new Date(c.fecha_estimada_pago);
   });
@@ -56,7 +56,7 @@ export default function ProveedoresTab({
   const comparativoPrecios = (() => {
     const byDescripcion = new Map<string, { proveedor: string; precio: number }[]>();
     for (const c of compras) {
-      for (const d of c.compra_detalle) {
+      for (const d of c.procurement_order_items) {
         const key = d.descripcion.toLowerCase().trim();
         if (!key) continue;
         const proveedor = proveedores.find((p) => p.id === c.proveedor_id)?.razon_social ?? "—";
@@ -172,7 +172,7 @@ function NewProveedorModal({
   async function submit(e: FormEvent) {
     e.preventDefault();
     setSaving(true);
-    await supabase.from("proveedores").insert({
+    await supabase.from("procurement_suppliers").insert({
       company_id: companyId,
       razon_social: form.razon_social,
       rfc: form.rfc || null,
@@ -231,7 +231,7 @@ function ImportProveedoresModal({
 
   async function confirm() {
     setSaving(true);
-    await supabase.from("proveedores").insert(
+    await supabase.from("procurement_suppliers").insert(
       dataRows
         .filter((r) => r[0]?.trim())
         .map((r) => ({
@@ -284,7 +284,7 @@ function RatingModal({
     const {
       data: { user },
     } = await supabase.auth.getUser();
-    await supabase.from("evaluacion_proveedor").insert({
+    await supabase.from("procurement_supplier_evaluations").insert({
       proveedor_id: proveedor.id,
       calificacion,
       notas: notas || null,

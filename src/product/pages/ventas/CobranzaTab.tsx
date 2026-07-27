@@ -129,14 +129,14 @@ function CobroModal({ factura, onClose, onCobrado }: { factura: FacturaFull; onC
     setSaving(true);
     const montoNum = Number(monto);
     const nuevoSaldo = Math.max(0, factura.saldo_pendiente - montoNum);
-    await supabase.from("cobros").insert({
+    await supabase.from("sales_collections").insert({
       factura_id: factura.id,
       monto: montoNum,
       tipo: nuevoSaldo <= 0 ? "total" : "parcial",
       referencia: referencia || null,
     });
     await supabase
-      .from("facturas")
+      .from("sales_invoices")
       .update({ saldo_pendiente: nuevoSaldo, estado: nuevoSaldo <= 0 ? "pagada" : "parcial" })
       .eq("id", factura.id);
     setSaving(false);
@@ -181,7 +181,7 @@ function EstadoCuentaModal({ cliente, facturas, onClose }: { cliente: Cliente; f
       <table><thead><tr><th>Folio</th><th>Fecha</th><th>Total</th><th>Cobrado</th><th>Saldo</th></tr></thead><tbody>
       ${facturas
         .map((f) => {
-          const cobrado = f.cobros.reduce((s, c) => s + Number(c.monto), 0);
+          const cobrado = f.sales_collections.reduce((s, c) => s + Number(c.monto), 0);
           return `<tr><td>${f.folio_interno}</td><td>${f.fecha_emision}</td><td>${money(f.total)}</td><td>${money(cobrado)}</td><td>${money(f.saldo_pendiente)}</td></tr>`;
         })
         .join("")}

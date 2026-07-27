@@ -70,7 +70,7 @@ export function useTreasuryData(companyId: string) {
       supabase.from("treasury_movements").select("*").eq("company_id", companyId).order("entry_date", { ascending: false }),
       supabase.from("treasury_statement_imports").select("*").eq("company_id", companyId).order("created_at", { ascending: false }),
       supabase
-        .from("mov_esperados")
+        .from("expected_movements")
         .select("*")
         .eq("company_id", companyId)
         .eq("estado", "pendiente")

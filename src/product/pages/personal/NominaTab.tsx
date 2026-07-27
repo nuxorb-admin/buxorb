@@ -287,7 +287,7 @@ function NewPeriodoModal({ companyId, onClose, onCreated }: { companyId: string;
   async function submit(e: FormEvent) {
     e.preventDefault();
     setSaving(true);
-    await supabase.from("periodo_nomina").insert({
+    await supabase.from("hr_payroll_periods").insert({
       company_id: companyId,
       periodicidad,
       fecha_inicio: fechaInicio,
@@ -409,7 +409,7 @@ function PrenominaModal({
       const neto = round2(totalPercepciones - totalDeducciones);
 
       const { data: recibo } = await supabase
-        .from("recibo_nomina")
+        .from("hr_payroll_receipts")
         .upsert(
           { periodo_id: periodo.id, empleado_id: emp.id, total_percepciones: totalPercepciones, total_deducciones: totalDeducciones, neto },
           { onConflict: "periodo_id,empleado_id" },
@@ -418,8 +418,8 @@ function PrenominaModal({
         .single();
 
       if (recibo) {
-        await supabase.from("recibo_detalle").delete().eq("recibo_id", recibo.id);
-        await supabase.from("recibo_detalle").insert(
+        await supabase.from("hr_payroll_receipt_items").delete().eq("recibo_id", recibo.id);
+        await supabase.from("hr_payroll_receipt_items").insert(
           items.map((it) => {
             const concepto = conceptos.find((c) => c.clave === it.clave);
             return { recibo_id: recibo.id, concepto_id: concepto?.id, tipo: it.tipo, monto: it.monto, origen: concepto?.origen ?? "calculado" };
@@ -427,7 +427,7 @@ function PrenominaModal({
         );
       }
     }
-    await supabase.from("periodo_nomina").update({ estado: "calculado" }).eq("id", periodo.id);
+    await supabase.from("hr_payroll_periods").update({ estado: "calculado" }).eq("id", periodo.id);
     setSaving(false);
     onSaved();
     onClose();
@@ -436,15 +436,15 @@ function PrenominaModal({
   async function cerrarPeriodo() {
     setCerrando(true);
     const totalNeto = round2(periodo.recibo_nomina.reduce((s, r) => s + r.neto, 0));
-    await supabase.from("periodo_nomina").update({ estado: "cerrado" }).eq("id", periodo.id);
+    await supabase.from("hr_payroll_periods").update({ estado: "cerrado" }).eq("id", periodo.id);
     await supabase
-      .from("incidencias")
+      .from("hr_incidents")
       .update({ estado: "aplicada_en_nomina" })
       .in("empleado_id", empleadosVigentes.map((e) => e.id))
       .gte("fecha", periodo.fecha_inicio)
       .lte("fecha", periodo.fecha_fin);
     if (totalNeto > 0) {
-      await supabase.from("mov_esperados").insert({
+      await supabase.from("expected_movements").insert({
         company_id: companyId,
         tipo: "egreso",
         monto: totalNeto,
@@ -647,7 +647,7 @@ function FiniquitoModal({
 
   async function guardar() {
     setSaving(true);
-    await supabase.from("finiquito").insert({
+    await supabase.from("hr_severances").insert({
       empleado_id: empleado.id,
       tipo: empleado.motivo_baja === "despido" ? "liquidacion" : "finiquito",
       desglose: resultado,

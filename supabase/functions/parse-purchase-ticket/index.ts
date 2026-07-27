@@ -96,7 +96,7 @@ Deno.serve(async (req) => {
     const limite = MAX_TICKETS_POR_MES[tier];
 
     const { data: usoRow } = await admin
-      .from("uso_lectura_tickets")
+      .from("procurement_ticket_reading_usage")
       .select("veces_usado")
       .eq("company_id", company_id)
       .eq("periodo", currentPeriod())

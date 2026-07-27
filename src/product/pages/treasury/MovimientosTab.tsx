@@ -369,14 +369,14 @@ function LinkProyectadoModal({
       .select()
       .single();
 
-    await supabase.from("mov_confirmados").insert({
+    await supabase.from("confirmed_movements").insert({
       mov_esperado_id: proyectado.id,
       company_id: companyId,
       treasury_movement_id: movement?.id ?? null,
       fecha_real: form.entry_date,
       monto: Number(form.amount),
     });
-    await supabase.from("mov_esperados").update({ estado: "vinculado" }).eq("id", proyectado.id);
+    await supabase.from("expected_movements").update({ estado: "vinculado" }).eq("id", proyectado.id);
 
     setSaving(false);
     onLinked();

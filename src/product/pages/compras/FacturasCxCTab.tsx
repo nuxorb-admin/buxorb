@@ -21,7 +21,7 @@ interface TicketResult {
 }
 
 function saldoPendiente(compra: CompraFull) {
-  const pagado = compra.pagos_compra.reduce((sum, p) => sum + Number(p.monto), 0);
+  const pagado = compra.procurement_purchase_payments.reduce((sum, p) => sum + Number(p.monto), 0);
   return Math.max(0, Number(compra.total) - pagado);
 }
 
@@ -56,7 +56,7 @@ export default function FacturasCxCTab({
   const [payingCompra, setPayingCompra] = useState<CompraFull | null>(null);
 
   const pendientesFactura = compras.filter(
-    (c) => c.origen === "ticket_ia" && c.facturas_compra.length === 0,
+    (c) => c.origen === "ticket_ia" && c.procurement_purchase_invoices.length === 0,
   );
   const conSaldo = compras.filter((c) => saldoPendiente(c) > 0 && c.estado !== "cancelada");
   const ticketsAgotados = ticketsUsados >= limits.maxTicketsIAPorMes;
@@ -220,7 +220,7 @@ function XmlUploadModal({
       const compra = pendientesFactura.find((c) => c.id === linkTo);
       const estadoMatch =
         matchEnabled && compra ? (Math.abs(compra.total - parsed.total) > 0.5 ? "con_diferencias" : "ok") : null;
-      await supabase.from("facturas_compra").insert({
+      await supabase.from("procurement_purchase_invoices").insert({
         compra_id: linkTo,
         uuid_fiscal: parsed.uuidFiscal,
         rfc_emisor: parsed.rfcEmisor,
@@ -239,7 +239,7 @@ function XmlUploadModal({
     let proveedor = proveedores.find((p) => p.rfc === parsed.rfcEmisor);
     if (!proveedor) {
       const { data: created } = await supabase
-        .from("proveedores")
+        .from("procurement_suppliers")
         .insert({ company_id: companyId, razon_social: parsed.nombreEmisor, rfc: parsed.rfcEmisor })
         .select()
         .single();
@@ -252,7 +252,7 @@ function XmlUploadModal({
 
     const folio = `OC-${Date.now().toString().slice(-6)}`;
     const { data: compra } = await supabase
-      .from("compras")
+      .from("procurement_orders")
       .insert({
         company_id: companyId,
         folio,
@@ -272,7 +272,7 @@ function XmlUploadModal({
       .single();
 
     if (compra) {
-      await supabase.from("compra_detalle").insert(
+      await supabase.from("procurement_order_items").insert(
         parsed.conceptos.map((c) => ({
           compra_id: compra.id,
           descripcion: c.descripcion,
@@ -281,7 +281,7 @@ function XmlUploadModal({
           importe: c.importe,
         })),
       );
-      await supabase.from("facturas_compra").insert({
+      await supabase.from("procurement_purchase_invoices").insert({
         compra_id: compra.id,
         uuid_fiscal: parsed.uuidFiscal,
         rfc_emisor: parsed.rfcEmisor,
@@ -290,7 +290,7 @@ function XmlUploadModal({
         iva: parsed.total - parsed.subtotal,
         total: parsed.total,
       });
-      await supabase.from("mov_esperados").insert({
+      await supabase.from("expected_movements").insert({
         company_id: companyId,
         tipo: "egreso",
         monto: parsed.total,
@@ -398,7 +398,7 @@ function TicketUploadModal({
 
     let proveedor = null as { id: string } | null;
     const { data: existing } = await supabase
-      .from("proveedores")
+      .from("procurement_suppliers")
       .select("id")
       .eq("company_id", companyId)
       .eq("razon_social", result.comercio)
@@ -407,7 +407,7 @@ function TicketUploadModal({
       proveedor = existing;
     } else {
       const { data: created } = await supabase
-        .from("proveedores")
+        .from("procurement_suppliers")
         .insert({ company_id: companyId, razon_social: result.comercio || "Proveedor de ticket" })
         .select()
         .single();
@@ -420,7 +420,7 @@ function TicketUploadModal({
 
     const folio = `TK-${Date.now().toString().slice(-6)}`;
     const { data: compra } = await supabase
-      .from("compras")
+      .from("procurement_orders")
       .insert({
         company_id: companyId,
         folio,
@@ -438,19 +438,19 @@ function TicketUploadModal({
       .single();
 
     if (compra) {
-      await supabase.from("compra_detalle").insert({
+      await supabase.from("procurement_order_items").insert({
         compra_id: compra.id,
         descripcion: `Ticket ${result.comercio}`,
         cantidad: 1,
         precio_unitario: result.total,
         importe: result.total,
       });
-      await supabase.from("tickets_compra").insert({
+      await supabase.from("procurement_purchase_tickets").insert({
         compra_id: compra.id,
         resultado_ia: result,
         estado: "confirmado",
       });
-      await supabase.from("mov_esperados").insert({
+      await supabase.from("expected_movements").insert({
         company_id: companyId,
         tipo: "egreso",
         monto: result.total,
@@ -519,10 +519,10 @@ function PagoModal({
   async function submit(e: FormEvent) {
     e.preventDefault();
     setSaving(true);
-    await supabase.from("pagos_compra").insert({ compra_id: compra.id, monto: Number(monto), referencia });
+    await supabase.from("procurement_purchase_payments").insert({ compra_id: compra.id, monto: Number(monto), referencia });
     const nuevoSaldo = saldoPendiente(compra) - Number(monto);
     if (nuevoSaldo <= 0) {
-      await supabase.from("compras").update({ estado: "pagada" }).eq("id", compra.id);
+      await supabase.from("procurement_orders").update({ estado: "pagada" }).eq("id", compra.id);
     }
     setSaving(false);
     onPaid();

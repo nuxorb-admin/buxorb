@@ -68,19 +68,19 @@ export function usePersonalData(companyId: string) {
       { data: umaRow },
       { data: imssRow },
     ] = await Promise.all([
-      supabase.from("empleados").select("*").eq("company_id", companyId).order("nombre_completo"),
-      supabase.from("departamentos_personal").select("*").eq("company_id", companyId).order("nombre"),
-      supabase.from("incidencias").select("*, empleados!inner(company_id)").eq("empleados.company_id", companyId).order("fecha", { ascending: false }),
-      supabase.from("concepto_nomina").select("*"),
+      supabase.from("hr_employees").select("*").eq("company_id", companyId).order("nombre_completo"),
+      supabase.from("departments").select("*").eq("company_id", companyId).order("nombre"),
+      supabase.from("hr_incidents").select("*, hr_employees!inner(company_id)").eq("hr_employees.company_id", companyId).order("fecha", { ascending: false }),
+      supabase.from("hr_payroll_concepts").select("*"),
       supabase
-        .from("periodo_nomina")
-        .select("*, recibo_nomina(*, recibo_detalle(*))")
+        .from("hr_payroll_periods")
+        .select("*, hr_payroll_receipts(*, hr_payroll_receipt_items(*))")
         .eq("company_id", companyId)
         .order("fecha_inicio", { ascending: false }),
       supabase.from("company_users").select("user_id").eq("company_id", companyId),
-      supabase.from("tabla_fiscal").select("contenido").eq("tipo", "isr_mensual").order("vigencia_desde", { ascending: false }).limit(1).maybeSingle(),
-      supabase.from("tabla_fiscal").select("contenido").eq("tipo", "uma").order("vigencia_desde", { ascending: false }).limit(1).maybeSingle(),
-      supabase.from("tabla_fiscal").select("contenido").eq("tipo", "imss_obrero").order("vigencia_desde", { ascending: false }).limit(1).maybeSingle(),
+      supabase.from("hr_tax_tables").select("contenido").eq("tipo", "isr_mensual").order("vigencia_desde", { ascending: false }).limit(1).maybeSingle(),
+      supabase.from("hr_tax_tables").select("contenido").eq("tipo", "uma").order("vigencia_desde", { ascending: false }).limit(1).maybeSingle(),
+      supabase.from("hr_tax_tables").select("contenido").eq("tipo", "imss_obrero").order("vigencia_desde", { ascending: false }).limit(1).maybeSingle(),
     ]);
 
     setEmpleados(empleadoRows ?? []);
@@ -95,9 +95,9 @@ export function usePersonalData(companyId: string) {
     const empleadoIds = (empleadoRows ?? []).map((e) => e.id);
     if (empleadoIds.length > 0) {
       const [{ data: historialRows }, { data: saldoRows }, { data: finiquitoRows }] = await Promise.all([
-        supabase.from("historial_sueldo").select("*").in("empleado_id", empleadoIds).order("fecha_efectiva", { ascending: false }),
-        supabase.from("saldo_vacaciones").select("*").in("empleado_id", empleadoIds),
-        supabase.from("finiquito").select("*").in("empleado_id", empleadoIds).order("fecha", { ascending: false }),
+        supabase.from("hr_salary_history").select("*").in("empleado_id", empleadoIds).order("fecha_efectiva", { ascending: false }),
+        supabase.from("hr_vacation_balances").select("*").in("empleado_id", empleadoIds),
+        supabase.from("hr_severances").select("*").in("empleado_id", empleadoIds).order("fecha", { ascending: false }),
       ]);
       setHistorialSueldo(historialRows ?? []);
       setSaldosVacaciones(saldoRows ?? []);

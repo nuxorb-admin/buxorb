@@ -69,7 +69,7 @@ export default function FacturacionTab({
       <p><b>Cliente:</b> ${clientes.find((c) => c.id === f.cliente_id)?.razon_social ?? ""}</p>
       <p><b>Fecha:</b> ${f.fecha_emision} · ${f.condicion}${f.fecha_vencimiento ? ` · vence ${f.fecha_vencimiento}` : ""}</p>
       <table><thead><tr><th>Descripción</th><th>Cantidad</th><th>Precio unitario</th><th>Importe</th></tr></thead><tbody>
-      ${f.factura_detalle.map((d) => `<tr><td>${d.descripcion}</td><td>${d.cantidad}</td><td>${money(d.precio_unitario)}</td><td>${money(d.importe)}</td></tr>`).join("")}
+      ${f.sales_invoice_items.map((d) => `<tr><td>${d.descripcion}</td><td>${d.cantidad}</td><td>${money(d.precio_unitario)}</td><td>${money(d.importe)}</td></tr>`).join("")}
       </tbody></table>
       <p style="text-align:right;margin-top:1rem;">Subtotal: ${money(f.subtotal)}<br/>IVA: ${money(f.iva)}<br/><b>Total: ${money(f.total)}</b><br/>Saldo pendiente: ${money(f.saldo_pendiente)}</p>
       <script>window.print()</script>
@@ -151,7 +151,7 @@ function NewFacturaModal({
 
   const pedido = pedidosFacturables.find((p) => p.id === pedidoId);
   const lineasPedido = pedido
-    ? pedido.pedido_detalle.map((d) => ({
+    ? pedido.sales_order_items.map((d) => ({
         detalle: d,
         pendiente: Number(d.cantidad) - Number(d.cantidad_facturada),
       }))
@@ -184,12 +184,12 @@ function NewFacturaModal({
         ? new Date(Date.now() + Number(diasCredito) * 86400000).toISOString().slice(0, 10)
         : null;
 
-    const anticiposDisponibles = pedido ? pedido.anticipos_pedido.filter((a) => !a.factura_id) : [];
+    const anticiposDisponibles = pedido ? pedido.sales_order_advances.filter((a) => !a.factura_id) : [];
     const totalAnticipos = anticiposDisponibles.reduce((s, a) => s + Number(a.monto), 0);
     const saldoInicial = Math.max(0, total - totalAnticipos);
 
     const { data: factura } = await supabase
-      .from("facturas")
+      .from("sales_invoices")
       .insert({
         company_id: companyId,
         pedido_id: origen === "pedido" ? pedidoId : null,
@@ -208,7 +208,7 @@ function NewFacturaModal({
       .single();
 
     if (factura) {
-      await supabase.from("factura_detalle").insert(
+      await supabase.from("sales_invoice_items").insert(
         partidasEfectivas
           .filter((p) => p.descripcion.trim())
           .map((p) => {
@@ -227,8 +227,8 @@ function NewFacturaModal({
       );
 
       for (const anticipo of anticiposDisponibles) {
-        await supabase.from("cobros").insert({ factura_id: factura.id, monto: anticipo.monto, tipo: "anticipo" });
-        await supabase.from("anticipos_pedido").update({ factura_id: factura.id }).eq("id", anticipo.id);
+        await supabase.from("sales_collections").insert({ factura_id: factura.id, monto: anticipo.monto, tipo: "anticipo" });
+        await supabase.from("sales_order_advances").update({ factura_id: factura.id }).eq("id", anticipo.id);
       }
 
       if (origen === "pedido" && pedido) {
@@ -236,7 +236,7 @@ function NewFacturaModal({
           const facturado = limits.facturacionParcial ? Number(cantidadesParciales[l.detalle.id] ?? l.pendiente) : l.pendiente;
           if (facturado > 0) {
             await supabase
-              .from("pedido_detalle")
+              .from("sales_order_items")
               .update({ cantidad_facturada: Number(l.detalle.cantidad_facturada) + facturado })
               .eq("id", l.detalle.id);
           }
@@ -246,13 +246,13 @@ function NewFacturaModal({
           return s + Math.max(0, l.pendiente - facturado);
         }, 0);
         await supabase
-          .from("pedidos")
+          .from("sales_orders")
           .update({ estado: totalPendienteRestante > 0 ? "facturado_parcial" : "facturado" })
           .eq("id", pedidoId);
       }
 
       if (saldoInicial > 0) {
-        await supabase.from("mov_esperados").insert({
+        await supabase.from("expected_movements").insert({
           company_id: companyId,
           tipo: "ingreso",
           monto: saldoInicial,

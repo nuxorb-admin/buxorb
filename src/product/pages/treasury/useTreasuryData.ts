@@ -10,8 +10,6 @@ import type {
 } from "../../../lib/database.types";
 import { limitsForTier, type TreasuryTierLimits } from "./limits";
 
-const DEFAULT_CATEGORIES = ["ventas", "nomina", "renta", "proveedores", "otros"];
-
 export function useTreasuryData(companyId: string) {
   const [loading, setLoading] = useState(true);
   const [tier, setTier] = useState<CompanyModuleTier | null>(null);
@@ -51,19 +49,14 @@ export function useTreasuryData(companyId: string) {
     }
     setAccounts(accountRows ?? []);
 
-    let { data: categoryRows } = await supabase
+    // El catálogo fijo se siembra en el servidor (trigger
+    // company_modules_seed_treasury_categories, migración 0018) al activarse
+    // el módulo — aquí solo se lee, sin fallback de creación en el cliente.
+    const { data: categoryRows } = await supabase
       .from("treasury_categories")
       .select("*")
       .eq("company_id", companyId)
       .order("name");
-
-    if (!categoryRows || categoryRows.length === 0) {
-      const { data: created } = await supabase
-        .from("treasury_categories")
-        .insert(DEFAULT_CATEGORIES.map((name) => ({ company_id: companyId, name })))
-        .select();
-      categoryRows = created ?? [];
-    }
     setCategories(categoryRows ?? []);
 
     const [{ data: movementRows }, { data: importRows }, { data: proyectadoRows }] = await Promise.all([

@@ -4,7 +4,14 @@ import type { TreasuryTierLimits } from "./limits";
 import { downloadCsv } from "./parseCsv";
 
 type Granularity = "dia" | "mes";
-type Bucket = "ingreso" | "costo_venta" | "gasto_venta" | "gasto_administrativo" | "gasto_financiero" | "impuesto";
+type Bucket =
+  | "ingreso"
+  | "costo_venta"
+  | "gasto_venta"
+  | "gasto_administrativo"
+  | "gasto_financiero"
+  | "impuesto"
+  | "pendiente";
 
 const MAX_DAYS = 366;
 const MAX_MONTHS = 60;
@@ -169,6 +176,7 @@ const BUCKET_LABELS: Record<Bucket, string> = {
   gasto_administrativo: "Gastos administrativos",
   gasto_financiero: "Gastos financieros",
   impuesto: "Impuestos",
+  pendiente: "Pendiente de clasificar",
 };
 
 export default function ResumenTab({
@@ -203,13 +211,14 @@ export default function ResumenTab({
   // viene completo de un movimiento o repartido entre varios splits.
   const lineItems = buildLineItems(scopedMovements, splits);
 
-  // Solo categorías que existen hoy en el catálogo — una línea con una
-  // categoría que ya no está en el catálogo no se suma en ningún lado del
-  // reporte; se avisa aparte para que el usuario lo corrija en Movimientos.
+  // Categorías que ya no están en el catálogo (borradas, renombradas, o de
+  // un movimiento importado con un nombre que nunca existió) no se pierden
+  // — se agrupan en "Pendiente de clasificar" hasta que el usuario las
+  // corrija en Movimientos.
   const validLineItems = lineItems.filter((li) => categories.some((c) => c.name === li.category));
-  const unrecognizedCount = new Set(
-    lineItems.filter((li) => !categories.some((c) => c.name === li.category)).map((li) => li.movement_id),
-  ).size;
+  const unrecognizedLineItems = lineItems.filter((li) => !categories.some((c) => c.name === li.category));
+  const unrecognizedCount = new Set(unrecognizedLineItems.map((li) => li.movement_id)).size;
+  const unrecognizedCategoryNames = [...new Set(unrecognizedLineItems.map((li) => li.category))];
 
   const periodKeys =
     granularity === "dia" ? enumerateDays(dayRange.start, dayRange.end) : enumerateMonths(monthRange.start, monthRange.end);
@@ -217,7 +226,7 @@ export default function ResumenTab({
   // Una fila por cada categoría del catálogo, tenga o no movimientos en el
   // rango visible — igual que las columnas de fecha, no desaparecen por
   // falta de actividad.
-  const rows: CategoryRow[] = categories.map((cat) => {
+  const catalogRows: CategoryRow[] = categories.map((cat) => {
     const values = periodKeys.map((key) =>
       validLineItems
         .filter((li) => li.category === cat.name && periodKey(li, granularity) === key)
@@ -231,6 +240,17 @@ export default function ResumenTab({
       total: values.reduce((s, v) => s + v, 0),
     };
   });
+
+  const pendienteRows: CategoryRow[] = unrecognizedCategoryNames.map((name, i) => {
+    const values = periodKeys.map((key) =>
+      unrecognizedLineItems
+        .filter((li) => li.category === name && periodKey(li, granularity) === key)
+        .reduce((sum, li) => sum + li.amount, 0),
+    );
+    return { category: name, bucket: "pendiente" as Bucket, orden: i, values, total: values.reduce((s, v) => s + v, 0) };
+  });
+
+  const rows: CategoryRow[] = [...catalogRows, ...pendienteRows];
 
   function bucketRows(bucket: Bucket) {
     return rows.filter((r) => r.bucket === bucket).sort((a, b) => a.orden - b.orden);
@@ -262,7 +282,10 @@ export default function ResumenTab({
   const utilidadAntesImpuestos = combine(utilidadOperativa, gastosFinancieros);
 
   const impuestos = bucketSubtotal("impuesto");
-  const utilidadNeta = combine(utilidadAntesImpuestos, impuestos);
+  const utilidadAntesDePendientes = combine(utilidadAntesImpuestos, impuestos);
+
+  const pendiente = bucketSubtotal("pendiente");
+  const utilidadNeta = combine(utilidadAntesDePendientes, pendiente);
 
   function downloadReport() {
     const rowsCsv: (string | number)[][] = [
@@ -375,9 +398,9 @@ export default function ResumenTab({
 
       {unrecognizedCount > 0 && (
         <div className="mt-4 border border-orange/40 bg-orange/10 px-3 py-2 font-mono text-[0.68rem] text-orange">
-          {unrecognizedCount} movimiento{unrecognizedCount === 1 ? "" : "s"} con categoría no reconocida — no se incluye
-          {unrecognizedCount === 1 ? "" : "n"} en el flujo de caja. Corrígelo{unrecognizedCount === 1 ? "" : "s"} en
-          Movimientos.
+          {unrecognizedCount} movimiento{unrecognizedCount === 1 ? "" : "s"} con categoría no reconocida — aparece
+          {unrecognizedCount === 1 ? "" : "n"} bajo "Pendiente de clasificar" al final del estado. Corrígelo
+          {unrecognizedCount === 1 ? "" : "s"} en Movimientos cuando puedas.
         </div>
       )}
 
@@ -531,6 +554,21 @@ export default function ResumenTab({
                 <Row key={r.category} label={r.category} values={r.values} total={r.total} />
               ))}
               <Row label="Total impuestos" values={impuestos.values} total={impuestos.total} emphasis="subtotal" />
+
+              {pendienteRows.length > 0 && (
+                <>
+                  <GroupHeader label={BUCKET_LABELS.pendiente} />
+                  {bucketRows("pendiente").map((r) => (
+                    <Row key={r.category} label={r.category} values={r.values} total={r.total} />
+                  ))}
+                  <Row
+                    label="Total pendiente de clasificar"
+                    values={pendiente.values}
+                    total={pendiente.total}
+                    emphasis="subtotal"
+                  />
+                </>
+              )}
 
               <Row label="Utilidad neta" values={utilidadNeta.values} total={utilidadNeta.total} emphasis="headline" />
             </tbody>

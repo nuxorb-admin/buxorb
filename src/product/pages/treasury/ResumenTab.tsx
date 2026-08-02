@@ -146,15 +146,22 @@ export default function ResumenTab({
   const [granularity, setGranularity] = useState<Granularity>("dia");
   const [dayRange, setDayRange] = useState(currentMonthDayRange);
   const [monthRange, setMonthRange] = useState(defaultMonthRange);
+  // Vista por cuenta bancaria: exclusiva de Professional (limits.perAccountView).
+  // Essential siempre ve todas sus cuentas consolidadas — ni siquiera se le
+  // muestra el selector, no solo se le deshabilita.
+  const [accountFilter, setAccountFilter] = useState<string>("all");
 
-  const overall = totals(movements);
-  const months = limits.monthComparison ? monthOverMonth(movements, 6) : [];
+  const scopedMovements =
+    limits.perAccountView && accountFilter !== "all" ? movements.filter((m) => m.account_id === accountFilter) : movements;
+
+  const overall = totals(scopedMovements);
+  const months = limits.monthComparison ? monthOverMonth(scopedMovements, 6) : [];
 
   // Solo categorías que existen hoy en el catálogo — un movimiento con una
   // categoría que ya no está en el catálogo no se suma en ningún lado del
   // reporte; se avisa aparte para que el usuario lo corrija en Movimientos.
-  const validMovements = movements.filter((m) => categories.some((c) => c.name === m.category));
-  const unrecognizedCount = movements.length - validMovements.length;
+  const validMovements = scopedMovements.filter((m) => categories.some((c) => c.name === m.category));
+  const unrecognizedCount = scopedMovements.length - validMovements.length;
 
   const periodKeys =
     granularity === "dia" ? enumerateDays(dayRange.start, dayRange.end) : enumerateMonths(monthRange.start, monthRange.end);
@@ -212,7 +219,7 @@ export default function ResumenTab({
   function downloadReport() {
     const rowsCsv: (string | number)[][] = [
       ["Fecha", "Concepto", "Categoría", "Tipo", "Cuenta", "Monto"],
-      ...movements.map((m) => [
+      ...scopedMovements.map((m) => [
         m.entry_date,
         m.concept,
         m.category,
@@ -327,9 +334,25 @@ export default function ResumenTab({
       )}
 
       <div className="mb-3 mt-6 flex flex-wrap items-center justify-between gap-3">
-        <h3 className="font-mono text-[0.68rem] font-bold uppercase tracking-[0.1em] text-muted">
-          Flujo de caja consolidado
-        </h3>
+        <div className="flex items-center gap-3">
+          <h3 className="font-mono text-[0.68rem] font-bold uppercase tracking-[0.1em] text-muted">
+            {accountFilter === "all" ? "Flujo de caja consolidado" : "Flujo de caja"}
+          </h3>
+          {limits.perAccountView && accounts.length > 1 && (
+            <select
+              value={accountFilter}
+              onChange={(e) => setAccountFilter(e.target.value)}
+              className="border border-ink/15 bg-sand-2 px-2 py-1 font-mono text-[0.68rem] text-ink focus:border-teal focus:outline-none"
+            >
+              <option value="all">Todas las cuentas</option>
+              {accounts.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.name}
+                </option>
+              ))}
+            </select>
+          )}
+        </div>
         <div className="flex flex-wrap items-center gap-3">
           {granularity === "dia" ? (
             <div className="flex items-center gap-2">
@@ -494,24 +517,6 @@ export default function ResumenTab({
         </>
       )}
 
-      {limits.perAccountView && accounts.length > 0 && (
-        <>
-          <h3 className="mb-3 mt-6 font-mono text-[0.68rem] font-bold uppercase tracking-[0.1em] text-muted">
-            Por cuenta
-          </h3>
-          <div className="divide-y divide-ink/10 border border-ink/10 bg-white">
-            {accounts.map((a) => {
-              const t = totals(movements.filter((m) => m.account_id === a.id));
-              return (
-                <div key={a.id} className="flex items-center justify-between gap-4 px-4 py-3">
-                  <span className="text-sm font-semibold text-ink">{a.name}</span>
-                  <span className="font-mono text-sm font-bold text-ink">{money(t.disponible)}</span>
-                </div>
-              );
-            })}
-          </div>
-        </>
-      )}
     </div>
   );
 }

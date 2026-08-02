@@ -249,6 +249,15 @@ export interface TreasuryMovement {
   created_at: string;
 }
 
+export interface TreasuryCategoryPattern {
+  id: string;
+  company_id: string;
+  texto_patron: string;
+  category: string;
+  frecuencia_uso: number;
+  updated_at: string;
+}
+
 export interface TreasuryMovementSplit {
   id: string;
   movement_id: string;

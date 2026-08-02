@@ -12,7 +12,7 @@ type Tab = "resumen" | "movimientos" | "cuentas" | "categorias" | "conciliacion"
 
 export default function Tesoreria() {
   const { scopeId: companyId } = useOutletContext<ProductContext>();
-  const { loading, tier, limits, accounts, categories, movements, splits, imports, proyectados, reload } =
+  const { loading, tier, limits, accounts, categories, movements, splits, patterns, imports, proyectados, reload } =
     useTreasuryData(companyId);
   const [tab, setTab] = useState<Tab>("resumen");
 
@@ -67,13 +67,21 @@ export default function Tesoreria() {
             categories={categories}
             movements={movements}
             splits={splits}
+            patterns={patterns}
             proyectados={proyectados}
             limits={limits}
             reload={reload}
           />
         )}
         {tab === "cuentas" && limits.perAccountView && (
-          <CuentasTab companyId={companyId} accounts={accounts} categories={activeCategories} limits={limits} reload={reload} />
+          <CuentasTab
+            companyId={companyId}
+            accounts={accounts}
+            categories={activeCategories}
+            patterns={patterns}
+            limits={limits}
+            reload={reload}
+          />
         )}
         {tab === "categorias" && limits.customCategories && (
           <CategoriasTab companyId={companyId} categories={categories} reload={reload} />
@@ -83,6 +91,7 @@ export default function Tesoreria() {
             companyId={companyId}
             accounts={accounts}
             categories={activeCategories}
+            patterns={patterns}
             movements={movements}
             imports={imports}
             limits={limits}

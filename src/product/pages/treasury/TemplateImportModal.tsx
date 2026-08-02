@@ -1,14 +1,16 @@
 import { useState, type ChangeEvent } from "react";
-import type { TreasuryCategory } from "../../../lib/database.types";
+import type { TreasuryCategory, TreasuryCategoryPattern } from "../../../lib/database.types";
 import Modal from "../../../admin/components/Modal";
 import { downloadTreasuryTemplate, parseTreasuryTemplate, type TemplateRow } from "./treasuryTemplate";
 import { insertMovementWithSplits, splitMatches, type SplitLine } from "./splits";
+import { suggestCategory } from "./patterns";
 import SplitEditor from "./SplitEditor";
 
 export default function TemplateImportModal({
   companyId,
   accountId,
   categories,
+  patterns,
   userId,
   onClose,
   onImported,
@@ -16,6 +18,7 @@ export default function TemplateImportModal({
   companyId: string;
   accountId: string;
   categories: TreasuryCategory[];
+  patterns: TreasuryCategoryPattern[];
   userId: string | null;
   onClose: () => void;
   onImported: () => void;
@@ -59,7 +62,9 @@ export default function TemplateImportModal({
     for (let i = 0; i < rows.length; i++) {
       const r = rows[i];
       const rowSplits = splitRows[i];
-      const category = categories.some((c) => c.name === r.categoria) ? r.categoria : "Otros gastos (papelería, seguros, etc.)";
+      const category = categories.some((c) => c.name === r.categoria)
+        ? r.categoria
+        : (suggestCategory(r.descripcion, patterns) ?? "Otros gastos (papelería, seguros, etc.)");
       await insertMovementWithSplits(
         {
           company_id: companyId,

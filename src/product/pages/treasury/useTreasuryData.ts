@@ -5,6 +5,7 @@ import type {
   MovEsperado,
   TreasuryAccount,
   TreasuryCategory,
+  TreasuryCategoryPattern,
   TreasuryMovement,
   TreasuryMovementSplit,
   TreasuryStatementImport,
@@ -18,6 +19,7 @@ export function useTreasuryData(companyId: string) {
   const [categories, setCategories] = useState<TreasuryCategory[]>([]);
   const [movements, setMovements] = useState<TreasuryMovement[]>([]);
   const [splits, setSplits] = useState<TreasuryMovementSplit[]>([]);
+  const [patterns, setPatterns] = useState<TreasuryCategoryPattern[]>([]);
   const [imports, setImports] = useState<TreasuryStatementImport[]>([]);
   const [proyectados, setProyectados] = useState<MovEsperado[]>([]);
 
@@ -61,7 +63,7 @@ export function useTreasuryData(companyId: string) {
       .order("orden");
     setCategories(categoryRows ?? []);
 
-    const [{ data: movementRows }, { data: importRows }, { data: proyectadoRows }] = await Promise.all([
+    const [{ data: movementRows }, { data: importRows }, { data: proyectadoRows }, { data: patternRows }] = await Promise.all([
       supabase.from("treasury_movements").select("*").eq("company_id", companyId).order("entry_date", { ascending: false }),
       supabase.from("treasury_statement_imports").select("*").eq("company_id", companyId).order("created_at", { ascending: false }),
       supabase
@@ -70,10 +72,12 @@ export function useTreasuryData(companyId: string) {
         .eq("company_id", companyId)
         .eq("estado", "pendiente")
         .order("fecha_esperada"),
+      supabase.from("treasury_category_patterns").select("*").eq("company_id", companyId),
     ]);
     setMovements(movementRows ?? []);
     setImports(importRows ?? []);
     setProyectados(proyectadoRows ?? []);
+    setPatterns(patternRows ?? []);
 
     const movementIds = (movementRows ?? []).map((m) => m.id);
     if (movementIds.length > 0) {
@@ -96,5 +100,5 @@ export function useTreasuryData(companyId: string) {
 
   const limits: TreasuryTierLimits = limitsForTier(tier);
 
-  return { loading, tier, limits, accounts, categories, movements, splits, imports, proyectados, reload: load };
+  return { loading, tier, limits, accounts, categories, movements, splits, patterns, imports, proyectados, reload: load };
 }

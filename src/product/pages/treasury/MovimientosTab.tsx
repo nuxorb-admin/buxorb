@@ -4,6 +4,7 @@ import type {
   MovEsperado,
   TreasuryAccount,
   TreasuryCategory,
+  TreasuryCategoryPattern,
   TreasuryEntryType,
   TreasuryMovement,
   TreasuryMovementSplit,
@@ -12,6 +13,7 @@ import type { TreasuryTierLimits } from "./limits";
 import TemplateImportModal from "./TemplateImportModal";
 import { downloadTreasuryTemplate } from "./treasuryTemplate";
 import { emptySplit, splitMatches, insertMovementWithSplits, type SplitLine } from "./splits";
+import { suggestCategory } from "./patterns";
 import SplitEditor from "./SplitEditor";
 import Modal from "../../../admin/components/Modal";
 
@@ -35,6 +37,7 @@ export default function MovimientosTab({
   categories,
   movements,
   splits,
+  patterns,
   proyectados,
   limits,
   reload,
@@ -44,6 +47,7 @@ export default function MovimientosTab({
   categories: TreasuryCategory[];
   movements: TreasuryMovement[];
   splits: TreasuryMovementSplit[];
+  patterns: TreasuryCategoryPattern[];
   proyectados: MovEsperado[];
   limits: TreasuryTierLimits;
   reload: () => void;
@@ -190,6 +194,7 @@ export default function MovimientosTab({
           companyId={companyId}
           accounts={accounts}
           categories={activeCategories}
+          patterns={patterns}
           lockAccount={limits.maxAccounts <= 1}
           userId={userId}
           onClose={() => setShowNew(false)}
@@ -202,6 +207,7 @@ export default function MovimientosTab({
           companyId={companyId}
           accountId={accounts[0]?.id ?? ""}
           categories={activeCategories}
+          patterns={patterns}
           userId={userId}
           onClose={() => setShowImport(false)}
           onImported={reload}
@@ -213,6 +219,7 @@ export default function MovimientosTab({
           companyId={companyId}
           accounts={accounts}
           categories={activeCategories}
+          patterns={patterns}
           proyectado={linking}
           userId={userId}
           onClose={() => setLinking(null)}
@@ -227,6 +234,7 @@ function NewMovementModal({
   companyId,
   accounts,
   categories,
+  patterns,
   lockAccount,
   userId,
   onClose,
@@ -235,6 +243,7 @@ function NewMovementModal({
   companyId: string;
   accounts: TreasuryAccount[];
   categories: TreasuryCategory[];
+  patterns: TreasuryCategoryPattern[];
   lockAccount: boolean;
   userId: string | null;
   onClose: () => void;
@@ -243,6 +252,7 @@ function NewMovementModal({
   const [saving, setSaving] = useState(false);
   const [splitting, setSplitting] = useState(false);
   const [splitLines, setSplitLines] = useState<SplitLine[]>([]);
+  const [categoryTouched, setCategoryTouched] = useState(false);
   const [form, setForm] = useState({
     entry_date: todayIso(),
     type: "ingreso" as TreasuryEntryType,
@@ -251,6 +261,17 @@ function NewMovementModal({
     amount: "",
     account_id: accounts[0]?.id ?? "",
   });
+
+  // Mientras el usuario no haya elegido categoría a mano, cada vez que
+  // cambia la descripción se sugiere la del patrón que mejor calce — en
+  // cuanto la toca manualmente, deja de pisarse.
+  function onConceptChange(concept: string) {
+    setForm((f) => {
+      if (categoryTouched) return { ...f, concept };
+      const suggested = suggestCategory(concept, patterns);
+      return suggested && categories.some((c) => c.name === suggested) ? { ...f, concept, category: suggested } : { ...f, concept };
+    });
+  }
 
   const total = Number(form.amount) || 0;
   const canSubmit = splitting ? splitMatches(splitLines, total) : true;
@@ -313,7 +334,7 @@ function NewMovementModal({
           </label>
           <input
             value={form.concept}
-            onChange={(e) => setForm({ ...form, concept: e.target.value })}
+            onChange={(e) => onConceptChange(e.target.value)}
             placeholder="Ej. Pago renta julio"
             required
             className="w-full border border-ink/15 bg-sand-2 px-3 py-2 text-sm text-ink focus:border-teal focus:outline-none"
@@ -342,7 +363,10 @@ function NewMovementModal({
             </label>
             <select
               value={form.category}
-              onChange={(e) => setForm({ ...form, category: e.target.value })}
+              onChange={(e) => {
+                setCategoryTouched(true);
+                setForm({ ...form, category: e.target.value });
+              }}
               className="w-full border border-ink/15 bg-sand-2 px-3 py-2 text-sm capitalize text-ink focus:border-teal focus:outline-none"
             >
               {categories.map((c) => (
@@ -351,6 +375,9 @@ function NewMovementModal({
                 </option>
               ))}
             </select>
+            {!categoryTouched && suggestCategory(form.concept, patterns) === form.category && form.concept && (
+              <p className="mt-1 font-mono text-[0.6rem] text-teal">Sugerida por descripciones parecidas.</p>
+            )}
           </div>
         )}
 
@@ -398,6 +425,7 @@ function LinkProyectadoModal({
   companyId,
   accounts,
   categories,
+  patterns,
   proyectado,
   userId,
   onClose,
@@ -406,17 +434,19 @@ function LinkProyectadoModal({
   companyId: string;
   accounts: TreasuryAccount[];
   categories: TreasuryCategory[];
+  patterns: TreasuryCategoryPattern[];
   proyectado: MovEsperado;
   userId: string | null;
   onClose: () => void;
   onLinked: () => void;
 }) {
+  const suggested = suggestCategory(proyectado.concepto ?? "", patterns);
   const [form, setForm] = useState({
     concept: proyectado.concepto || "Movimiento proyectado",
     amount: String(proyectado.monto),
     entry_date: proyectado.fecha_esperada,
     account_id: accounts[0]?.id ?? "",
-    category: categories[0]?.name ?? "Otros gastos (papelería, seguros, etc.)",
+    category: (suggested && categories.some((c) => c.name === suggested) ? suggested : categories[0]?.name) ?? "Otros gastos (papelería, seguros, etc.)",
   });
   const [saving, setSaving] = useState(false);
   const [splitting, setSplitting] = useState(false);

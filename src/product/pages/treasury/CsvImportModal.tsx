@@ -1,8 +1,9 @@
 import { useState, type ChangeEvent } from "react";
-import type { TreasuryCategory } from "../../../lib/database.types";
+import type { TreasuryCategory, TreasuryCategoryPattern } from "../../../lib/database.types";
 import Modal from "../../../admin/components/Modal";
 import { parseCsv, parseXlsxToRows } from "./parseCsv";
 import { insertMovementWithSplits, splitMatches, type SplitLine } from "./splits";
+import { suggestCategory } from "./patterns";
 import SplitEditor from "./SplitEditor";
 
 const TYPE_BY_SIGN = "__sign__";
@@ -23,6 +24,7 @@ export default function CsvImportModal({
   companyId,
   accountId,
   categories,
+  patterns,
   source,
   userId,
   onClose,
@@ -32,6 +34,7 @@ export default function CsvImportModal({
   companyId: string;
   accountId: string;
   categories: TreasuryCategory[];
+  patterns: TreasuryCategoryPattern[];
   source: "csv_import" | "bank_import";
   userId: string | null;
   onClose: () => void;
@@ -74,6 +77,13 @@ export default function CsvImportModal({
     return Math.abs(parseAmount(r[mapping.amount] ?? "0"));
   }
 
+  function rowCategoryFor(r: string[], i: number): string {
+    if (rowCategory[i]) return rowCategory[i];
+    const suggested = suggestCategory(r[mapping.concept] ?? "", patterns);
+    if (suggested && categories.some((c) => c.name === suggested)) return suggested;
+    return categories[0]?.name ?? "Otros gastos (papelería, seguros, etc.)";
+  }
+
   function allSplitsValid() {
     return dataRows.every((r, i) => !splitRows[i] || splitMatches(splitRows[i], rowAmount(r)));
   }
@@ -90,7 +100,7 @@ export default function CsvImportModal({
       const r = dataRows[i];
       const amount = parseAmount(r[mapping.amount] ?? "0");
       const type = mapping.type === TYPE_BY_SIGN ? (amount < 0 ? "egreso" : "ingreso") : r[mapping.type];
-      const category = rowCategory[i] ?? categories[0]?.name ?? "Otros gastos (papelería, seguros, etc.)";
+      const category = rowCategoryFor(r, i);
       const rowSplits = splitRows[i];
       await insertMovementWithSplits(
         {
@@ -180,7 +190,7 @@ export default function CsvImportModal({
                     {!splitRows[i] && (
                       <div className="px-1 pb-1">
                         <select
-                          value={rowCategory[i] ?? categories[0]?.name ?? ""}
+                          value={rowCategoryFor(r, i)}
                           onChange={(e) => setRowCategory((prev) => ({ ...prev, [i]: e.target.value }))}
                           className="w-full border border-ink/15 bg-sand-2 px-2 py-1 font-sans text-xs text-ink focus:border-teal focus:outline-none"
                         >

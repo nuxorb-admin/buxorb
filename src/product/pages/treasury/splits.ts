@@ -1,4 +1,5 @@
 import { supabase } from "../../../lib/supabase";
+import { learnPattern } from "./patterns";
 
 export interface SplitLine {
   category: string;
@@ -57,6 +58,11 @@ export async function insertMovementWithSplits(
       })),
     );
   }
+
+  // Refuerza el motor de patrones con la categoría "primaria" que se
+  // acaba de confirmar — así la próxima vez que se capture o importe una
+  // descripción parecida, se sugiere sola.
+  if (category) void learnPattern(movement.company_id, movement.concept, category);
 
   return created;
 }

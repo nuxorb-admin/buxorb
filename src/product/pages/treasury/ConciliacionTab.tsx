@@ -1,9 +1,16 @@
 import { useEffect, useState, type ChangeEvent } from "react";
 import { supabase } from "../../../lib/supabase";
-import type { TreasuryAccount, TreasuryCategory, TreasuryMovement, TreasuryStatementImport } from "../../../lib/database.types";
+import type {
+  TreasuryAccount,
+  TreasuryCategory,
+  TreasuryCategoryPattern,
+  TreasuryMovement,
+  TreasuryStatementImport,
+} from "../../../lib/database.types";
 import type { TreasuryTierLimits } from "./limits";
 import { downloadCsv } from "./parseCsv";
 import { insertMovementWithSplits, splitMatches, type SplitLine } from "./splits";
+import { suggestCategory } from "./patterns";
 import SplitEditor from "./SplitEditor";
 import Modal from "../../../admin/components/Modal";
 
@@ -23,6 +30,7 @@ export default function ConciliacionTab({
   companyId,
   accounts,
   categories,
+  patterns,
   movements,
   imports,
   limits,
@@ -31,6 +39,7 @@ export default function ConciliacionTab({
   companyId: string;
   accounts: TreasuryAccount[];
   categories: TreasuryCategory[];
+  patterns: TreasuryCategoryPattern[];
   movements: TreasuryMovement[];
   imports: TreasuryStatementImport[];
   limits: TreasuryTierLimits;
@@ -120,6 +129,7 @@ export default function ConciliacionTab({
           companyId={companyId}
           accounts={accounts}
           categories={categories}
+          patterns={patterns}
           allowAi={limits.aiParsing}
           userId={userId}
           onClose={() => setShowNew(false)}
@@ -134,6 +144,7 @@ function NewReconciliationModal({
   companyId,
   accounts,
   categories,
+  patterns,
   allowAi,
   userId,
   onClose,
@@ -142,6 +153,7 @@ function NewReconciliationModal({
   companyId: string;
   accounts: TreasuryAccount[];
   categories: TreasuryCategory[];
+  patterns: TreasuryCategoryPattern[];
   allowAi: boolean;
   userId: string | null;
   onClose: () => void;
@@ -207,12 +219,19 @@ function NewReconciliationModal({
     return proposed.every((t, i) => !splitRows[i] || splitMatches(splitRows[i], t.amount));
   }
 
+  function rowCategoryFor(concept: string, i: number): string {
+    if (rowCategory[i]) return rowCategory[i];
+    const suggested = suggestCategory(concept, patterns);
+    if (suggested && categories.some((c) => c.name === suggested)) return suggested;
+    return categories[0]?.name ?? "Otros gastos (papelería, seguros, etc.)";
+  }
+
   async function confirmProposed() {
     if (!proposed || !allSplitsValid()) return;
     setSaving(true);
     for (let i = 0; i < proposed.length; i++) {
       const t = proposed[i];
-      const category = rowCategory[i] ?? categories[0]?.name ?? "Otros gastos (papelería, seguros, etc.)";
+      const category = rowCategoryFor(t.concept, i);
       const rowSplits = splitRows[i];
       await insertMovementWithSplits(
         {
@@ -290,7 +309,7 @@ function NewReconciliationModal({
                   {!splitRows[i] && (
                     <div className="px-1 pb-1">
                       <select
-                        value={rowCategory[i] ?? categories[0]?.name ?? ""}
+                        value={rowCategoryFor(t.concept, i)}
                         onChange={(e) => setRowCategory((prev) => ({ ...prev, [i]: e.target.value }))}
                         className="w-full border border-ink/15 bg-sand-2 px-2 py-1 font-sans text-xs text-ink focus:border-teal focus:outline-none"
                       >

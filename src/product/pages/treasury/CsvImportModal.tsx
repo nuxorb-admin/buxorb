@@ -77,7 +77,7 @@ export default function CsvImportModal({
         account_id: accountId,
         type: type === "egreso" ? "egreso" : "ingreso",
         concept: r[mapping.concept] || "Importado",
-        category: "otros",
+        category: "Otros gastos (papelería, seguros, etc.)",
         amount: Math.abs(amount) || 0,
         entry_date: r[mapping.date] || new Date().toISOString().slice(0, 10),
         source,

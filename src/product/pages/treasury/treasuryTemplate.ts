@@ -16,7 +16,7 @@ export interface TemplateRow {
 }
 
 export async function downloadTreasuryTemplate(categoryNames: string[]) {
-  const categories = categoryNames.length > 0 ? categoryNames : ["otros"];
+  const categories = categoryNames.length > 0 ? categoryNames : ["Otros gastos (papelería, seguros, etc.)"];
 
   const wb = new ExcelJS.Workbook();
 
@@ -112,7 +112,7 @@ export async function parseTreasuryTemplate(file: File): Promise<TemplateRow[]> 
       tipo: tipoRaw === "egreso" ? "egreso" : "ingreso",
       descripcion: descripcion || "Importado de plantilla",
       monto: Math.abs(monto),
-      categoria: cellToText(row.getCell(5).value) || "otros",
+      categoria: cellToText(row.getCell(5).value) || "Otros gastos (papelería, seguros, etc.)",
     });
   });
 

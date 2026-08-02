@@ -4,7 +4,7 @@ import type { TreasuryTierLimits } from "./limits";
 import { downloadCsv } from "./parseCsv";
 
 type Granularity = "dia" | "mes";
-type Bucket = "ingreso" | "fijo" | "variable" | "operativo";
+type Bucket = "ingreso" | "costo_venta" | "gasto_venta" | "gasto_administrativo" | "gasto_financiero" | "impuesto";
 
 const MAX_DAYS = 366;
 const MAX_MONTHS = 60;
@@ -105,10 +105,10 @@ function monthOverMonth(movements: TreasuryMovement[], count: number) {
 
 function bucketFor(category: string, categories: TreasuryCategory[]): Bucket {
   const cat = categories.find((c) => c.name === category);
-  if (!cat) return "operativo";
+  if (!cat) return "gasto_administrativo";
   if (cat.kind === "ingreso") return "ingreso";
-  if (cat.naturaleza === "fijo" || cat.naturaleza === "variable") return cat.naturaleza;
-  return "operativo";
+  if (cat.grupo && cat.grupo !== "ingreso") return cat.grupo;
+  return "gasto_administrativo";
 }
 
 function signedAmount(m: TreasuryMovement) {
@@ -124,9 +124,11 @@ interface CategoryRow {
 
 const BUCKET_LABELS: Record<Bucket, string> = {
   ingreso: "Ingresos",
-  fijo: "Egresos fijos",
-  variable: "Egresos variables",
-  operativo: "Egresos operativos",
+  costo_venta: "Costo de venta",
+  gasto_venta: "Gastos de venta",
+  gasto_administrativo: "Gastos administrativos",
+  gasto_financiero: "Gastos financieros",
+  impuesto: "Impuestos",
 };
 
 export default function ResumenTab({
@@ -176,18 +178,29 @@ export default function ResumenTab({
     return { values, total: values.reduce((s, v) => s + v, 0) };
   }
 
+  function combine(...parts: { values: number[]; total: number }[]) {
+    return {
+      values: periodKeys.map((_, i) => parts.reduce((sum, p) => sum + p.values[i], 0)),
+      total: parts.reduce((sum, p) => sum + p.total, 0),
+    };
+  }
+
+  // Los egresos ya llegan en negativo desde signedAmount() — sumar los
+  // subtotales de grupo directamente resta correctamente, sin negarlos de
+  // nuevo.
   const ingresos = bucketSubtotal("ingreso");
-  const fijos = bucketSubtotal("fijo");
-  const variables = bucketSubtotal("variable");
-  const utilidadOperativa = {
-    values: periodKeys.map((_, i) => ingresos.values[i] + fijos.values[i] + variables.values[i]),
-    total: ingresos.total + fijos.total + variables.total,
-  };
-  const operativos = bucketSubtotal("operativo");
-  const flujoNeto = {
-    values: periodKeys.map((_, i) => utilidadOperativa.values[i] + operativos.values[i]),
-    total: utilidadOperativa.total + operativos.total,
-  };
+  const costoVenta = bucketSubtotal("costo_venta");
+  const utilidadBruta = combine(ingresos, costoVenta);
+
+  const gastosVenta = bucketSubtotal("gasto_venta");
+  const gastosAdmin = bucketSubtotal("gasto_administrativo");
+  const utilidadOperativa = combine(utilidadBruta, gastosVenta, gastosAdmin);
+
+  const gastosFinancieros = bucketSubtotal("gasto_financiero");
+  const utilidadAntesImpuestos = combine(utilidadOperativa, gastosFinancieros);
+
+  const impuestos = bucketSubtotal("impuesto");
+  const utilidadNeta = combine(utilidadAntesImpuestos, impuestos);
 
   function downloadReport() {
     const rowsCsv: (string | number)[][] = [
@@ -390,27 +403,58 @@ export default function ResumenTab({
               ))}
               <Row label="Total ingresos" values={ingresos.values} total={ingresos.total} emphasis="subtotal" />
 
-              <GroupHeader label={BUCKET_LABELS.fijo} />
-              {bucketRows("fijo").map((r) => (
+              <GroupHeader label={BUCKET_LABELS.costo_venta} />
+              {bucketRows("costo_venta").map((r) => (
                 <Row key={r.category} label={r.category} values={r.values} total={r.total} />
               ))}
-              <Row label="Total fijos" values={fijos.values} total={fijos.total} emphasis="subtotal" />
+              <Row label="Total costo de venta" values={costoVenta.values} total={costoVenta.total} emphasis="subtotal" />
 
-              <GroupHeader label={BUCKET_LABELS.variable} />
-              {bucketRows("variable").map((r) => (
+              <Row label="Utilidad bruta" values={utilidadBruta.values} total={utilidadBruta.total} emphasis="headline" />
+
+              <GroupHeader label={BUCKET_LABELS.gasto_venta} />
+              {bucketRows("gasto_venta").map((r) => (
                 <Row key={r.category} label={r.category} values={r.values} total={r.total} />
               ))}
-              <Row label="Total variables" values={variables.values} total={variables.total} emphasis="subtotal" />
+              <Row label="Total gastos de venta" values={gastosVenta.values} total={gastosVenta.total} emphasis="subtotal" />
+
+              <GroupHeader label={BUCKET_LABELS.gasto_administrativo} />
+              {bucketRows("gasto_administrativo").map((r) => (
+                <Row key={r.category} label={r.category} values={r.values} total={r.total} />
+              ))}
+              <Row
+                label="Total gastos administrativos"
+                values={gastosAdmin.values}
+                total={gastosAdmin.total}
+                emphasis="subtotal"
+              />
 
               <Row label="Utilidad operativa" values={utilidadOperativa.values} total={utilidadOperativa.total} emphasis="headline" />
 
-              <GroupHeader label={BUCKET_LABELS.operativo} />
-              {bucketRows("operativo").map((r) => (
+              <GroupHeader label={BUCKET_LABELS.gasto_financiero} />
+              {bucketRows("gasto_financiero").map((r) => (
                 <Row key={r.category} label={r.category} values={r.values} total={r.total} />
               ))}
-              <Row label="Total operativos" values={operativos.values} total={operativos.total} emphasis="subtotal" />
+              <Row
+                label="Total gastos financieros"
+                values={gastosFinancieros.values}
+                total={gastosFinancieros.total}
+                emphasis="subtotal"
+              />
 
-              <Row label="Flujo neto de caja" values={flujoNeto.values} total={flujoNeto.total} emphasis="headline" />
+              <Row
+                label="Utilidad antes de impuestos"
+                values={utilidadAntesImpuestos.values}
+                total={utilidadAntesImpuestos.total}
+                emphasis="headline"
+              />
+
+              <GroupHeader label={BUCKET_LABELS.impuesto} />
+              {bucketRows("impuesto").map((r) => (
+                <Row key={r.category} label={r.category} values={r.values} total={r.total} />
+              ))}
+              <Row label="Total impuestos" values={impuestos.values} total={impuestos.total} emphasis="subtotal" />
+
+              <Row label="Utilidad neta" values={utilidadNeta.values} total={utilidadNeta.total} emphasis="headline" />
             </tbody>
           </table>
         </div>

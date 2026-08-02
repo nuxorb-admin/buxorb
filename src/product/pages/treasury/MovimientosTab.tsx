@@ -225,7 +225,7 @@ function NewMovementModal({
     entry_date: todayIso(),
     type: "ingreso" as TreasuryEntryType,
     concept: "",
-    category: categories[0]?.name ?? "otros",
+    category: categories[0]?.name ?? "Otros gastos (papelería, seguros, etc.)",
     amount: "",
     account_id: accounts[0]?.id ?? "",
   });
@@ -389,7 +389,7 @@ function LinkProyectadoModal({
         account_id: form.account_id,
         type: proyectado.tipo,
         concept: form.concept.trim(),
-        category: "otros",
+        category: "Otros gastos (papelería, seguros, etc.)",
         amount: Number(form.amount),
         entry_date: form.entry_date,
         source: "mov_confirmado",

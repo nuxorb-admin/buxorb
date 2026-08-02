@@ -200,7 +200,7 @@ function NewReconciliationModal({
         account_id: accountId,
         type: t.type,
         concept: t.concept,
-        category: "otros",
+        category: "Otros gastos (papelería, seguros, etc.)",
         amount: t.amount,
         entry_date: t.date,
         source: "ai_statement",

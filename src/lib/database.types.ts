@@ -213,14 +213,21 @@ export interface TreasuryAccount {
   created_at: string;
 }
 
-export type TreasuryCategoryNaturaleza = "fijo" | "variable" | "operativo" | null;
+export type TreasuryCategoryGrupo =
+  | "ingreso"
+  | "costo_venta"
+  | "gasto_venta"
+  | "gasto_administrativo"
+  | "gasto_financiero"
+  | "impuesto"
+  | null;
 
 export interface TreasuryCategory {
   id: string;
   company_id: string;
   name: string;
   kind: TreasuryCategoryKind;
-  naturaleza: TreasuryCategoryNaturaleza;
+  grupo: TreasuryCategoryGrupo;
   created_at: string;
 }
 

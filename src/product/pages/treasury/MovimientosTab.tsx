@@ -27,6 +27,14 @@ function todayIso() {
   return new Date().toISOString().slice(0, 10);
 }
 
+function daysAgoIso(days: number) {
+  const d = new Date();
+  d.setDate(d.getDate() - days);
+  return d.toISOString().slice(0, 10);
+}
+
+const MAX_VISIBLE = 50;
+
 const MODULE_LABELS: Record<string, string> = {
   compras: "Compras y Proveedores",
   personal: "Gestión de Personal",
@@ -58,6 +66,10 @@ export default function MovimientosTab({
   const [linking, setLinking] = useState<MovEsperado | null>(null);
   const [showImport, setShowImport] = useState(false);
   const [showNew, setShowNew] = useState(false);
+  // Filtro por default: últimos 7 días, todas las cuentas.
+  const [dateFrom, setDateFrom] = useState(() => daysAgoIso(6));
+  const [dateTo, setDateTo] = useState(todayIso);
+  const [accountFilter, setAccountFilter] = useState("all");
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setUserId(data.user?.id ?? null));
@@ -67,6 +79,16 @@ export default function MovimientosTab({
   // una desactivada sigue siendo válida para lo ya categorizado con ella
   // (por eso la validación de la lista de abajo usa `categories` completo).
   const activeCategories = categories.filter((c) => c.active);
+
+  const filteredMovements = movements.filter(
+    (m) =>
+      (accountFilter === "all" || m.account_id === accountFilter) &&
+      (!dateFrom || m.entry_date >= dateFrom) &&
+      (!dateTo || m.entry_date <= dateTo),
+  );
+  // movements ya viene ordenado por fecha descendente desde useTreasuryData
+  // — los primeros 50 son los más recientes dentro del rango filtrado.
+  const visibleMovements = filteredMovements.slice(0, MAX_VISIBLE);
 
   async function remove(id: string) {
     await supabase.from("treasury_movements").delete().eq("id", id);
@@ -113,7 +135,7 @@ export default function MovimientosTab({
         </div>
       )}
 
-      <div className="mb-3 flex items-center justify-between">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
         <h3 className="font-mono text-[0.68rem] font-bold uppercase tracking-[0.1em] text-muted">Movimientos</h3>
         <div className="flex gap-4">
           <button
@@ -134,9 +156,49 @@ export default function MovimientosTab({
         </div>
       </div>
 
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <input
+          type="date"
+          value={dateFrom}
+          onChange={(e) => setDateFrom(e.target.value)}
+          className="border border-ink/15 bg-sand-2 px-2 py-1 font-mono text-xs text-ink focus:border-teal focus:outline-none"
+        />
+        <span className="font-mono text-xs text-muted">a</span>
+        <input
+          type="date"
+          value={dateTo}
+          onChange={(e) => setDateTo(e.target.value)}
+          className="border border-ink/15 bg-sand-2 px-2 py-1 font-mono text-xs text-ink focus:border-teal focus:outline-none"
+        />
+        {accounts.length > 1 && (
+          <select
+            value={accountFilter}
+            onChange={(e) => setAccountFilter(e.target.value)}
+            className="border border-ink/15 bg-sand-2 px-2 py-1 font-mono text-xs text-ink focus:border-teal focus:outline-none"
+          >
+            <option value="all">Todas las cuentas</option>
+            {accounts.map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.name}
+              </option>
+            ))}
+          </select>
+        )}
+        <button
+          onClick={() => {
+            setDateFrom(daysAgoIso(6));
+            setDateTo(todayIso());
+            setAccountFilter("all");
+          }}
+          className="font-mono text-[0.62rem] uppercase text-muted hover:text-ink"
+        >
+          Restablecer
+        </button>
+      </div>
+
       <div className="divide-y divide-ink/10 border border-ink/10 bg-white">
-        {movements.length === 0 && <p className="p-4 font-mono text-xs text-muted">Sin movimientos todavía.</p>}
-        {movements.map((m) => {
+        {filteredMovements.length === 0 && <p className="p-4 font-mono text-xs text-muted">Sin movimientos en este rango.</p>}
+        {visibleMovements.map((m) => {
           const categoryValid = categories.some((c) => c.name === m.category);
           const movementSplits = splits.filter((s) => s.movement_id === m.id);
           return (
@@ -190,6 +252,12 @@ export default function MovimientosTab({
           );
         })}
       </div>
+
+      {filteredMovements.length > MAX_VISIBLE && (
+        <p className="mt-2 font-mono text-[0.62rem] text-muted">
+          Mostrando los {MAX_VISIBLE} más recientes de {filteredMovements.length} — acota el rango de fechas para ver el resto.
+        </p>
+      )}
 
       {showNew && (
         <NewMovementModal

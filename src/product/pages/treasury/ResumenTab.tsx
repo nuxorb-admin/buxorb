@@ -273,7 +273,6 @@ export default function ResumenTab({
   const scopedAccounts =
     limits.perAccountView && accountFilter !== "all" ? accounts.filter((a) => a.id === accountFilter) : accounts;
 
-  const overall = totals(scopedMovements);
   const months = limits.monthComparison ? monthOverMonth(scopedMovements) : [];
 
   // Un movimiento dividido en categorías se expande a varias líneas aquí —
@@ -456,21 +455,6 @@ export default function ResumenTab({
         >
           ↓ Descargar reporte
         </button>
-      </div>
-
-      <div className="grid grid-cols-3 gap-4 border border-ink/15 bg-ink p-6 text-white">
-        <div>
-          <span className="block font-mono text-[0.62rem] uppercase tracking-[0.1em] text-white/40">Entradas</span>
-          <span className="mt-1 block font-display text-2xl">{money(overall.entradas)}</span>
-        </div>
-        <div>
-          <span className="block font-mono text-[0.62rem] uppercase tracking-[0.1em] text-white/40">Salidas</span>
-          <span className="mt-1 block font-display text-2xl">{money(overall.salidas)}</span>
-        </div>
-        <div>
-          <span className="block font-mono text-[0.62rem] uppercase tracking-[0.1em] text-white/40">Disponible</span>
-          <span className="mt-1 block font-display text-2xl text-teal">{money(overall.disponible)}</span>
-        </div>
       </div>
 
       {unrecognizedCount > 0 && (

@@ -14,6 +14,7 @@ import TemplateImportModal from "./TemplateImportModal";
 import { downloadTreasuryTemplate } from "./treasuryTemplate";
 import { emptySplit, splitMatches, insertMovementWithSplits, type SplitLine } from "./splits";
 import { suggestCategory } from "./patterns";
+import { findDuplicate } from "./duplicates";
 import SplitEditor from "./SplitEditor";
 import Modal from "../../../admin/components/Modal";
 
@@ -195,6 +196,7 @@ export default function MovimientosTab({
           accounts={accounts}
           categories={activeCategories}
           patterns={patterns}
+          movements={movements}
           lockAccount={limits.maxAccounts <= 1}
           userId={userId}
           onClose={() => setShowNew(false)}
@@ -208,6 +210,7 @@ export default function MovimientosTab({
           accountId={accounts[0]?.id ?? ""}
           categories={activeCategories}
           patterns={patterns}
+          movements={movements}
           userId={userId}
           onClose={() => setShowImport(false)}
           onImported={reload}
@@ -220,6 +223,7 @@ export default function MovimientosTab({
           accounts={accounts}
           categories={activeCategories}
           patterns={patterns}
+          movements={movements}
           proyectado={linking}
           userId={userId}
           onClose={() => setLinking(null)}
@@ -235,6 +239,7 @@ function NewMovementModal({
   accounts,
   categories,
   patterns,
+  movements,
   lockAccount,
   userId,
   onClose,
@@ -244,6 +249,7 @@ function NewMovementModal({
   accounts: TreasuryAccount[];
   categories: TreasuryCategory[];
   patterns: TreasuryCategoryPattern[];
+  movements: TreasuryMovement[];
   lockAccount: boolean;
   userId: string | null;
   onClose: () => void;
@@ -253,6 +259,7 @@ function NewMovementModal({
   const [splitting, setSplitting] = useState(false);
   const [splitLines, setSplitLines] = useState<SplitLine[]>([]);
   const [categoryTouched, setCategoryTouched] = useState(false);
+  const [confirmDuplicate, setConfirmDuplicate] = useState(false);
   const [form, setForm] = useState({
     entry_date: todayIso(),
     type: "ingreso" as TreasuryEntryType,
@@ -275,10 +282,12 @@ function NewMovementModal({
 
   const total = Number(form.amount) || 0;
   const canSubmit = splitting ? splitMatches(splitLines, total) : true;
+  const duplicate = findDuplicate(movements, { account_id: form.account_id, entry_date: form.entry_date, amount: total });
 
   async function submit(e: FormEvent) {
     e.preventDefault();
     if (!form.concept.trim() || !form.amount || !form.account_id || !canSubmit) return;
+    if (duplicate && !confirmDuplicate) return;
     setSaving(true);
     await insertMovementWithSplits(
       {
@@ -413,7 +422,18 @@ function NewMovementModal({
           )}
         </div>
 
-        <button type="submit" disabled={saving || !canSubmit} className="btn btn-primary w-full">
+        {duplicate && (
+          <div className="border border-orange/40 bg-orange/10 px-3 py-2 font-mono text-[0.68rem] text-orange">
+            Ya existe un movimiento de {money(Number(duplicate.amount))} el {new Date(duplicate.entry_date).toLocaleDateString("es-MX")}{" "}
+            en esta cuenta ("{duplicate.concept}") — parece duplicado.
+            <label className="mt-2 flex items-center gap-2 font-mono text-[0.66rem] normal-case text-ink">
+              <input type="checkbox" checked={confirmDuplicate} onChange={(e) => setConfirmDuplicate(e.target.checked)} />
+              Sé que es distinto, guardar de todos modos
+            </label>
+          </div>
+        )}
+
+        <button type="submit" disabled={saving || !canSubmit || (!!duplicate && !confirmDuplicate)} className="btn btn-primary w-full">
           {saving ? "Guardando…" : "Guardar movimiento"}
         </button>
       </form>
@@ -426,6 +446,7 @@ function LinkProyectadoModal({
   accounts,
   categories,
   patterns,
+  movements,
   proyectado,
   userId,
   onClose,
@@ -435,6 +456,7 @@ function LinkProyectadoModal({
   accounts: TreasuryAccount[];
   categories: TreasuryCategory[];
   patterns: TreasuryCategoryPattern[];
+  movements: TreasuryMovement[];
   proyectado: MovEsperado;
   userId: string | null;
   onClose: () => void;
@@ -451,13 +473,16 @@ function LinkProyectadoModal({
   const [saving, setSaving] = useState(false);
   const [splitting, setSplitting] = useState(false);
   const [splitLines, setSplitLines] = useState<SplitLine[]>([]);
+  const [confirmDuplicate, setConfirmDuplicate] = useState(false);
 
   const total = Number(form.amount) || 0;
   const canSubmit = splitting ? splitMatches(splitLines, total) : true;
+  const duplicate = findDuplicate(movements, { account_id: form.account_id, entry_date: form.entry_date, amount: total });
 
   async function confirm(e: FormEvent) {
     e.preventDefault();
     if (!canSubmit) return;
+    if (duplicate && !confirmDuplicate) return;
     setSaving(true);
     const movement = await insertMovementWithSplits(
       {
@@ -545,7 +570,18 @@ function LinkProyectadoModal({
           lines={splitLines}
           onChange={setSplitLines}
         />
-        <button type="submit" disabled={saving || !canSubmit} className="btn btn-primary w-full">
+        {duplicate && (
+          <div className="border border-orange/40 bg-orange/10 px-3 py-2 font-mono text-[0.68rem] text-orange">
+            Ya existe un movimiento de {money(Number(duplicate.amount))} el {new Date(duplicate.entry_date).toLocaleDateString("es-MX")}{" "}
+            en esta cuenta ("{duplicate.concept}") — parece duplicado.
+            <label className="mt-2 flex items-center gap-2 font-mono text-[0.66rem] normal-case text-ink">
+              <input type="checkbox" checked={confirmDuplicate} onChange={(e) => setConfirmDuplicate(e.target.checked)} />
+              Sé que es distinto, guardar de todos modos
+            </label>
+          </div>
+        )}
+
+        <button type="submit" disabled={saving || !canSubmit || (!!duplicate && !confirmDuplicate)} className="btn btn-primary w-full">
           {saving ? "Guardando…" : "Confirmar movimiento real"}
         </button>
       </form>

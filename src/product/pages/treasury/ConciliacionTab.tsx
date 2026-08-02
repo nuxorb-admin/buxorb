@@ -11,6 +11,7 @@ import type { TreasuryTierLimits } from "./limits";
 import { downloadCsv } from "./parseCsv";
 import { insertMovementWithSplits, splitMatches, type SplitLine } from "./splits";
 import { suggestCategory } from "./patterns";
+import { findDuplicate } from "./duplicates";
 import SplitEditor from "./SplitEditor";
 import Modal from "../../../admin/components/Modal";
 
@@ -130,6 +131,7 @@ export default function ConciliacionTab({
           accounts={accounts}
           categories={categories}
           patterns={patterns}
+          movements={movements}
           allowAi={limits.aiParsing}
           userId={userId}
           onClose={() => setShowNew(false)}
@@ -145,6 +147,7 @@ function NewReconciliationModal({
   accounts,
   categories,
   patterns,
+  movements,
   allowAi,
   userId,
   onClose,
@@ -154,6 +157,7 @@ function NewReconciliationModal({
   accounts: TreasuryAccount[];
   categories: TreasuryCategory[];
   patterns: TreasuryCategoryPattern[];
+  movements: TreasuryMovement[];
   allowAi: boolean;
   userId: string | null;
   onClose: () => void;
@@ -167,12 +171,14 @@ function NewReconciliationModal({
   const [proposed, setProposed] = useState<ProposedTransaction[] | null>(null);
   const [rowCategory, setRowCategory] = useState<Record<number, string>>({});
   const [splitRows, setSplitRows] = useState<Record<number, SplitLine[]>>({});
+  const [includeDuplicate, setIncludeDuplicate] = useState<Record<number, boolean>>({});
 
   function onFile(e: ChangeEvent<HTMLInputElement>) {
     setFile(e.target.files?.[0] ?? null);
     setProposed(null);
     setRowCategory({});
     setSplitRows({});
+    setIncludeDuplicate({});
   }
 
   async function fileToBase64(f: File): Promise<string> {
@@ -226,11 +232,16 @@ function NewReconciliationModal({
     return categories[0]?.name ?? "Otros gastos (papelería, seguros, etc.)";
   }
 
+  function rowIsDuplicate(t: ProposedTransaction): boolean {
+    return !!findDuplicate(movements, { account_id: accountId, entry_date: t.date, amount: t.amount });
+  }
+
   async function confirmProposed() {
     if (!proposed || !allSplitsValid()) return;
     setSaving(true);
     for (let i = 0; i < proposed.length; i++) {
       const t = proposed[i];
+      if (rowIsDuplicate(t) && !includeDuplicate[i]) continue;
       const category = rowCategoryFor(t.concept, i);
       const rowSplits = splitRows[i];
       await insertMovementWithSplits(
@@ -306,6 +317,16 @@ function NewReconciliationModal({
                       {t.type === "ingreso" ? "+" : "-"}${t.amount.toLocaleString("es-MX")}
                     </span>
                   </div>
+                  {rowIsDuplicate(t) && (
+                    <label className="mx-1 mb-1 flex items-center gap-2 border border-orange/40 bg-orange/10 px-2 py-1 font-mono text-[0.62rem] text-orange">
+                      <input
+                        type="checkbox"
+                        checked={!!includeDuplicate[i]}
+                        onChange={(e) => setIncludeDuplicate((prev) => ({ ...prev, [i]: e.target.checked }))}
+                      />
+                      Parece duplicado (misma cuenta/fecha/monto) — importar de todos modos
+                    </label>
+                  )}
                   {!splitRows[i] && (
                     <div className="px-1 pb-1">
                       <select

@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { supabase } from "../../../lib/supabase";
-import type { TreasuryAccount, TreasuryCategory, TreasuryCategoryPattern } from "../../../lib/database.types";
+import type { TreasuryAccount, TreasuryCategory, TreasuryCategoryPattern, TreasuryMovement } from "../../../lib/database.types";
 import type { TreasuryTierLimits } from "./limits";
 import CsvImportModal from "./CsvImportModal";
 import Modal from "../../../admin/components/Modal";
@@ -15,6 +15,7 @@ export default function CuentasTab({
   accounts,
   categories,
   patterns,
+  movements,
   limits,
   reload,
 }: {
@@ -22,6 +23,7 @@ export default function CuentasTab({
   accounts: TreasuryAccount[];
   categories: TreasuryCategory[];
   patterns: TreasuryCategoryPattern[];
+  movements: TreasuryMovement[];
   limits: TreasuryTierLimits;
   reload: () => void;
 }) {
@@ -126,6 +128,7 @@ export default function CuentasTab({
           accountId={importAccount.id}
           categories={categories}
           patterns={patterns}
+          movements={movements}
           source="bank_import"
           userId={userId}
           onClose={() => setImportAccount(null)}

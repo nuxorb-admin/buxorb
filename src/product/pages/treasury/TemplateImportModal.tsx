@@ -1,9 +1,10 @@
 import { useState, type ChangeEvent } from "react";
-import type { TreasuryCategory, TreasuryCategoryPattern } from "../../../lib/database.types";
+import type { TreasuryCategory, TreasuryCategoryPattern, TreasuryMovement } from "../../../lib/database.types";
 import Modal from "../../../admin/components/Modal";
 import { downloadTreasuryTemplate, parseTreasuryTemplate, type TemplateRow } from "./treasuryTemplate";
 import { insertMovementWithSplits, splitMatches, type SplitLine } from "./splits";
 import { suggestCategory } from "./patterns";
+import { findDuplicate } from "./duplicates";
 import SplitEditor from "./SplitEditor";
 
 export default function TemplateImportModal({
@@ -11,6 +12,7 @@ export default function TemplateImportModal({
   accountId,
   categories,
   patterns,
+  movements,
   userId,
   onClose,
   onImported,
@@ -19,6 +21,7 @@ export default function TemplateImportModal({
   accountId: string;
   categories: TreasuryCategory[];
   patterns: TreasuryCategoryPattern[];
+  movements: TreasuryMovement[];
   userId: string | null;
   onClose: () => void;
   onImported: () => void;
@@ -30,6 +33,10 @@ export default function TemplateImportModal({
   // Splits por fila — pantalla de confirmación previa antes de guardar, ahí
   // es donde se puede dividir cada movimiento importado en 2+ categorías.
   const [splitRows, setSplitRows] = useState<Record<number, SplitLine[]>>({});
+  // Filas que calzan con un movimiento ya existente (misma cuenta/fecha/
+  // monto) se excluyen del import por default — hay que marcarlas a mano
+  // para incluirlas de todos modos.
+  const [includeDuplicate, setIncludeDuplicate] = useState<Record<number, boolean>>({});
 
   async function onFile(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -61,6 +68,8 @@ export default function TemplateImportModal({
     setSaving(true);
     for (let i = 0; i < rows.length; i++) {
       const r = rows[i];
+      const isDuplicate = !!findDuplicate(movements, { account_id: accountId, entry_date: r.fecha, amount: r.monto });
+      if (isDuplicate && !includeDuplicate[i]) continue;
       const rowSplits = splitRows[i];
       const category = categories.some((c) => c.name === r.categoria)
         ? r.categoria
@@ -119,7 +128,9 @@ export default function TemplateImportModal({
                 Vista previa ({rows.length} filas) — {fileName}
               </p>
               <div className="max-h-80 space-y-2 overflow-y-auto border border-ink/10 bg-white p-2">
-                {rows.map((r, i) => (
+                {rows.map((r, i) => {
+                  const isDuplicate = !!findDuplicate(movements, { account_id: accountId, entry_date: r.fecha, amount: r.monto });
+                  return (
                   <div key={i} className="border-b border-ink/5 pb-2 last:border-b-0">
                     <div className="flex items-center justify-between gap-3 px-1 py-1 font-mono text-[0.68rem] text-ink">
                       <span>
@@ -129,6 +140,16 @@ export default function TemplateImportModal({
                         {r.tipo === "ingreso" ? "+" : "-"}${r.monto.toLocaleString("es-MX")}
                       </span>
                     </div>
+                    {isDuplicate && (
+                      <label className="mx-1 mb-1 flex items-center gap-2 border border-orange/40 bg-orange/10 px-2 py-1 font-mono text-[0.62rem] text-orange">
+                        <input
+                          type="checkbox"
+                          checked={!!includeDuplicate[i]}
+                          onChange={(e) => setIncludeDuplicate((prev) => ({ ...prev, [i]: e.target.checked }))}
+                        />
+                        Parece duplicado (misma cuenta/fecha/monto) — importar de todos modos
+                      </label>
+                    )}
                     <div className="px-1">
                       <SplitEditor
                         total={r.monto}
@@ -147,7 +168,8 @@ export default function TemplateImportModal({
                       />
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
 

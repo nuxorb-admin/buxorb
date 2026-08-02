@@ -79,6 +79,7 @@ export default function Tesoreria() {
             accounts={accounts}
             categories={activeCategories}
             patterns={patterns}
+            movements={movements}
             limits={limits}
             reload={reload}
           />

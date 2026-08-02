@@ -1,9 +1,10 @@
 import { useState, type ChangeEvent } from "react";
-import type { TreasuryCategory, TreasuryCategoryPattern } from "../../../lib/database.types";
+import type { TreasuryCategory, TreasuryCategoryPattern, TreasuryMovement } from "../../../lib/database.types";
 import Modal from "../../../admin/components/Modal";
 import { parseCsv, parseXlsxToRows } from "./parseCsv";
 import { insertMovementWithSplits, splitMatches, type SplitLine } from "./splits";
 import { suggestCategory } from "./patterns";
+import { findDuplicate } from "./duplicates";
 import SplitEditor from "./SplitEditor";
 
 const TYPE_BY_SIGN = "__sign__";
@@ -25,6 +26,7 @@ export default function CsvImportModal({
   accountId,
   categories,
   patterns,
+  movements,
   source,
   userId,
   onClose,
@@ -35,6 +37,7 @@ export default function CsvImportModal({
   accountId: string;
   categories: TreasuryCategory[];
   patterns: TreasuryCategoryPattern[];
+  movements: TreasuryMovement[];
   source: "csv_import" | "bank_import";
   userId: string | null;
   onClose: () => void;
@@ -47,6 +50,7 @@ export default function CsvImportModal({
   const [error, setError] = useState<string | null>(null);
   const [rowCategory, setRowCategory] = useState<Record<number, string>>({});
   const [splitRows, setSplitRows] = useState<Record<number, SplitLine[]>>({});
+  const [includeDuplicate, setIncludeDuplicate] = useState<Record<number, boolean>>({});
 
   const dataRows = hasHeader ? rows.slice(1) : rows;
   const columnCount = rows[0]?.length ?? 0;
@@ -84,6 +88,14 @@ export default function CsvImportModal({
     return categories[0]?.name ?? "Otros gastos (papelería, seguros, etc.)";
   }
 
+  function rowIsDuplicate(r: string[]): boolean {
+    return !!findDuplicate(movements, {
+      account_id: accountId,
+      entry_date: r[mapping.date] || "",
+      amount: rowAmount(r),
+    });
+  }
+
   function allSplitsValid() {
     return dataRows.every((r, i) => !splitRows[i] || splitMatches(splitRows[i], rowAmount(r)));
   }
@@ -98,6 +110,7 @@ export default function CsvImportModal({
     setSaving(true);
     for (let i = 0; i < dataRows.length; i++) {
       const r = dataRows[i];
+      if (rowIsDuplicate(r) && !includeDuplicate[i]) continue;
       const amount = parseAmount(r[mapping.amount] ?? "0");
       const type = mapping.type === TYPE_BY_SIGN ? (amount < 0 ? "egreso" : "ingreso") : r[mapping.type];
       const category = rowCategoryFor(r, i);
@@ -187,6 +200,16 @@ export default function CsvImportModal({
                       </span>
                       <span>${rowAmount(r).toLocaleString("es-MX")}</span>
                     </div>
+                    {rowIsDuplicate(r) && (
+                      <label className="mx-1 mb-1 flex items-center gap-2 border border-orange/40 bg-orange/10 px-2 py-1 font-mono text-[0.62rem] text-orange">
+                        <input
+                          type="checkbox"
+                          checked={!!includeDuplicate[i]}
+                          onChange={(e) => setIncludeDuplicate((prev) => ({ ...prev, [i]: e.target.checked }))}
+                        />
+                        Parece duplicado (misma cuenta/fecha/monto) — importar de todos modos
+                      </label>
+                    )}
                     {!splitRows[i] && (
                       <div className="px-1 pb-1">
                         <select

@@ -223,10 +223,10 @@ export default function ResumenTab({
           ? "text-[0.8rem] font-bold text-ink"
           : "text-sm font-bold text-ink";
     const topBorder = emphasis === "headline" ? "border-t-2 border-ink" : emphasis === "subtotal" ? "border-t border-ink/10" : "";
-    // Filas de detalle bien compactas (~15px de alto) para que quepan más
+    // Filas de detalle bien compactas (~19px de alto) para que quepan más
     // categorías sin scroll vertical — subtotales y encabezados conservan
     // más aire porque son los que marcan el ritmo de lectura.
-    const vPad = emphasis === "detail" ? "py-0 leading-[15px]" : "py-2.5";
+    const vPad = emphasis === "detail" ? "py-0 leading-[19px]" : "py-2.5";
     return (
       <tr className={`${rowBg} ${topBorder}`}>
         <td className={`sticky left-0 z-10 whitespace-nowrap border-r border-ink/10 px-3 ${vPad} ${rowBg} ${topBorder} ${labelClass}`}>

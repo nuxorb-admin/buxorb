@@ -3,8 +3,15 @@ import type { TreasuryAccount, TreasuryCategory, TreasuryMovement } from "../../
 import type { TreasuryTierLimits } from "./limits";
 import { downloadCsv } from "./parseCsv";
 
-type Granularity = "dia" | "semana" | "mes";
+type Granularity = "dia" | "mes";
 type Bucket = "ingreso" | "fijo" | "variable" | "operativo";
+
+const MAX_DAYS = 366;
+const MAX_MONTHS = 60;
+
+function pad(n: number) {
+  return String(n).padStart(2, "0");
+}
 
 function money(n: number) {
   return n.toLocaleString("es-MX", { style: "currency", currency: "MXN", maximumFractionDigits: 0 });
@@ -20,29 +27,60 @@ function totals(movements: TreasuryMovement[]) {
   return { entradas, salidas, disponible: entradas - salidas };
 }
 
-// Semana anclada al lunes — más simple que el número de semana ISO real y
-// igual de útil para agrupar, se muestra como "semana del <lunes>".
-function weekKey(entryDate: string): string {
-  const d = new Date(entryDate + "T00:00:00");
-  const day = d.getDay();
-  const diffToMonday = day === 0 ? -6 : 1 - day;
-  d.setDate(d.getDate() + diffToMonday);
-  return d.toISOString().slice(0, 10);
+function currentMonthDayRange(): { start: string; end: string } {
+  const now = new Date();
+  const start = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-01`;
+  const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  const end = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(lastDay)}`;
+  return { start, end };
+}
+
+function defaultMonthRange(): { start: string; end: string } {
+  const now = new Date();
+  const end = `${now.getFullYear()}-${pad(now.getMonth() + 1)}`;
+  const startDate = new Date(now.getFullYear(), now.getMonth() - 5, 1);
+  const start = `${startDate.getFullYear()}-${pad(startDate.getMonth() + 1)}`;
+  return { start, end };
+}
+
+function enumerateDays(start: string, end: string): string[] {
+  const out: string[] = [];
+  const d = new Date(start + "T00:00:00");
+  const endD = new Date(end + "T00:00:00");
+  if (Number.isNaN(d.getTime()) || Number.isNaN(endD.getTime()) || d > endD) return out;
+  while (d <= endD && out.length < MAX_DAYS) {
+    out.push(d.toISOString().slice(0, 10));
+    d.setDate(d.getDate() + 1);
+  }
+  return out;
+}
+
+function enumerateMonths(start: string, end: string): string[] {
+  const out: string[] = [];
+  const [sy, sm] = start.split("-").map(Number);
+  const [ey, em] = end.split("-").map(Number);
+  if (!sy || !sm || !ey || !em) return out;
+  let y = sy;
+  let m = sm;
+  while ((y < ey || (y === ey && m <= em)) && out.length < MAX_MONTHS) {
+    out.push(`${y}-${pad(m)}`);
+    m++;
+    if (m > 12) {
+      m = 1;
+      y++;
+    }
+  }
+  return out;
 }
 
 function periodKey(m: TreasuryMovement, granularity: Granularity): string {
-  if (granularity === "dia") return m.entry_date;
-  if (granularity === "semana") return weekKey(m.entry_date);
-  return m.entry_date.slice(0, 7);
+  return granularity === "dia" ? m.entry_date : m.entry_date.slice(0, 7);
 }
 
 function periodLabel(key: string, granularity: Granularity): string {
-  if (granularity === "semana") return `Sem. ${new Date(key + "T00:00:00").toLocaleDateString("es-MX", { day: "2-digit", month: "short" })}`;
   if (granularity === "mes") return new Date(key + "-01T00:00:00").toLocaleDateString("es-MX", { year: "2-digit", month: "short" });
   return new Date(key + "T00:00:00").toLocaleDateString("es-MX", { day: "2-digit", month: "short" });
 }
-
-const PERIOD_LIMIT: Record<Granularity, number> = { dia: 14, semana: 12, mes: 12 };
 
 function monthOverMonth(movements: TreasuryMovement[], count: number) {
   const byMonth = new Map<string, TreasuryMovement[]>();
@@ -95,21 +133,28 @@ export default function ResumenTab({
   categories: TreasuryCategory[];
   limits: TreasuryTierLimits;
 }) {
-  const [granularity, setGranularity] = useState<Granularity>("mes");
+  const [granularity, setGranularity] = useState<Granularity>("dia");
+  const [dayRange, setDayRange] = useState(currentMonthDayRange);
+  const [monthRange, setMonthRange] = useState(defaultMonthRange);
+
   const overall = totals(movements);
   const months = limits.monthComparison ? monthOverMonth(movements, 6) : [];
 
-  // Columnas: períodos según el filtro, en orden ascendente (más viejo a la
-  // izquierda, más reciente a la derecha, como un estado financiero normal).
-  const periodKeys = [...new Set(movements.map((m) => periodKey(m, granularity)))]
-    .sort()
-    .slice(-PERIOD_LIMIT[granularity]);
+  // Solo categorías que existen hoy en el catálogo — un movimiento con una
+  // categoría que ya no está en el catálogo no se suma en ningún lado del
+  // reporte; se avisa aparte para que el usuario lo corrija en Movimientos.
+  const validMovements = movements.filter((m) => categories.some((c) => c.name === m.category));
+  const unrecognizedCount = movements.length - validMovements.length;
 
-  // Filas: una por categoría con movimientos, agrupada por su naturaleza.
-  const categoryNames = [...new Set(movements.map((m) => m.category))];
+  const periodKeys =
+    granularity === "dia" ? enumerateDays(dayRange.start, dayRange.end) : enumerateMonths(monthRange.start, monthRange.end);
+
+  const categoryNames = [...new Set(validMovements.map((m) => m.category))];
   const rows: CategoryRow[] = categoryNames.map((category) => {
     const values = periodKeys.map((key) =>
-      movements.filter((m) => m.category === category && periodKey(m, granularity) === key).reduce((sum, m) => sum + signedAmount(m), 0),
+      validMovements
+        .filter((m) => m.category === category && periodKey(m, granularity) === key)
+        .reduce((sum, m) => sum + signedAmount(m), 0),
     );
     return { category, bucket: bucketFor(category, categories), values, total: values.reduce((s, v) => s + v, 0) };
   });
@@ -150,7 +195,7 @@ export default function ResumenTab({
     downloadCsv(`flujo-de-caja-${new Date().toISOString().slice(0, 10)}.csv`, rowsCsv);
   }
 
-  function Row({ label, values, total, bold, tone }: { label: string; values: number[]; total: number; bold?: boolean; tone?: "up" | "down" }) {
+  function Row({ label, values, total, bold }: { label: string; values: number[]; total: number; bold?: boolean }) {
     return (
       <tr className={bold ? "bg-sand-2 font-bold" : ""}>
         <td className="whitespace-nowrap px-3 py-2 text-sm capitalize text-ink">{label}</td>
@@ -166,7 +211,7 @@ export default function ResumenTab({
         ))}
         <td
           className={`whitespace-nowrap border-l border-ink/10 px-3 py-2 text-right font-mono text-xs font-bold ${
-            tone === "down" || total < 0 ? "text-orange" : tone === "up" || total > 0 ? "text-teal" : "text-ink"
+            total < 0 ? "text-orange" : total > 0 ? "text-teal" : "text-ink"
           }`}
         >
           {signedMoney(total)}
@@ -201,27 +246,70 @@ export default function ResumenTab({
         </div>
       </div>
 
-      <div className="mb-3 mt-6 flex items-center justify-between">
+      {unrecognizedCount > 0 && (
+        <div className="mt-4 border border-orange/40 bg-orange/10 px-3 py-2 font-mono text-[0.68rem] text-orange">
+          {unrecognizedCount} movimiento{unrecognizedCount === 1 ? "" : "s"} con categoría no reconocida — no se incluye
+          {unrecognizedCount === 1 ? "" : "n"} en el flujo de caja. Corrígelo{unrecognizedCount === 1 ? "" : "s"} en
+          Movimientos.
+        </div>
+      )}
+
+      <div className="mb-3 mt-6 flex flex-wrap items-center justify-between gap-3">
         <h3 className="font-mono text-[0.68rem] font-bold uppercase tracking-[0.1em] text-muted">
           Flujo de caja consolidado
         </h3>
-        <div className="flex gap-1 border border-ink/15">
-          {(["dia", "semana", "mes"] as Granularity[]).map((g) => (
-            <button
-              key={g}
-              onClick={() => setGranularity(g)}
-              className={`px-3 py-1 font-mono text-[0.62rem] uppercase tracking-[0.08em] ${
-                granularity === g ? "bg-ink text-white" : "text-muted hover:text-ink"
-              }`}
-            >
-              {g === "dia" ? "Día" : g === "semana" ? "Semana" : "Mes"}
-            </button>
-          ))}
+        <div className="flex flex-wrap items-center gap-3">
+          {granularity === "dia" ? (
+            <div className="flex items-center gap-2">
+              <input
+                type="date"
+                value={dayRange.start}
+                onChange={(e) => setDayRange({ ...dayRange, start: e.target.value })}
+                className="border border-ink/15 bg-sand-2 px-2 py-1 font-mono text-xs text-ink focus:border-teal focus:outline-none"
+              />
+              <span className="font-mono text-xs text-muted">a</span>
+              <input
+                type="date"
+                value={dayRange.end}
+                onChange={(e) => setDayRange({ ...dayRange, end: e.target.value })}
+                className="border border-ink/15 bg-sand-2 px-2 py-1 font-mono text-xs text-ink focus:border-teal focus:outline-none"
+              />
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <input
+                type="month"
+                value={monthRange.start}
+                onChange={(e) => setMonthRange({ ...monthRange, start: e.target.value })}
+                className="border border-ink/15 bg-sand-2 px-2 py-1 font-mono text-xs text-ink focus:border-teal focus:outline-none"
+              />
+              <span className="font-mono text-xs text-muted">a</span>
+              <input
+                type="month"
+                value={monthRange.end}
+                onChange={(e) => setMonthRange({ ...monthRange, end: e.target.value })}
+                className="border border-ink/15 bg-sand-2 px-2 py-1 font-mono text-xs text-ink focus:border-teal focus:outline-none"
+              />
+            </div>
+          )}
+          <div className="flex gap-1 border border-ink/15">
+            {(["dia", "mes"] as Granularity[]).map((g) => (
+              <button
+                key={g}
+                onClick={() => setGranularity(g)}
+                className={`px-3 py-1 font-mono text-[0.62rem] uppercase tracking-[0.08em] ${
+                  granularity === g ? "bg-ink text-white" : "text-muted hover:text-ink"
+                }`}
+              >
+                {g === "dia" ? "Día" : "Mes"}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
       {periodKeys.length === 0 ? (
-        <p className="font-mono text-xs text-muted">Sin movimientos todavía.</p>
+        <p className="font-mono text-xs text-muted">Elige un rango de fechas válido.</p>
       ) : (
         <div className="overflow-x-auto border border-ink/10 bg-white">
           <table className="w-full border-collapse">

@@ -57,6 +57,11 @@ export default function MovimientosTab({
     reload();
   }
 
+  async function fixCategory(id: string, category: string) {
+    await supabase.from("treasury_movements").update({ category }).eq("id", id);
+    reload();
+  }
+
   return (
     <div>
       {proyectados.length > 0 && (
@@ -115,26 +120,50 @@ export default function MovimientosTab({
 
       <div className="divide-y divide-ink/10 border border-ink/10 bg-white">
         {movements.length === 0 && <p className="p-4 font-mono text-xs text-muted">Sin movimientos todavía.</p>}
-        {movements.map((m) => (
-          <div key={m.id} className="flex items-center justify-between gap-3 px-4 py-3">
-            <div>
-              <p className="text-sm font-semibold text-ink">{m.concept}</p>
-              <p className="font-mono text-[0.66rem] uppercase tracking-[0.06em] text-muted">
-                {m.category} · {new Date(m.entry_date).toLocaleDateString("es-MX")}
-                {accounts.length > 1 && ` · ${accounts.find((a) => a.id === m.account_id)?.name ?? ""}`}
-              </p>
+        {movements.map((m) => {
+          const categoryValid = categories.some((c) => c.name === m.category);
+          return (
+            <div key={m.id} className="flex items-center justify-between gap-3 px-4 py-3">
+              <div>
+                <p className="text-sm font-semibold text-ink">{m.concept}</p>
+                <p className="font-mono text-[0.66rem] uppercase tracking-[0.06em] text-muted">
+                  {categoryValid ? (
+                    m.category
+                  ) : (
+                    <span className="text-orange">Categoría no reconocida ({m.category})</span>
+                  )}{" "}
+                  · {new Date(m.entry_date).toLocaleDateString("es-MX")}
+                  {accounts.length > 1 && ` · ${accounts.find((a) => a.id === m.account_id)?.name ?? ""}`}
+                </p>
+                {!categoryValid && (
+                  <select
+                    onChange={(e) => e.target.value && fixCategory(m.id, e.target.value)}
+                    defaultValue=""
+                    className="mt-1 border border-orange/40 bg-orange/10 px-2 py-1 font-mono text-[0.62rem] text-ink focus:outline-none"
+                  >
+                    <option value="" disabled>
+                      Corregir categoría…
+                    </option>
+                    {categories.map((c) => (
+                      <option key={c.id} value={c.name}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+              <div className="flex items-center gap-3">
+                <span className={`font-mono text-sm font-bold ${m.type === "ingreso" ? "text-teal" : "text-orange"}`}>
+                  {m.type === "ingreso" ? "+" : "-"}
+                  {money(Number(m.amount))}
+                </span>
+                <button onClick={() => remove(m.id)} className="font-mono text-[0.62rem] uppercase text-muted hover:text-orange">
+                  ✕
+                </button>
+              </div>
             </div>
-            <div className="flex items-center gap-3">
-              <span className={`font-mono text-sm font-bold ${m.type === "ingreso" ? "text-teal" : "text-orange"}`}>
-                {m.type === "ingreso" ? "+" : "-"}
-                {money(Number(m.amount))}
-              </span>
-              <button onClick={() => remove(m.id)} className="font-mono text-[0.62rem] uppercase text-muted hover:text-orange">
-                ✕
-              </button>
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {showNew && (

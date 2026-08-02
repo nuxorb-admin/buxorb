@@ -101,7 +101,7 @@ export default function ProductLayout({
           </div>
         )}
       </aside>
-      <main className="flex-1 px-6 py-8 lg:px-10 lg:py-10">
+      <main className="min-w-0 flex-1 px-6 py-8 lg:px-10 lg:py-10">
         <Outlet context={{ scopeId } satisfies ProductContext} />
       </main>
     </div>

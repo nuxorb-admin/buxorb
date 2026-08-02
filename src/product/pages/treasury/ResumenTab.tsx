@@ -198,7 +198,13 @@ export default function ResumenTab({
   function Row({ label, values, total, bold }: { label: string; values: number[]; total: number; bold?: boolean }) {
     return (
       <tr className={bold ? "bg-sand-2 font-bold" : ""}>
-        <td className="whitespace-nowrap px-3 py-2 text-sm capitalize text-ink">{label}</td>
+        <td
+          className={`sticky left-0 z-10 whitespace-nowrap px-3 py-2 text-sm capitalize text-ink ${
+            bold ? "bg-sand-2" : "bg-white"
+          }`}
+        >
+          {label}
+        </td>
         {values.map((v, i) => (
           <td
             key={i}
@@ -311,11 +317,11 @@ export default function ResumenTab({
       {periodKeys.length === 0 ? (
         <p className="font-mono text-xs text-muted">Elige un rango de fechas válido.</p>
       ) : (
-        <div className="overflow-x-auto border border-ink/10 bg-white">
+        <div className="max-w-full overflow-x-auto border border-ink/10 bg-white">
           <table className="w-full border-collapse">
             <thead>
               <tr className="border-b border-ink/10">
-                <th className="whitespace-nowrap px-3 py-2 text-left font-mono text-[0.6rem] uppercase tracking-[0.08em] text-muted">
+                <th className="sticky left-0 z-20 whitespace-nowrap bg-white px-3 py-2 text-left font-mono text-[0.6rem] uppercase tracking-[0.08em] text-muted">
                   Categoría
                 </th>
                 {periodKeys.map((key) => (

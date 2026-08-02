@@ -223,15 +223,19 @@ export default function ResumenTab({
           ? "text-[0.8rem] font-bold text-ink"
           : "text-sm font-bold text-ink";
     const topBorder = emphasis === "headline" ? "border-t-2 border-ink" : emphasis === "subtotal" ? "border-t border-ink/10" : "";
+    // Filas de detalle bien compactas (~15px de alto) para que quepan más
+    // categorías sin scroll vertical — subtotales y encabezados conservan
+    // más aire porque son los que marcan el ritmo de lectura.
+    const vPad = emphasis === "detail" ? "py-0 leading-[15px]" : "py-2.5";
     return (
       <tr className={`${rowBg} ${topBorder}`}>
-        <td className={`sticky left-0 z-10 whitespace-nowrap border-r border-ink/10 px-3 py-2.5 ${rowBg} ${topBorder} ${labelClass}`}>
+        <td className={`sticky left-0 z-10 whitespace-nowrap border-r border-ink/10 px-3 ${vPad} ${rowBg} ${topBorder} ${labelClass}`}>
           {label}
         </td>
         {values.map((v, i) => (
           <td
             key={i}
-            className={`whitespace-nowrap px-3 py-2.5 text-right font-mono text-xs ${topBorder} ${rowBg} ${
+            className={`whitespace-nowrap px-3 ${vPad} text-right font-mono text-xs ${topBorder} ${rowBg} ${
               emphasis !== "detail" ? "font-bold" : ""
             } ${v < 0 ? "text-orange" : v > 0 ? "text-teal" : "text-muted/50"}`}
           >
@@ -239,7 +243,7 @@ export default function ResumenTab({
           </td>
         ))}
         <td
-          className={`whitespace-nowrap border-l border-ink/10 px-3 py-2.5 text-right font-mono text-xs font-bold ${topBorder} ${rowBg} ${
+          className={`whitespace-nowrap border-l border-ink/10 px-3 ${vPad} text-right font-mono text-xs font-bold ${topBorder} ${rowBg} ${
             total < 0 ? "text-orange" : total > 0 ? "text-teal" : "text-muted/50"
           }`}
         >

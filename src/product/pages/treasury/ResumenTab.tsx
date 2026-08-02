@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState, type MouseEvent } from "react";
 import type { TreasuryAccount, TreasuryCategory, TreasuryMovement, TreasuryMovementSplit } from "../../../lib/database.types";
 import type { TreasuryTierLimits } from "./limits";
 import { downloadCsv } from "./parseCsv";
@@ -244,6 +244,29 @@ export default function ResumenTab({
   // Essential siempre ve todas sus cuentas consolidadas — ni siquiera se le
   // muestra el selector, no solo se le deshabilita.
   const [accountFilter, setAccountFilter] = useState<string>("all");
+
+  // "Arrastrar para hacer scroll" horizontal en la tabla — clic en
+  // cualquier parte (no solo la barra de scroll) y arrastrar mueve las
+  // columnas de fecha.
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const dragState = useRef<{ startX: number; startScrollLeft: number } | null>(null);
+  const [dragging, setDragging] = useState(false);
+
+  function onScrollMouseDown(e: MouseEvent) {
+    if (!scrollRef.current) return;
+    dragState.current = { startX: e.pageX, startScrollLeft: scrollRef.current.scrollLeft };
+    setDragging(true);
+  }
+  function onScrollMouseMove(e: MouseEvent) {
+    if (!dragState.current || !scrollRef.current) return;
+    e.preventDefault();
+    const dx = e.pageX - dragState.current.startX;
+    scrollRef.current.scrollLeft = dragState.current.startScrollLeft - dx;
+  }
+  function stopDragging() {
+    dragState.current = null;
+    setDragging(false);
+  }
 
   const scopedMovements =
     limits.perAccountView && accountFilter !== "all" ? movements.filter((m) => m.account_id === accountFilter) : movements;
@@ -531,7 +554,16 @@ export default function ResumenTab({
       {periodKeys.length === 0 ? (
         <p className="font-mono text-xs text-muted">Elige un rango de fechas válido.</p>
       ) : (
-        <div className="max-w-full overflow-x-auto border border-ink/10 bg-white">
+        <div
+          ref={scrollRef}
+          onMouseDown={onScrollMouseDown}
+          onMouseMove={onScrollMouseMove}
+          onMouseUp={stopDragging}
+          onMouseLeave={stopDragging}
+          className={`max-w-full overflow-x-auto border border-ink/10 bg-white ${
+            dragging ? "cursor-grabbing select-none" : "cursor-grab"
+          }`}
+        >
           <table className="w-full border-separate border-spacing-0">
             <thead>
               <tr>

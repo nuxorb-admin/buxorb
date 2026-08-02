@@ -228,6 +228,7 @@ export interface TreasuryCategory {
   name: string;
   kind: TreasuryCategoryKind;
   grupo: TreasuryCategoryGrupo;
+  orden: number;
   created_at: string;
 }
 

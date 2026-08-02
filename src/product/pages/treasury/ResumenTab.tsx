@@ -118,6 +118,7 @@ function signedAmount(m: TreasuryMovement) {
 interface CategoryRow {
   category: string;
   bucket: Bucket;
+  orden: number;
   values: number[];
   total: number;
 }
@@ -167,11 +168,17 @@ export default function ResumenTab({
         .filter((m) => m.category === cat.name && periodKey(m, granularity) === key)
         .reduce((sum, m) => sum + signedAmount(m), 0),
     );
-    return { category: cat.name, bucket: bucketFor(cat.name, categories), values, total: values.reduce((s, v) => s + v, 0) };
+    return {
+      category: cat.name,
+      bucket: bucketFor(cat.name, categories),
+      orden: cat.orden,
+      values,
+      total: values.reduce((s, v) => s + v, 0),
+    };
   });
 
   function bucketRows(bucket: Bucket) {
-    return rows.filter((r) => r.bucket === bucket).sort((a, b) => a.category.localeCompare(b.category));
+    return rows.filter((r) => r.bucket === bucket).sort((a, b) => a.orden - b.orden);
   }
   function bucketSubtotal(bucket: Bucket) {
     const values = periodKeys.map((_, i) => bucketRows(bucket).reduce((sum, r) => sum + r.values[i], 0));

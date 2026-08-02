@@ -181,19 +181,23 @@ Sin cambios respecto al plan — pendiente de definir con cada cliente.
 ### 5.1 Objetivo
 Verificar que el saldo registrado en Flujo de caja coincide con el extracto bancario oficial. Es un proceso interno (banco vs. libros) — no participa del estándar de conexión inter-módulo.
 
-**Cambio importante respecto al plan v1.0**: la implementación real es más simple que lo especificado originalmente. No existe el cálculo formal de cuadre (saldo inicial/final/diferencia) ni el sistema de matching automático con reporte de discrepancias por motivo — eso quedó pendiente. Lo que sí existe:
+**Cambio importante respecto al plan v1.0**: el saldo formal (inicial/final/diferencia) no vive aquí — se resolvió en el subproceso de Flujo de caja (sección 4, filas Saldo inicial/Saldo final del estado de resultados, con fecha de saldo inicial por cuenta) en vez de en Conciliación. El matching automático y el reporte de discrepancias sí se construyeron, con un alcance más simple que "OCR + reglas de negocio" del plan original (usa el mismo motor de IA de extracción, no un sistema de matching aparte). Lo que existe:
 
 ### 5.2 Funcionalidades Essential (tal como se construyeron)
 
-- ✅ Marcar movimientos individuales como conciliados (checkbox) — no hay captura de saldo inicial/final ni cálculo de diferencia
+- ✅ Marcar movimientos individuales como conciliados (checkbox)
 - ✅ Reporte exportable en CSV (no PDF/Excel con formato)
-- ✅ Lectura de PDF con IA (no OCR clásico) — 1 al mes, 1 cuenta. La IA propone una lista de transacciones (fecha, concepto, monto, tipo); el usuario asigna categoría o divide cada una en la misma pantalla antes de confirmar
-- ⏳ **Pendiente**: matching automático contra movimientos ya existentes — hoy el usuario simplemente confirma la lista que propone la IA como movimientos nuevos, no se cruzan contra lo ya capturado
+- ✅ Lectura de PDF con IA (no OCR clásico) — 1 al mes, 1 cuenta. La IA propone una lista de transacciones (fecha, concepto, monto, tipo)
+- ✅ **Matching automático contra movimientos ya existentes** (`reconciliationMatch.ts`): cada transacción propuesta se compara contra los movimientos ya capturados en esa cuenta —
+  - **Conciliado**: fecha y monto exactos → se marca el movimiento existente como conciliado, no se crea uno nuevo.
+  - **Diferencia (fecha o monto)**: mismo monto en una ventana de ~3 días, o misma fecha con monto distinto → se marca como posible discrepancia; por default se registra como nuevo (más seguro), con opción de vincularlo al existente a mano.
+  - **No registrado**: nada parecido → se captura como movimiento nuevo (categoría/split como siempre).
 
 ### 5.3 Funcionalidades Professional (incremental)
 
 - ✅ Lectura de PDF con IA hasta 2 veces al mes, en hasta 2 cuentas
-- ⏳ **Pendiente**: matching automático (monto + fecha), sugerencias por patrón, reporte de discrepancias por motivo — nada de esto se construyó
+- ✅ **Reporte de discrepancias por motivo**: resumen en pantalla (N conciliados / M con diferencia / K nuevos) + exportable en CSV cuando hay al menos una diferencia, con el motivo y el movimiento existente contra el que hizo match
+- ⏳ **Pendiente**: selector multi-cuenta para conciliar varias cuentas en un solo lote (hoy cada conciliación es de una cuenta a la vez, aunque el cupo mensual sí es por cuenta)
 
 ### 5.4 Campos de datos
 
@@ -224,7 +228,7 @@ No hay tabla de control de cupo separada (`uso_conciliacion_pdf`) — el cupo se
 **Professional (adicional):**
 - Mismo flujo, con cupo mensual más alto (2 veces, 2 cuentas)
 
-⏳ **Pendiente**: selector multi-cuenta para conciliar en batch, pantalla de sugerencias de match, reporte de discrepancias por motivo.
+⏳ **Pendiente**: selector multi-cuenta para conciliar varias cuentas en batch (ver 5.3).
 
 ### 5.6 Integraciones
 La lectura de PDF usa un modelo de IA vía función edge (`parse-bank-statement`), no un servicio de OCR tradicional como contemplaba el plan v1.0. Tiene costo variable por documento (ver pendientes: piloto de exactitud).

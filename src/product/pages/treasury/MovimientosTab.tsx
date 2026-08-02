@@ -57,6 +57,11 @@ export default function MovimientosTab({
     supabase.auth.getUser().then(({ data }) => setUserId(data.user?.id ?? null));
   }, []);
 
+  // Solo categorías activas se ofrecen para capturar movimientos nuevos —
+  // una desactivada sigue siendo válida para lo ya categorizado con ella
+  // (por eso la validación de la lista de abajo usa `categories` completo).
+  const activeCategories = categories.filter((c) => c.active);
+
   async function remove(id: string) {
     await supabase.from("treasury_movements").delete().eq("id", id);
     reload();
@@ -106,7 +111,7 @@ export default function MovimientosTab({
         <h3 className="font-mono text-[0.68rem] font-bold uppercase tracking-[0.1em] text-muted">Movimientos</h3>
         <div className="flex gap-4">
           <button
-            onClick={() => downloadTreasuryTemplate(categories.map((c) => c.name))}
+            onClick={() => downloadTreasuryTemplate(activeCategories.map((c) => c.name))}
             className="font-mono text-[0.66rem] uppercase tracking-[0.1em] text-teal hover:underline"
           >
             ↓ Descargar plantilla
@@ -158,7 +163,7 @@ export default function MovimientosTab({
                     <option value="" disabled>
                       Corregir categoría…
                     </option>
-                    {categories.map((c) => (
+                    {activeCategories.map((c) => (
                       <option key={c.id} value={c.name}>
                         {c.name}
                       </option>
@@ -184,7 +189,7 @@ export default function MovimientosTab({
         <NewMovementModal
           companyId={companyId}
           accounts={accounts}
-          categories={categories}
+          categories={activeCategories}
           lockAccount={limits.maxAccounts <= 1}
           userId={userId}
           onClose={() => setShowNew(false)}
@@ -196,7 +201,7 @@ export default function MovimientosTab({
         <TemplateImportModal
           companyId={companyId}
           accountId={accounts[0]?.id ?? ""}
-          categories={categories}
+          categories={activeCategories}
           userId={userId}
           onClose={() => setShowImport(false)}
           onImported={reload}
@@ -207,7 +212,7 @@ export default function MovimientosTab({
         <LinkProyectadoModal
           companyId={companyId}
           accounts={accounts}
-          categories={categories}
+          categories={activeCategories}
           proyectado={linking}
           userId={userId}
           onClose={() => setLinking(null)}

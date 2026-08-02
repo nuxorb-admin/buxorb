@@ -229,6 +229,7 @@ export interface TreasuryCategory {
   kind: TreasuryCategoryKind;
   grupo: TreasuryCategoryGrupo;
   orden: number;
+  active: boolean;
   created_at: string;
 }
 

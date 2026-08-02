@@ -6,8 +6,9 @@ import ResumenTab from "./treasury/ResumenTab";
 import MovimientosTab from "./treasury/MovimientosTab";
 import CuentasTab from "./treasury/CuentasTab";
 import ConciliacionTab from "./treasury/ConciliacionTab";
+import CategoriasTab from "./treasury/CategoriasTab";
 
-type Tab = "resumen" | "movimientos" | "cuentas" | "conciliacion";
+type Tab = "resumen" | "movimientos" | "cuentas" | "categorias" | "conciliacion";
 
 export default function Tesoreria() {
   const { scopeId: companyId } = useOutletContext<ProductContext>();
@@ -19,10 +20,15 @@ export default function Tesoreria() {
     return <p className="font-mono text-xs text-muted">Cargando…</p>;
   }
 
+  // Solo categorías activas se ofrecen para capturar movimientos nuevos —
+  // una desactivada sigue siendo válida para lo ya categorizado con ella.
+  const activeCategories = categories.filter((c) => c.active);
+
   const tabs: { id: Tab; label: string }[] = [
     { id: "resumen", label: "Resumen" },
     { id: "movimientos", label: "Movimientos" },
     ...(limits.perAccountView ? [{ id: "cuentas" as Tab, label: "Cuentas" }] : []),
+    ...(limits.customCategories ? [{ id: "categorias" as Tab, label: "Categorías" }] : []),
     { id: "conciliacion", label: "Conciliación" },
   ];
 
@@ -67,13 +73,16 @@ export default function Tesoreria() {
           />
         )}
         {tab === "cuentas" && limits.perAccountView && (
-          <CuentasTab companyId={companyId} accounts={accounts} categories={categories} limits={limits} reload={reload} />
+          <CuentasTab companyId={companyId} accounts={accounts} categories={activeCategories} limits={limits} reload={reload} />
+        )}
+        {tab === "categorias" && limits.customCategories && (
+          <CategoriasTab companyId={companyId} categories={categories} reload={reload} />
         )}
         {tab === "conciliacion" && (
           <ConciliacionTab
             companyId={companyId}
             accounts={accounts}
-            categories={categories}
+            categories={activeCategories}
             movements={movements}
             imports={imports}
             limits={limits}

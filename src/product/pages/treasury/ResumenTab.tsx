@@ -215,7 +215,11 @@ export default function ResumenTab({
     total: number;
     emphasis?: "detail" | "subtotal" | "headline";
   }) {
-    const rowBg = emphasis === "headline" ? "bg-teal/[0.06]" : emphasis === "subtotal" ? "bg-sand-2" : "bg-white";
+    // Colores sólidos (sin canal alfa) a propósito: las columnas fija
+    // (categoría y total) van con sticky encima de las columnas que sí
+    // hacen scroll, y un fondo translúcido dejaría ver los números pasar
+    // por detrás.
+    const rowBg = emphasis === "headline" ? "bg-[#f3f8f8]" : emphasis === "subtotal" ? "bg-sand-2" : "bg-white";
     const labelClass =
       emphasis === "detail"
         ? "text-[0.8rem] font-normal text-muted"
@@ -244,7 +248,7 @@ export default function ResumenTab({
           </td>
         ))}
         <td
-          className={`whitespace-nowrap border-l border-ink/10 px-3 ${vPad} text-right font-mono text-xs font-bold ${topBorder} ${rowBg} ${
+          className={`sticky right-0 z-10 whitespace-nowrap border-l border-ink/10 px-3 ${vPad} text-right font-mono text-xs font-bold ${topBorder} ${rowBg} ${
             total < 0 ? "text-orange" : total > 0 ? "text-teal" : "text-muted/50"
           }`}
         >
@@ -374,7 +378,7 @@ export default function ResumenTab({
                     {periodLabel(key, granularity)}
                   </th>
                 ))}
-                <th className="whitespace-nowrap border-b border-l border-ink/10 px-3 py-2 text-right font-mono text-[0.62rem] uppercase tracking-[0.08em] text-muted">
+                <th className="sticky right-0 z-20 whitespace-nowrap border-b border-l border-ink/10 bg-white px-3 py-2 text-right font-mono text-[0.62rem] uppercase tracking-[0.08em] text-muted">
                   Total
                 </th>
               </tr>

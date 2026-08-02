@@ -156,18 +156,20 @@ export default function ResumenTab({
   const periodKeys =
     granularity === "dia" ? enumerateDays(dayRange.start, dayRange.end) : enumerateMonths(monthRange.start, monthRange.end);
 
-  const categoryNames = [...new Set(validMovements.map((m) => m.category))];
-  const rows: CategoryRow[] = categoryNames.map((category) => {
+  // Una fila por cada categoría del catálogo, tenga o no movimientos en el
+  // rango visible — igual que las columnas de fecha, no desaparecen por
+  // falta de actividad.
+  const rows: CategoryRow[] = categories.map((cat) => {
     const values = periodKeys.map((key) =>
       validMovements
-        .filter((m) => m.category === category && periodKey(m, granularity) === key)
+        .filter((m) => m.category === cat.name && periodKey(m, granularity) === key)
         .reduce((sum, m) => sum + signedAmount(m), 0),
     );
-    return { category, bucket: bucketFor(category, categories), values, total: values.reduce((s, v) => s + v, 0) };
+    return { category: cat.name, bucket: bucketFor(cat.name, categories), values, total: values.reduce((s, v) => s + v, 0) };
   });
 
   function bucketRows(bucket: Bucket) {
-    return rows.filter((r) => r.bucket === bucket).sort((a, b) => b.total - a.total);
+    return rows.filter((r) => r.bucket === bucket).sort((a, b) => a.category.localeCompare(b.category));
   }
   function bucketSubtotal(bucket: Bucket) {
     const values = periodKeys.map((_, i) => bucketRows(bucket).reduce((sum, r) => sum + r.values[i], 0));

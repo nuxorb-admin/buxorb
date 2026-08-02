@@ -7,6 +7,7 @@ export interface TreasuryTierLimits {
   bankFileImport: boolean;
   maxBankImportAccounts: number;
   perAccountView: boolean;
+  monthComparison: boolean;
 }
 
 const ESSENTIAL: TreasuryTierLimits = {
@@ -16,6 +17,7 @@ const ESSENTIAL: TreasuryTierLimits = {
   bankFileImport: false,
   maxBankImportAccounts: 0,
   perAccountView: false,
+  monthComparison: false,
 };
 
 const PROFESSIONAL: TreasuryTierLimits = {
@@ -25,6 +27,7 @@ const PROFESSIONAL: TreasuryTierLimits = {
   bankFileImport: true,
   maxBankImportAccounts: 2,
   perAccountView: true,
+  monthComparison: true,
 };
 
 // Enterprise todavía no está desarrollado (es a la medida de cada cliente) —

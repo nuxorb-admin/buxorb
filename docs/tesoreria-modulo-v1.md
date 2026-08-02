@@ -56,7 +56,7 @@ Dar visibilidad clara y actualizada de entradas, salidas y utilidad neta, permit
 - ✅ Registro manual de ingresos/egresos (popup con fecha, tipo, descripción, monto, categoría, cuenta)
 - ✅ **Split de movimientos**: un mismo movimiento bancario se puede dividir en 2+ categorías (con validación de que la suma cuadre con el total) — no estaba en el plan v1.0, se agregó porque en la práctica un solo cargo bancario casi siempre mezcla conceptos (ej. una compra que es materia prima + logística)
 - ✅ Plantilla descargable en **.xlsx real** (no CSV) con desplegable de categoría por fila vía data validation de Excel — reemplaza el concepto original de "template Excel/Sheets" genérico
-- ⏳ **Pendiente**: sugerencia automática de categoría por patrón (motor `patron_categoria`) — no existe, ni en la carga de plantilla ni en la importación bancaria. Hoy la categoría siempre se asigna a mano en la pantalla de revisión previa a guardar
+- ✅ Sugerencia automática de categoría por patrón (motor `treasury_category_patterns`, antes `patron_categoria`) — aprende de cada movimiento guardado (sin importar el origen: manual, plantilla, banco, IA, proyectado) y sugiere categoría por descripción parecida en captura manual y en cada pantalla de revisión previa a importar
 - ✅ Categorización con catálogo fijo — pero **19 categorías con estructura de estado de resultados**, no las 17 originales de "flujo de caja simple" (ver 4.4, cambió por completo)
 - ✅ Estado de resultados consolidado (todas las cuentas), con **filtro de fechas libre** — día a día (rango de fechas) o mes a mes (rango de meses). El plan original hablaba de un filtro día/semana/mes; la vista semanal se quitó (el usuario pidió simplificar a solo día/mes con rango propio en cada uno)
 - ✅ 1 cuenta bancaria en Essential (el plan original decía "sin límite" para ambos niveles; en la implementación Essential quedó topado a 1 cuenta, Professional sin límite — ver tabla de resumen)
@@ -144,7 +144,15 @@ Catálogo base idéntico para Essential y Professional. La distinción "fijo/edi
 | orden | Entero |
 | active | Booleano (default true) — desactivar ≠ borrar, solo deja de ofrecerse al capturar; lo ya categorizado con ella sigue siendo válido |
 
-⏳ **Pendiente / no implementado**: `patron_categoria` (motor de sugerencia por patrón/heurística) — no existe ninguna tabla ni lógica de esto.
+**`treasury_category_patterns`** (antes `patron_categoria`)
+| Campo | Tipo |
+|---|---|
+| id | UUID |
+| company_id | Referencia |
+| texto_patron | Texto (descripción normalizada — sin acentos/mayúsculas/puntuación) |
+| category | Texto |
+| frecuencia_uso | Entero — desempate cuando calzan varios patrones |
+| updated_at | Timestamptz |
 
 ⏳ **Pendiente / no implementado**: `configuracion_cuenta_bancaria` con `modo_importacion` — lo más parecido que existe es el booleano `treasury_accounts.bank_import_enabled`, pero no hay modo "directo sin revisión".
 

@@ -19,7 +19,7 @@ Dar a negocios (emprendimientos y PyMEs) visibilidad y control sobre su flujo de
 | | **Essential** | **Professional** | **Enterprise** |
 |---|---|---|---|
 | Ingesta | Manual (formulario, con split en varias categorías) o plantilla .xlsx | + Automática desde archivo bancario (CSV/Excel), hasta 2 cuentas | A medida |
-| Categorización | Catálogo fijo de 19 categorías (estado de resultados) | Mismo catálogo — ⏳ alta libre de categorías propias pendiente de construir | A medida |
+| Categorización | Catálogo fijo de 19 categorías (estado de resultados), no editable | Mismo catálogo base + alta libre de categorías propias (crear/renombrar/desactivar por grupo) | A medida |
 | Vista de flujo de caja | Estado de resultados consolidado, filtro por día o mes (rango libre) | + Filtro por cuenta bancaria individual, comparativo mes a mes (12 meses) | A medida |
 | Conciliación | Marcar movimientos como conciliados + lectura de PDF con IA (1/mes, 1 cuenta) + reporte CSV | Lectura de PDF con IA hasta 2/mes, 2 cuentas | A medida |
 | Cuentas bancarias | 1 cuenta (nombre editable; banco y últimos dígitos, no) | Sin límite | A medida |
@@ -68,7 +68,7 @@ Dar visibilidad clara y actualizada de entradas, salidas y utilidad neta, permit
 
 - ✅ Importación desde archivo bancario (CSV o Excel), hasta 2 cuentas — con mapeo de columnas genérico (fecha/concepto/monto/tipo) más que un parser por banco. Hay un punto de extensión (`bankParsers.ts`) para cuando se apruebe automatizar un banco específico a la medida
 - ⏳ **Pendiente**: modo de importación configurable por cuenta ("revisión previa" vs. "directo") — hoy **siempre** pasa por la pantalla de revisión antes de guardar, no existe el modo directo sin revisión
-- ⏳ **Pendiente**: categorías personalizables (alta libre) — no hay pantalla de gestión de categorías todavía; el catálogo de 19 es el mismo para Essential y Professional
+- ✅ Categorías personalizables: tab **Categorías**, solo Professional (`limits.customCategories`) — crear categoría propia dentro de cualquiera de los 6 grupos del estado de resultados, renombrar, y desactivar/reactivar. Desactivar no borra: solo deja de ofrecerse al capturar movimientos nuevos, lo ya categorizado con ella sigue viéndose normal (no cae en "Pendiente de clasificar")
 - ✅ Comparativo mes a mes — pero ampliado: muestra los **12 meses del año en curso** (no solo los últimos meses con datos), con % de variación contra el mes anterior
 - ✅ Filtro por cuenta bancaria individual — pero implementado como filtro sobre el **mismo estado de resultados completo** (no una vista aparte simplificada): al elegir una cuenta, todo el estado (tarjetas, tabla, comparativo, export) se recalcula para esa cuenta
 
@@ -101,7 +101,7 @@ Total pendiente de clasificar (solo si hay movimientos sin categoría válida)
 → UTILIDAD NETA
 ```
 
-Mismo catálogo para Essential y Professional (la distinción "fijo/editable" del plan v1.0 no se implementó — ver 4.3).
+Catálogo base idéntico para Essential y Professional. La distinción "fijo/editable" del plan v1.0 sí se implementó: Essential no tiene forma de agregar categorías propias (catálogo fijo), Professional sí vía el tab Categorías (ver 4.3).
 
 **Arquitectura de la siembra**: el catálogo maestro vive en `nuxorb.treasury_category_templates` (propiedad exclusiva del equipo Nuxorb, el cliente nunca lo lee). Al activarse el módulo de Tesorería para una empresa (insert en `company_modules`), un trigger en el servidor copia el catálogo completo a la tabla propia de esa empresa (`treasury_categories`) — no depende de que el cliente abra la pantalla.
 
@@ -142,6 +142,7 @@ Mismo catálogo para Essential y Professional (la distinción "fijo/editable" de
 | kind | Enum (ingreso/egreso/ambos) |
 | grupo | Enum (ingreso/costo_venta/gasto_venta/gasto_administrativo/gasto_financiero/impuesto, nullable) |
 | orden | Entero |
+| active | Booleano (default true) — desactivar ≠ borrar, solo deja de ofrecerse al capturar; lo ya categorizado con ella sigue siendo válido |
 
 ⏳ **Pendiente / no implementado**: `patron_categoria` (motor de sugerencia por patrón/heurística) — no existe ninguna tabla ni lógica de esto.
 

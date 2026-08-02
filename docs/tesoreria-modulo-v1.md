@@ -1,7 +1,7 @@
 # Módulo: Tesorería
 [[tesorería]]
 **Versión:** 1.1
-**Fecha:** 19 de julio de 2026 (v1.0) — actualizado 2 de agosto de 2026 para reflejar lo construido
+**Fecha:** 19 de julio de 2026 (v1.0) — actualizado 26 de agosto de 2026 para reflejar lo construido
 **Estado:** En producción (Essential + Professional) — pendiente de pricing (ver `tesoreria-pendientes.md`)
 
 > Esta versión documenta lo que **existe hoy en el código y la base de datos**, no solo el plan original. Donde la implementación se desvió del plan v1.0 (para bien o porque algo quedó pendiente), se marca explícitamente con ✅ **Construido** o ⏳ **Pendiente**.
@@ -49,7 +49,7 @@ Cualquier módulo inserta en `expected_movements`; Tesorería la lee y muestra c
 ## 4. Subproceso: Flujo de caja y liquidez
 
 ### 4.1 Objetivo
-Dar visibilidad clara y actualizada de entradas, salidas y utilidad neta, permitiendo decisiones de liquidez sin depender de otros módulos.
+Dar visibilidad clara y actualizada de entradas, salidas, utilidad neta y saldo bancario corrido, permitiendo decisiones de liquidez sin depender de otros módulos.
 
 ### 4.2 Funcionalidades Essential
 
@@ -63,6 +63,9 @@ Dar visibilidad clara y actualizada de entradas, salidas y utilidad neta, permit
 - ✅ Reporte exportable (CSV) del historial completo de movimientos
 - ✅ Vinculación manual de un movimiento real con un proyectado (`expected_movements`)
 - ✅ Categorías sin match en el catálogo no se pierden: se agrupan bajo **"Pendiente de clasificar"**, al final del estado, arriba de Utilidad neta, y sí suman al total — antes de esto (implementación intermedia) se excluían del todo; se corrigió
+- ✅ **Saldo inicial / Saldo final corridos**: fila "Saldo inicial" arriba de Ingresos y "Saldo final" abajo de Utilidad neta en el estado de resultados. Cada cuenta tiene su propio saldo inicial + fecha de referencia (capturados/editables en Cuentas); saldo_final de un periodo = saldo_inicial + ingresos − egresos, y ese saldo_final es el saldo_inicial del periodo siguiente — no estaba en el plan v1.0
+- ✅ **Aviso de movimiento duplicado**: antes de guardar (manual, plantilla, banco, IA, o vincular proyectado) se avisa si ya existe un movimiento con la misma cuenta + fecha + monto exacto; no bloquea, pero exige una confirmación explícita ("guardar de todos modos") — no estaba en el plan v1.0
+- ✅ **Filtros en Movimientos**: rango de fechas + cuenta (Professional), default últimos 7 días todas las cuentas, máximo 50 movimientos visibles a la vez (los más recientes; se avisa si hay más y sugiere acotar el rango) — no estaba en el plan v1.0
 
 ### 4.3 Funcionalidades Professional (incremental sobre Essential)
 
@@ -106,6 +109,18 @@ Catálogo base idéntico para Essential y Professional. La distinción "fijo/edi
 **Arquitectura de la siembra**: el catálogo maestro vive en `nuxorb.treasury_category_templates` (propiedad exclusiva del equipo Nuxorb, el cliente nunca lo lee). Al activarse el módulo de Tesorería para una empresa (insert en `company_modules`), un trigger en el servidor copia el catálogo completo a la tabla propia de esa empresa (`treasury_categories`) — no depende de que el cliente abra la pantalla.
 
 ### 4.5 Campos de datos (tal como existen hoy en Supabase)
+
+**`treasury_accounts`**
+| Campo | Tipo | Notas |
+|---|---|---|
+| id | UUID | |
+| company_id | Referencia | |
+| name | Texto | Editable siempre |
+| bank_name | Texto | Fijo después de creada |
+| last4 | Texto | Fijo después de creada |
+| opening_balance | Decimal | Editable — punto de partida del saldo corrido |
+| opening_balance_date | Fecha | Editable — junto con opening_balance, no estaba en el plan v1.0 |
+| bank_import_enabled | Booleano | |
 
 **`treasury_movements`** (antes `movimiento`)
 | Campo | Tipo | Obligatorio | Notas |
@@ -159,13 +174,14 @@ Catálogo base idéntico para Essential y Professional. La distinción "fijo/edi
 ### 4.6 Pantallas / Dashboard (tal como existen)
 
 **Essential:**
-- Tab **Resumen**: tarjetas de Entradas/Salidas/Disponible, estado de resultados completo (categorías como filas, fechas como columnas fijas con scroll horizontal propio, ambas columnas de extremos — Categoría y Total — fijas), aviso de movimientos con categoría no reconocida, botón de reporte CSV
-- Tab **Movimientos**: alta manual (con split), lista de movimientos (marca los que tienen categoría no reconocida y permite corregirla ahí mismo), descarga/carga de plantilla .xlsx, lista de proyectados pendientes de vincular
-- Tab **Conciliación**: marcar movimientos como conciliados, subir PDF (lectura con IA, no OCR tradicional) con pantalla de revisión/split previa a guardar, reporte CSV
+- Tab **Resumen**: estado de resultados completo (categorías como filas, fechas como columnas — con filtro de rango día/mes —, columnas de extremos Categoría y Total fijas, scroll horizontal propio incluyendo arrastrar con clic para desplazarse), filas Saldo inicial/Saldo final, aviso de movimientos con categoría no reconocida, botón de reporte CSV. La tarjeta de resumen Entradas/Salidas/Disponible que hubo en una versión intermedia se quitó — el propio estado de resultados y el saldo corrido ya cubren esa información
+- Tab **Movimientos**: alta manual (con split y sugerencia de categoría por patrón mientras se escribe la descripción), filtros por rango de fechas y cuenta (default últimos 7 días, máx. 50 visibles), lista de movimientos (marca los que tienen categoría no reconocida y permite corregirla ahí mismo), descarga/carga de plantilla .xlsx, lista de proyectados pendientes de vincular
+- Tab **Conciliación**: marcar movimientos como conciliados, subir PDF (lectura con IA, no OCR tradicional) con matching automático contra lo ya capturado, pantalla de revisión/split previa a guardar, reporte CSV
 
 **Professional (adicional):**
-- Tab **Cuentas**: alta de cuenta (nombre, banco, últimos 4 dígitos — banco y dígitos no editables después de creada, solo el nombre), activar importación bancaria por cuenta, importar archivo
-- Selector de cuenta bancaria en el tab Resumen (filtra todo el estado de resultados)
+- Tab **Cuentas**: alta de cuenta (nombre, banco, últimos 4 dígitos, saldo inicial + fecha — banco y dígitos no editables después de creada; nombre y saldo inicial sí), activar importación bancaria por cuenta, importar archivo
+- Tab **Categorías**: alta libre de categorías propias por grupo del estado de resultados, renombrar, desactivar/reactivar
+- Selector de cuenta bancaria en el tab Resumen y en el filtro de Movimientos
 - Sección "Comparativo mes a mes" (12 meses del año, con %)
 
 ### 4.7 Integraciones API

@@ -126,15 +126,21 @@ function periodLabel(key: string, granularity: Granularity): string {
   return new Date(key + "T00:00:00").toLocaleDateString("es-MX", { day: "2-digit", month: "short" });
 }
 
-function monthOverMonth(movements: TreasuryMovement[], count: number) {
+// Los 12 meses del año en curso, de enero a diciembre, tengan o no
+// movimientos — mismo criterio que las columnas de fecha del estado de
+// resultados (no desaparecen por falta de actividad).
+function monthOverMonth(movements: TreasuryMovement[]) {
+  const year = new Date().getFullYear();
   const byMonth = new Map<string, TreasuryMovement[]>();
   for (const m of movements) byMonth.set(m.entry_date.slice(0, 7), [...(byMonth.get(m.entry_date.slice(0, 7)) ?? []), m]);
-  const months = [...byMonth.entries()]
-    .sort((a, b) => b[0].localeCompare(a[0]))
-    .slice(0, count)
-    .map(([key, ms]) => ({ key, label: periodLabel(key, "mes"), ...totals(ms) }));
+
+  const months = Array.from({ length: 12 }, (_, i) => {
+    const key = `${year}-${pad(i + 1)}`;
+    return { key, label: periodLabel(key, "mes"), ...totals(byMonth.get(key) ?? []) };
+  });
+
   return months.map((m, i) => {
-    const prev = months[i + 1];
+    const prev = months[i - 1];
     const pct = prev && prev.disponible !== 0 ? ((m.disponible - prev.disponible) / Math.abs(prev.disponible)) * 100 : null;
     return { ...m, pct };
   });
@@ -190,7 +196,7 @@ export default function ResumenTab({
     limits.perAccountView && accountFilter !== "all" ? movements.filter((m) => m.account_id === accountFilter) : movements;
 
   const overall = totals(scopedMovements);
-  const months = limits.monthComparison ? monthOverMonth(scopedMovements, 6) : [];
+  const months = limits.monthComparison ? monthOverMonth(scopedMovements) : [];
 
   // Un movimiento dividido en categorías se expande a varias líneas aquí —
   // el estado de resultados suma por categoría sin importar si el monto

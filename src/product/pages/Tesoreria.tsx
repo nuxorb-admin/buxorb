@@ -51,7 +51,9 @@ export default function Tesoreria() {
       </div>
 
       <div className="mt-6">
-        {tab === "resumen" && <ResumenTab movements={movements} accounts={accounts} limits={limits} />}
+        {tab === "resumen" && (
+          <ResumenTab movements={movements} accounts={accounts} categories={categories} limits={limits} />
+        )}
         {tab === "movimientos" && (
           <MovimientosTab
             companyId={companyId}

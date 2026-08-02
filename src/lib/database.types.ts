@@ -213,11 +213,14 @@ export interface TreasuryAccount {
   created_at: string;
 }
 
+export type TreasuryCategoryNaturaleza = "fijo" | "variable" | "operativo" | null;
+
 export interface TreasuryCategory {
   id: string;
   company_id: string;
   name: string;
   kind: TreasuryCategoryKind;
+  naturaleza: TreasuryCategoryNaturaleza;
   created_at: string;
 }
 

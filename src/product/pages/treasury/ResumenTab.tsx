@@ -21,6 +21,13 @@ function signedMoney(n: number) {
   return n < 0 ? `-${money(Math.abs(n))}` : money(n);
 }
 
+// "$0" repetido en cada columna vacía es puro ruido visual en una tabla con
+// muchas fechas — un guión es la convención estándar en estados financieros
+// para "sin movimiento" y se lee mucho más rápido de un vistazo.
+function cellValue(n: number) {
+  return n === 0 ? "–" : signedMoney(n);
+}
+
 function totals(movements: TreasuryMovement[]) {
   const entradas = movements.filter((m) => m.type === "ingreso").reduce((sum, m) => sum + Number(m.amount), 0);
   const salidas = movements.filter((m) => m.type === "egreso").reduce((sum, m) => sum + Number(m.amount), 0);
@@ -195,32 +202,60 @@ export default function ResumenTab({
     downloadCsv(`flujo-de-caja-${new Date().toISOString().slice(0, 10)}.csv`, rowsCsv);
   }
 
-  function Row({ label, values, total, bold }: { label: string; values: number[]; total: number; bold?: boolean }) {
+  function Row({
+    label,
+    values,
+    total,
+    emphasis = "detail",
+  }: {
+    label: string;
+    values: number[];
+    total: number;
+    emphasis?: "detail" | "subtotal" | "headline";
+  }) {
+    const rowBg = emphasis === "headline" ? "bg-teal/[0.06]" : emphasis === "subtotal" ? "bg-sand-2" : "bg-white";
+    const labelClass =
+      emphasis === "detail"
+        ? "text-[0.8rem] font-normal text-muted"
+        : emphasis === "subtotal"
+          ? "text-[0.8rem] font-bold text-ink"
+          : "text-sm font-bold text-ink";
+    const topBorder = emphasis === "headline" ? "border-t-2 border-ink" : emphasis === "subtotal" ? "border-t border-ink/10" : "";
     return (
-      <tr className={bold ? "bg-sand-2 font-bold" : ""}>
-        <td
-          className={`sticky left-0 z-10 whitespace-nowrap px-3 py-2 text-sm capitalize text-ink ${
-            bold ? "bg-sand-2" : "bg-white"
-          }`}
-        >
+      <tr className={`${rowBg} ${topBorder}`}>
+        <td className={`sticky left-0 z-10 whitespace-nowrap border-r border-ink/10 px-3 py-2.5 ${rowBg} ${topBorder} ${labelClass}`}>
           {label}
         </td>
         {values.map((v, i) => (
           <td
             key={i}
-            className={`whitespace-nowrap px-3 py-2 text-right font-mono text-xs ${
-              v < 0 ? "text-orange" : v > 0 ? "text-teal" : "text-muted"
-            }`}
+            className={`whitespace-nowrap px-3 py-2.5 text-right font-mono text-xs ${topBorder} ${rowBg} ${
+              emphasis !== "detail" ? "font-bold" : ""
+            } ${v < 0 ? "text-orange" : v > 0 ? "text-teal" : "text-muted/50"}`}
           >
-            {signedMoney(v)}
+            {cellValue(v)}
           </td>
         ))}
         <td
-          className={`whitespace-nowrap border-l border-ink/10 px-3 py-2 text-right font-mono text-xs font-bold ${
-            total < 0 ? "text-orange" : total > 0 ? "text-teal" : "text-ink"
+          className={`whitespace-nowrap border-l border-ink/10 px-3 py-2.5 text-right font-mono text-xs font-bold ${topBorder} ${rowBg} ${
+            total < 0 ? "text-orange" : total > 0 ? "text-teal" : "text-muted/50"
           }`}
         >
-          {signedMoney(total)}
+          {cellValue(total)}
+        </td>
+      </tr>
+    );
+  }
+
+  function GroupHeader({ label, first }: { label: string; first?: boolean }) {
+    return (
+      <tr>
+        <td
+          className={`sticky left-0 z-10 whitespace-nowrap border-r border-ink/10 bg-white px-3 pb-1.5 font-mono text-[0.62rem] font-bold uppercase tracking-[0.1em] text-muted ${
+            first ? "pt-3" : "pt-5"
+          }`}
+        >
+          {label}
         </td>
       </tr>
     );
@@ -318,71 +353,53 @@ export default function ResumenTab({
         <p className="font-mono text-xs text-muted">Elige un rango de fechas válido.</p>
       ) : (
         <div className="max-w-full overflow-x-auto border border-ink/10 bg-white">
-          <table className="w-full border-collapse">
+          <table className="w-full border-separate border-spacing-0">
             <thead>
-              <tr className="border-b border-ink/10">
-                <th className="sticky left-0 z-20 whitespace-nowrap bg-white px-3 py-2 text-left font-mono text-[0.6rem] uppercase tracking-[0.08em] text-muted">
+              <tr>
+                <th className="sticky left-0 z-20 whitespace-nowrap border-b border-r border-ink/10 bg-white px-3 py-2 text-left font-mono text-[0.62rem] uppercase tracking-[0.08em] text-muted">
                   Categoría
                 </th>
                 {periodKeys.map((key) => (
-                  <th key={key} className="whitespace-nowrap px-3 py-2 text-right font-mono text-[0.6rem] uppercase tracking-[0.08em] text-muted">
+                  <th
+                    key={key}
+                    className="whitespace-nowrap border-b border-ink/10 px-3 py-2 text-right font-mono text-[0.62rem] uppercase tracking-[0.08em] text-muted"
+                  >
                     {periodLabel(key, granularity)}
                   </th>
                 ))}
-                <th className="whitespace-nowrap border-l border-ink/10 px-3 py-2 text-right font-mono text-[0.6rem] uppercase tracking-[0.08em] text-muted">
+                <th className="whitespace-nowrap border-b border-l border-ink/10 px-3 py-2 text-right font-mono text-[0.62rem] uppercase tracking-[0.08em] text-muted">
                   Total
                 </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-ink/5">
-              <tr>
-                <td colSpan={periodKeys.length + 2} className="sticky left-0 z-10 whitespace-nowrap bg-white px-3 pt-3 pb-1 font-mono text-[0.6rem] font-bold uppercase tracking-[0.1em] text-muted">
-                  {BUCKET_LABELS.ingreso}
-                </td>
-              </tr>
+            <tbody>
+              <GroupHeader label={BUCKET_LABELS.ingreso} first />
               {bucketRows("ingreso").map((r) => (
                 <Row key={r.category} label={r.category} values={r.values} total={r.total} />
               ))}
-              <Row label="Total ingresos" values={ingresos.values} total={ingresos.total} bold />
+              <Row label="Total ingresos" values={ingresos.values} total={ingresos.total} emphasis="subtotal" />
 
-              <tr>
-                <td colSpan={periodKeys.length + 2} className="sticky left-0 z-10 whitespace-nowrap bg-white px-3 pt-3 pb-1 font-mono text-[0.6rem] font-bold uppercase tracking-[0.1em] text-muted">
-                  {BUCKET_LABELS.fijo}
-                </td>
-              </tr>
+              <GroupHeader label={BUCKET_LABELS.fijo} />
               {bucketRows("fijo").map((r) => (
                 <Row key={r.category} label={r.category} values={r.values} total={r.total} />
               ))}
-              <Row label="Total fijos" values={fijos.values} total={fijos.total} bold />
+              <Row label="Total fijos" values={fijos.values} total={fijos.total} emphasis="subtotal" />
 
-              <tr>
-                <td colSpan={periodKeys.length + 2} className="sticky left-0 z-10 whitespace-nowrap bg-white px-3 pt-3 pb-1 font-mono text-[0.6rem] font-bold uppercase tracking-[0.1em] text-muted">
-                  {BUCKET_LABELS.variable}
-                </td>
-              </tr>
+              <GroupHeader label={BUCKET_LABELS.variable} />
               {bucketRows("variable").map((r) => (
                 <Row key={r.category} label={r.category} values={r.values} total={r.total} />
               ))}
-              <Row label="Total variables" values={variables.values} total={variables.total} bold />
+              <Row label="Total variables" values={variables.values} total={variables.total} emphasis="subtotal" />
 
-              <Row label="Utilidad operativa" values={utilidadOperativa.values} total={utilidadOperativa.total} bold />
+              <Row label="Utilidad operativa" values={utilidadOperativa.values} total={utilidadOperativa.total} emphasis="headline" />
 
-              <tr>
-                <td colSpan={periodKeys.length + 2} className="sticky left-0 z-10 whitespace-nowrap bg-white px-3 pt-3 pb-1 font-mono text-[0.6rem] font-bold uppercase tracking-[0.1em] text-muted">
-                  {BUCKET_LABELS.operativo}
-                </td>
-              </tr>
+              <GroupHeader label={BUCKET_LABELS.operativo} />
               {bucketRows("operativo").map((r) => (
                 <Row key={r.category} label={r.category} values={r.values} total={r.total} />
               ))}
-              <Row label="Total operativos" values={operativos.values} total={operativos.total} bold />
+              <Row label="Total operativos" values={operativos.values} total={operativos.total} emphasis="subtotal" />
 
-              <tr className="border-t-2 border-ink">
-                <td colSpan={periodKeys.length + 2}>
-                  <div />
-                </td>
-              </tr>
-              <Row label="Flujo neto de caja" values={flujoNeto.values} total={flujoNeto.total} bold />
+              <Row label="Flujo neto de caja" values={flujoNeto.values} total={flujoNeto.total} emphasis="headline" />
             </tbody>
           </table>
         </div>

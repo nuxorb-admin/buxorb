@@ -21,6 +21,7 @@ export default function CuentasTab({
 }) {
   const [userId, setUserId] = useState<string | null>(null);
   const [showNew, setShowNew] = useState(false);
+  const [editAccount, setEditAccount] = useState<TreasuryAccount | null>(null);
   const [importAccount, setImportAccount] = useState<TreasuryAccount | null>(null);
 
   useEffect(() => {
@@ -92,6 +93,12 @@ export default function CuentasTab({
                   )}
                 </>
               )}
+              <button
+                onClick={() => setEditAccount(a)}
+                className="font-mono text-[0.62rem] uppercase text-teal hover:underline"
+              >
+                Editar
+              </button>
               <button onClick={() => remove(a.id)} className="font-mono text-[0.62rem] uppercase text-muted hover:text-orange">
                 ✕
               </button>
@@ -101,6 +108,10 @@ export default function CuentasTab({
       </div>
 
       {showNew && <NewAccountModal companyId={companyId} onClose={() => setShowNew(false)} onCreated={reload} />}
+
+      {editAccount && (
+        <EditAccountModal account={editAccount} onClose={() => setEditAccount(null)} onSaved={reload} />
+      )}
 
       {importAccount && (
         <CsvImportModal
@@ -151,8 +162,55 @@ function NewAccountModal({
         <FieldInput label="Nombre" value={form.name} onChange={(v) => setForm({ ...form, name: v })} required placeholder="BBVA Cheques" />
         <FieldInput label="Banco" value={form.bank_name} onChange={(v) => setForm({ ...form, bank_name: v })} />
         <FieldInput label="Últimos 4 dígitos" value={form.last4} onChange={(v) => setForm({ ...form, last4: v.slice(0, 4) })} />
+        <p className="font-mono text-[0.62rem] text-muted">
+          El banco y los últimos dígitos no se podrán modificar más adelante — solo el nombre. Si te equivocas, tendrás
+          que crear la cuenta de nuevo.
+        </p>
         <button type="submit" disabled={saving} className="btn btn-primary w-full">
           {saving ? "Creando…" : "Crear cuenta"}
+        </button>
+      </form>
+    </Modal>
+  );
+}
+
+function EditAccountModal({
+  account,
+  onClose,
+  onSaved,
+}: {
+  account: TreasuryAccount;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [name, setName] = useState(account.name);
+  const [saving, setSaving] = useState(false);
+
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    if (!name.trim()) return;
+    setSaving(true);
+    await supabase.from("treasury_accounts").update({ name: name.trim() }).eq("id", account.id);
+    setSaving(false);
+    onSaved();
+    onClose();
+  }
+
+  return (
+    <Modal title="Editar cuenta" onClose={onClose}>
+      <form onSubmit={submit} className="space-y-3">
+        <FieldInput label="Nombre" value={name} onChange={setName} required placeholder="BBVA Cheques" />
+        <div>
+          <label className="mb-1 block font-mono text-[0.62rem] font-bold uppercase tracking-[0.12em] text-muted">
+            Banco
+          </label>
+          <p className="border border-ink/10 bg-sand-2 px-3 py-2 font-sans text-sm text-muted">
+            {[account.bank_name, account.last4 && `····${account.last4}`].filter(Boolean).join(" · ") || "—"}
+          </p>
+          <p className="mt-1 font-mono text-[0.6rem] text-muted">No se puede modificar — solo el nombre.</p>
+        </div>
+        <button type="submit" disabled={saving} className="btn btn-primary w-full">
+          {saving ? "Guardando…" : "Guardar cambios"}
         </button>
       </form>
     </Modal>

@@ -6,6 +6,7 @@ import type {
   TreasuryAccount,
   TreasuryCategory,
   TreasuryMovement,
+  TreasuryMovementSplit,
   TreasuryStatementImport,
 } from "../../../lib/database.types";
 import { limitsForTier, type TreasuryTierLimits } from "./limits";
@@ -16,6 +17,7 @@ export function useTreasuryData(companyId: string) {
   const [accounts, setAccounts] = useState<TreasuryAccount[]>([]);
   const [categories, setCategories] = useState<TreasuryCategory[]>([]);
   const [movements, setMovements] = useState<TreasuryMovement[]>([]);
+  const [splits, setSplits] = useState<TreasuryMovementSplit[]>([]);
   const [imports, setImports] = useState<TreasuryStatementImport[]>([]);
   const [proyectados, setProyectados] = useState<MovEsperado[]>([]);
 
@@ -56,7 +58,7 @@ export function useTreasuryData(companyId: string) {
       .from("treasury_categories")
       .select("*")
       .eq("company_id", companyId)
-      .order("name");
+      .order("orden");
     setCategories(categoryRows ?? []);
 
     const [{ data: movementRows }, { data: importRows }, { data: proyectadoRows }] = await Promise.all([
@@ -73,6 +75,17 @@ export function useTreasuryData(companyId: string) {
     setImports(importRows ?? []);
     setProyectados(proyectadoRows ?? []);
 
+    const movementIds = (movementRows ?? []).map((m) => m.id);
+    if (movementIds.length > 0) {
+      const { data: splitRows } = await supabase
+        .from("treasury_movement_splits")
+        .select("*")
+        .in("movement_id", movementIds);
+      setSplits(splitRows ?? []);
+    } else {
+      setSplits([]);
+    }
+
     setLoading(false);
   }
 
@@ -83,5 +96,5 @@ export function useTreasuryData(companyId: string) {
 
   const limits: TreasuryTierLimits = limitsForTier(tier);
 
-  return { loading, tier, limits, accounts, categories, movements, imports, proyectados, reload: load };
+  return { loading, tier, limits, accounts, categories, movements, splits, imports, proyectados, reload: load };
 }

@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { supabase } from "../../../lib/supabase";
-import type { TreasuryAccount } from "../../../lib/database.types";
+import type { TreasuryAccount, TreasuryCategory } from "../../../lib/database.types";
 import type { TreasuryTierLimits } from "./limits";
 import CsvImportModal from "./CsvImportModal";
 import Modal from "../../../admin/components/Modal";
@@ -9,11 +9,13 @@ import FieldInput from "../../../admin/components/FieldInput";
 export default function CuentasTab({
   companyId,
   accounts,
+  categories,
   limits,
   reload,
 }: {
   companyId: string;
   accounts: TreasuryAccount[];
+  categories: TreasuryCategory[];
   limits: TreasuryTierLimits;
   reload: () => void;
 }) {
@@ -105,6 +107,7 @@ export default function CuentasTab({
           title={`Importar archivo del banco — ${importAccount.name}`}
           companyId={companyId}
           accountId={importAccount.id}
+          categories={categories}
           source="bank_import"
           userId={userId}
           onClose={() => setImportAccount(null)}

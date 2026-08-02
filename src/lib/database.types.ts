@@ -247,6 +247,14 @@ export interface TreasuryMovement {
   created_at: string;
 }
 
+export interface TreasuryMovementSplit {
+  id: string;
+  movement_id: string;
+  category: string;
+  amount: number;
+  created_at: string;
+}
+
 export interface TreasuryStatementImport {
   id: string;
   company_id: string;

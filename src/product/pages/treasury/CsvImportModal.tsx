@@ -1,7 +1,9 @@
 import { useState, type ChangeEvent } from "react";
-import { supabase } from "../../../lib/supabase";
+import type { TreasuryCategory } from "../../../lib/database.types";
 import Modal from "../../../admin/components/Modal";
 import { parseCsv, parseXlsxToRows } from "./parseCsv";
+import { insertMovementWithSplits, splitMatches, type SplitLine } from "./splits";
+import SplitEditor from "./SplitEditor";
 
 const TYPE_BY_SIGN = "__sign__";
 
@@ -20,6 +22,7 @@ export default function CsvImportModal({
   title,
   companyId,
   accountId,
+  categories,
   source,
   userId,
   onClose,
@@ -28,6 +31,7 @@ export default function CsvImportModal({
   title: string;
   companyId: string;
   accountId: string;
+  categories: TreasuryCategory[];
   source: "csv_import" | "bank_import";
   userId: string | null;
   onClose: () => void;
@@ -38,6 +42,8 @@ export default function CsvImportModal({
   const [mapping, setMapping] = useState<Mapping>({ date: 0, concept: 1, amount: 2, type: TYPE_BY_SIGN });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [rowCategory, setRowCategory] = useState<Record<number, string>>({});
+  const [splitRows, setSplitRows] = useState<Record<number, SplitLine[]>>({});
 
   const dataRows = hasHeader ? rows.slice(1) : rows;
   const columnCount = rows[0]?.length ?? 0;
@@ -46,6 +52,8 @@ export default function CsvImportModal({
     const file = e.target.files?.[0];
     if (!file) return;
     setError(null);
+    setRowCategory({});
+    setSplitRows({});
     if (file.name.toLowerCase().endsWith(".xlsx")) {
       try {
         setRows(await parseXlsxToRows(file));
@@ -62,35 +70,43 @@ export default function CsvImportModal({
     return Number(raw.replace(/[^0-9.\-]/g, ""));
   }
 
+  function rowAmount(r: string[]): number {
+    return Math.abs(parseAmount(r[mapping.amount] ?? "0"));
+  }
+
+  function allSplitsValid() {
+    return dataRows.every((r, i) => !splitRows[i] || splitMatches(splitRows[i], rowAmount(r)));
+  }
+
   async function confirmImport() {
     setError(null);
     if (dataRows.length === 0) {
       setError("Sube un archivo con al menos una fila de datos");
       return;
     }
+    if (!allSplitsValid()) return;
     setSaving(true);
-    const records = dataRows.map((r) => {
+    for (let i = 0; i < dataRows.length; i++) {
+      const r = dataRows[i];
       const amount = parseAmount(r[mapping.amount] ?? "0");
       const type = mapping.type === TYPE_BY_SIGN ? (amount < 0 ? "egreso" : "ingreso") : r[mapping.type];
-      return {
-        company_id: companyId,
-        account_id: accountId,
-        type: type === "egreso" ? "egreso" : "ingreso",
-        concept: r[mapping.concept] || "Importado",
-        category: "Otros gastos (papelería, seguros, etc.)",
-        amount: Math.abs(amount) || 0,
-        entry_date: r[mapping.date] || new Date().toISOString().slice(0, 10),
-        source,
-        created_by: userId,
-      };
-    });
-
-    const { error: insertError } = await supabase.from("treasury_movements").insert(records);
-    setSaving(false);
-    if (insertError) {
-      setError(insertError.message);
-      return;
+      const category = rowCategory[i] ?? categories[0]?.name ?? "Otros gastos (papelería, seguros, etc.)";
+      const rowSplits = splitRows[i];
+      await insertMovementWithSplits(
+        {
+          company_id: companyId,
+          account_id: accountId,
+          type: type === "egreso" ? "egreso" : "ingreso",
+          concept: r[mapping.concept] || "Importado",
+          amount: Math.abs(amount) || 0,
+          entry_date: r[mapping.date] || new Date().toISOString().slice(0, 10),
+          source,
+          created_by: userId,
+        },
+        rowSplits && rowSplits.length > 1 ? rowSplits : [{ category, amount: String(Math.abs(amount) || 0) }],
+      );
     }
+    setSaving(false);
     onImported();
     onClose();
   }
@@ -150,18 +166,55 @@ export default function CsvImportModal({
 
             <div>
               <p className="mb-1 font-mono text-[0.62rem] font-bold uppercase tracking-[0.12em] text-muted">
-                Vista previa ({dataRows.length} filas)
+                Vista previa ({dataRows.length} filas) — asigna categoría o divide cada movimiento
               </p>
-              <div className="max-h-40 overflow-y-auto border border-ink/10 bg-white">
-                {dataRows.slice(0, 5).map((r, i) => (
-                  <div key={i} className="border-b border-ink/5 px-3 py-1.5 font-mono text-[0.68rem] text-ink last:border-b-0">
-                    {r[mapping.date]} · {r[mapping.concept]} · {r[mapping.amount]}
+              <div className="max-h-80 space-y-2 overflow-y-auto border border-ink/10 bg-white p-2">
+                {dataRows.map((r, i) => (
+                  <div key={i} className="border-b border-ink/5 pb-2 last:border-b-0">
+                    <div className="flex items-center justify-between gap-3 px-1 py-1 font-mono text-[0.68rem] text-ink">
+                      <span>
+                        {r[mapping.date]} · {r[mapping.concept]}
+                      </span>
+                      <span>${rowAmount(r).toLocaleString("es-MX")}</span>
+                    </div>
+                    {!splitRows[i] && (
+                      <div className="px-1 pb-1">
+                        <select
+                          value={rowCategory[i] ?? categories[0]?.name ?? ""}
+                          onChange={(e) => setRowCategory((prev) => ({ ...prev, [i]: e.target.value }))}
+                          className="w-full border border-ink/15 bg-sand-2 px-2 py-1 font-sans text-xs text-ink focus:border-teal focus:outline-none"
+                        >
+                          {categories.map((c) => (
+                            <option key={c.id} value={c.name}>
+                              {c.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+                    <div className="px-1">
+                      <SplitEditor
+                        total={rowAmount(r)}
+                        categories={categories}
+                        splitting={!!splitRows[i]}
+                        onToggle={(on) =>
+                          setSplitRows((prev) => {
+                            const next = { ...prev };
+                            if (on) next[i] = [];
+                            else delete next[i];
+                            return next;
+                          })
+                        }
+                        lines={splitRows[i] ?? []}
+                        onChange={(lines) => setSplitRows((prev) => ({ ...prev, [i]: lines }))}
+                      />
+                    </div>
                   </div>
                 ))}
               </div>
             </div>
 
-            <button onClick={confirmImport} disabled={saving} className="btn btn-primary w-full">
+            <button onClick={confirmImport} disabled={saving || !allSplitsValid()} className="btn btn-primary w-full">
               {saving ? "Importando…" : `Confirmar importación (${dataRows.length} movimientos)`}
             </button>
           </>

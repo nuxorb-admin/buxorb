@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { TreasuryAccount, TreasuryCategory, TreasuryMovement } from "../../../lib/database.types";
+import type { TreasuryAccount, TreasuryCategory, TreasuryMovement, TreasuryMovementSplit } from "../../../lib/database.types";
 import type { TreasuryTierLimits } from "./limits";
 import { downloadCsv } from "./parseCsv";
 
@@ -80,8 +80,45 @@ function enumerateMonths(start: string, end: string): string[] {
   return out;
 }
 
-function periodKey(m: TreasuryMovement, granularity: Granularity): string {
+function periodKey(m: { entry_date: string }, granularity: Granularity): string {
   return granularity === "dia" ? m.entry_date : m.entry_date.slice(0, 7);
+}
+
+interface LineItem {
+  movement_id: string;
+  entry_date: string;
+  category: string;
+  amount: number; // ya con signo (ingreso +, egreso -)
+}
+
+// Un movimiento sin splits es una sola línea con su categoría de siempre;
+// uno dividido en 2+ categorías se expande en varias líneas que comparten
+// fecha/tipo pero cada una con su propio monto — así el estado de
+// resultados suma por categoría sin importar si viene de un solo
+// movimiento bancario o de un split.
+function buildLineItems(movements: TreasuryMovement[], splits: TreasuryMovementSplit[]): LineItem[] {
+  const items: LineItem[] = [];
+  for (const m of movements) {
+    const ownSplits = splits.filter((s) => s.movement_id === m.id);
+    if (ownSplits.length > 1) {
+      for (const s of ownSplits) {
+        items.push({
+          movement_id: m.id,
+          entry_date: m.entry_date,
+          category: s.category,
+          amount: m.type === "ingreso" ? Number(s.amount) : -Number(s.amount),
+        });
+      }
+    } else {
+      items.push({
+        movement_id: m.id,
+        entry_date: m.entry_date,
+        category: m.category,
+        amount: m.type === "ingreso" ? Number(m.amount) : -Number(m.amount),
+      });
+    }
+  }
+  return items;
 }
 
 function periodLabel(key: string, granularity: Granularity): string {
@@ -111,10 +148,6 @@ function bucketFor(category: string, categories: TreasuryCategory[]): Bucket {
   return "gasto_administrativo";
 }
 
-function signedAmount(m: TreasuryMovement) {
-  return m.type === "ingreso" ? Number(m.amount) : -Number(m.amount);
-}
-
 interface CategoryRow {
   category: string;
   bucket: Bucket;
@@ -134,11 +167,13 @@ const BUCKET_LABELS: Record<Bucket, string> = {
 
 export default function ResumenTab({
   movements,
+  splits,
   accounts,
   categories,
   limits,
 }: {
   movements: TreasuryMovement[];
+  splits: TreasuryMovementSplit[];
   accounts: TreasuryAccount[];
   categories: TreasuryCategory[];
   limits: TreasuryTierLimits;
@@ -157,11 +192,18 @@ export default function ResumenTab({
   const overall = totals(scopedMovements);
   const months = limits.monthComparison ? monthOverMonth(scopedMovements, 6) : [];
 
-  // Solo categorías que existen hoy en el catálogo — un movimiento con una
+  // Un movimiento dividido en categorías se expande a varias líneas aquí —
+  // el estado de resultados suma por categoría sin importar si el monto
+  // viene completo de un movimiento o repartido entre varios splits.
+  const lineItems = buildLineItems(scopedMovements, splits);
+
+  // Solo categorías que existen hoy en el catálogo — una línea con una
   // categoría que ya no está en el catálogo no se suma en ningún lado del
   // reporte; se avisa aparte para que el usuario lo corrija en Movimientos.
-  const validMovements = scopedMovements.filter((m) => categories.some((c) => c.name === m.category));
-  const unrecognizedCount = scopedMovements.length - validMovements.length;
+  const validLineItems = lineItems.filter((li) => categories.some((c) => c.name === li.category));
+  const unrecognizedCount = new Set(
+    lineItems.filter((li) => !categories.some((c) => c.name === li.category)).map((li) => li.movement_id),
+  ).size;
 
   const periodKeys =
     granularity === "dia" ? enumerateDays(dayRange.start, dayRange.end) : enumerateMonths(monthRange.start, monthRange.end);
@@ -171,9 +213,9 @@ export default function ResumenTab({
   // falta de actividad.
   const rows: CategoryRow[] = categories.map((cat) => {
     const values = periodKeys.map((key) =>
-      validMovements
-        .filter((m) => m.category === cat.name && periodKey(m, granularity) === key)
-        .reduce((sum, m) => sum + signedAmount(m), 0),
+      validLineItems
+        .filter((li) => li.category === cat.name && periodKey(li, granularity) === key)
+        .reduce((sum, li) => sum + li.amount, 0),
     );
     return {
       category: cat.name,
@@ -199,7 +241,7 @@ export default function ResumenTab({
     };
   }
 
-  // Los egresos ya llegan en negativo desde signedAmount() — sumar los
+  // Los egresos ya llegan en negativo desde buildLineItems() — sumar los
   // subtotales de grupo directamente resta correctamente, sin negarlos de
   // nuevo.
   const ingresos = bucketSubtotal("ingreso");

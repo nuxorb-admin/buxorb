@@ -1,8 +1,10 @@
 import { useEffect, useState, type ChangeEvent } from "react";
 import { supabase } from "../../../lib/supabase";
-import type { TreasuryAccount, TreasuryMovement, TreasuryStatementImport } from "../../../lib/database.types";
+import type { TreasuryAccount, TreasuryCategory, TreasuryMovement, TreasuryStatementImport } from "../../../lib/database.types";
 import type { TreasuryTierLimits } from "./limits";
 import { downloadCsv } from "./parseCsv";
+import { insertMovementWithSplits, splitMatches, type SplitLine } from "./splits";
+import SplitEditor from "./SplitEditor";
 import Modal from "../../../admin/components/Modal";
 
 interface ProposedTransaction {
@@ -20,6 +22,7 @@ function currentPeriod() {
 export default function ConciliacionTab({
   companyId,
   accounts,
+  categories,
   movements,
   imports,
   limits,
@@ -27,6 +30,7 @@ export default function ConciliacionTab({
 }: {
   companyId: string;
   accounts: TreasuryAccount[];
+  categories: TreasuryCategory[];
   movements: TreasuryMovement[];
   imports: TreasuryStatementImport[];
   limits: TreasuryTierLimits;
@@ -115,6 +119,7 @@ export default function ConciliacionTab({
         <NewReconciliationModal
           companyId={companyId}
           accounts={accounts}
+          categories={categories}
           allowAi={limits.aiParsing}
           userId={userId}
           onClose={() => setShowNew(false)}
@@ -128,6 +133,7 @@ export default function ConciliacionTab({
 function NewReconciliationModal({
   companyId,
   accounts,
+  categories,
   allowAi,
   userId,
   onClose,
@@ -135,6 +141,7 @@ function NewReconciliationModal({
 }: {
   companyId: string;
   accounts: TreasuryAccount[];
+  categories: TreasuryCategory[];
   allowAi: boolean;
   userId: string | null;
   onClose: () => void;
@@ -146,10 +153,14 @@ function NewReconciliationModal({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [proposed, setProposed] = useState<ProposedTransaction[] | null>(null);
+  const [rowCategory, setRowCategory] = useState<Record<number, string>>({});
+  const [splitRows, setSplitRows] = useState<Record<number, SplitLine[]>>({});
 
   function onFile(e: ChangeEvent<HTMLInputElement>) {
     setFile(e.target.files?.[0] ?? null);
     setProposed(null);
+    setRowCategory({});
+    setSplitRows({});
   }
 
   async function fileToBase64(f: File): Promise<string> {
@@ -191,23 +202,33 @@ function NewReconciliationModal({
     onClose();
   }
 
+  function allSplitsValid() {
+    if (!proposed) return true;
+    return proposed.every((t, i) => !splitRows[i] || splitMatches(splitRows[i], t.amount));
+  }
+
   async function confirmProposed() {
-    if (!proposed) return;
+    if (!proposed || !allSplitsValid()) return;
     setSaving(true);
-    await supabase.from("treasury_movements").insert(
-      proposed.map((t) => ({
-        company_id: companyId,
-        account_id: accountId,
-        type: t.type,
-        concept: t.concept,
-        category: "Otros gastos (papelería, seguros, etc.)",
-        amount: t.amount,
-        entry_date: t.date,
-        source: "ai_statement",
-        reconciled: true,
-        created_by: userId,
-      })),
-    );
+    for (let i = 0; i < proposed.length; i++) {
+      const t = proposed[i];
+      const category = rowCategory[i] ?? categories[0]?.name ?? "Otros gastos (papelería, seguros, etc.)";
+      const rowSplits = splitRows[i];
+      await insertMovementWithSplits(
+        {
+          company_id: companyId,
+          account_id: accountId,
+          type: t.type,
+          concept: t.concept,
+          amount: t.amount,
+          entry_date: t.date,
+          source: "ai_statement",
+          reconciled: true,
+          created_by: userId,
+        },
+        rowSplits && rowSplits.length > 1 ? rowSplits : [{ category, amount: String(t.amount) }],
+      );
+    }
     await supabase.from("treasury_statement_imports").insert({
       company_id: companyId,
       account_id: accountId,
@@ -253,15 +274,51 @@ function NewReconciliationModal({
         {proposed && (
           <div>
             <p className="mb-1 font-mono text-[0.62rem] font-bold uppercase tracking-[0.12em] text-muted">
-              Transacciones encontradas ({proposed.length})
+              Transacciones encontradas ({proposed.length}) — asigna categoría o divide cada una
             </p>
-            <div className="max-h-48 overflow-y-auto border border-ink/10 bg-white">
+            <div className="max-h-80 space-y-2 overflow-y-auto border border-ink/10 bg-white p-2">
               {proposed.map((t, i) => (
-                <div key={i} className="flex justify-between border-b border-ink/5 px-3 py-1.5 font-mono text-[0.68rem] text-ink last:border-b-0">
-                  <span>{t.date} · {t.concept}</span>
-                  <span className={t.type === "ingreso" ? "text-teal" : "text-orange"}>
-                    {t.type === "ingreso" ? "+" : "-"}${t.amount.toLocaleString("es-MX")}
-                  </span>
+                <div key={i} className="border-b border-ink/5 pb-2 last:border-b-0">
+                  <div className="flex justify-between px-1 py-1 font-mono text-[0.68rem] text-ink">
+                    <span>
+                      {t.date} · {t.concept}
+                    </span>
+                    <span className={t.type === "ingreso" ? "text-teal" : "text-orange"}>
+                      {t.type === "ingreso" ? "+" : "-"}${t.amount.toLocaleString("es-MX")}
+                    </span>
+                  </div>
+                  {!splitRows[i] && (
+                    <div className="px-1 pb-1">
+                      <select
+                        value={rowCategory[i] ?? categories[0]?.name ?? ""}
+                        onChange={(e) => setRowCategory((prev) => ({ ...prev, [i]: e.target.value }))}
+                        className="w-full border border-ink/15 bg-sand-2 px-2 py-1 font-sans text-xs text-ink focus:border-teal focus:outline-none"
+                      >
+                        {categories.map((c) => (
+                          <option key={c.id} value={c.name}>
+                            {c.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                  <div className="px-1">
+                    <SplitEditor
+                      total={t.amount}
+                      categories={categories}
+                      splitting={!!splitRows[i]}
+                      onToggle={(on) =>
+                        setSplitRows((prev) => {
+                          const next = { ...prev };
+                          if (on) next[i] = [];
+                          else delete next[i];
+                          return next;
+                        })
+                      }
+                      lines={splitRows[i] ?? []}
+                      onChange={(lines) => setSplitRows((prev) => ({ ...prev, [i]: lines }))}
+                    />
+                  </div>
                 </div>
               ))}
             </div>
@@ -275,7 +332,7 @@ function NewReconciliationModal({
             </button>
           )}
           {proposed && (
-            <button onClick={confirmProposed} disabled={saving} className="btn btn-primary w-full">
+            <button onClick={confirmProposed} disabled={saving || !allSplitsValid()} className="btn btn-primary w-full">
               {saving ? "Guardando…" : `Confirmar ${proposed.length} movimientos`}
             </button>
           )}

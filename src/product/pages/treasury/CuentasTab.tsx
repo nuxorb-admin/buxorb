@@ -6,6 +6,10 @@ import CsvImportModal from "./CsvImportModal";
 import Modal from "../../../admin/components/Modal";
 import FieldInput from "../../../admin/components/FieldInput";
 
+function todayIso() {
+  return new Date().toISOString().slice(0, 10);
+}
+
 export default function CuentasTab({
   companyId,
   accounts,
@@ -138,7 +142,13 @@ function NewAccountModal({
   onClose: () => void;
   onCreated: () => void;
 }) {
-  const [form, setForm] = useState({ name: "", bank_name: "", last4: "", opening_balance: "0" });
+  const [form, setForm] = useState({
+    name: "",
+    bank_name: "",
+    last4: "",
+    opening_balance: "0",
+    opening_balance_date: todayIso(),
+  });
   const [saving, setSaving] = useState(false);
 
   async function submit(e: FormEvent) {
@@ -150,6 +160,7 @@ function NewAccountModal({
       bank_name: form.bank_name.trim() || null,
       last4: form.last4.trim() || null,
       opening_balance: Number(form.opening_balance) || 0,
+      opening_balance_date: form.opening_balance_date,
     });
     setSaving(false);
     onCreated();
@@ -166,6 +177,34 @@ function NewAccountModal({
           El banco y los últimos dígitos no se podrán modificar más adelante — solo el nombre. Si te equivocas, tendrás
           que crear la cuenta de nuevo.
         </p>
+        <div>
+          <label className="mb-1 block font-mono text-[0.62rem] font-bold uppercase tracking-[0.12em] text-muted">
+            Saldo inicial
+          </label>
+          <input
+            type="number"
+            step="0.01"
+            value={form.opening_balance}
+            onChange={(e) => setForm({ ...form, opening_balance: e.target.value })}
+            className="w-full border border-ink/15 bg-sand-2 px-3 py-2 text-sm text-ink focus:border-teal focus:outline-none"
+          />
+        </div>
+        <div>
+          <label className="mb-1 block font-mono text-[0.62rem] font-bold uppercase tracking-[0.12em] text-muted">
+            Fecha del saldo inicial
+          </label>
+          <input
+            type="date"
+            value={form.opening_balance_date}
+            onChange={(e) => setForm({ ...form, opening_balance_date: e.target.value })}
+            required
+            className="w-full border border-ink/15 bg-sand-2 px-3 py-2 text-sm text-ink focus:border-teal focus:outline-none"
+          />
+          <p className="mt-1 font-mono text-[0.6rem] text-muted">
+            Es el punto de partida del saldo corrido en el estado de resultados — el saldo que tenía la cuenta justo
+            antes de esta fecha.
+          </p>
+        </div>
         <button type="submit" disabled={saving} className="btn btn-primary w-full">
           {saving ? "Creando…" : "Crear cuenta"}
         </button>
@@ -184,13 +223,22 @@ function EditAccountModal({
   onSaved: () => void;
 }) {
   const [name, setName] = useState(account.name);
+  const [openingBalance, setOpeningBalance] = useState(String(account.opening_balance));
+  const [openingBalanceDate, setOpeningBalanceDate] = useState(account.opening_balance_date);
   const [saving, setSaving] = useState(false);
 
   async function submit(e: FormEvent) {
     e.preventDefault();
     if (!name.trim()) return;
     setSaving(true);
-    await supabase.from("treasury_accounts").update({ name: name.trim() }).eq("id", account.id);
+    await supabase
+      .from("treasury_accounts")
+      .update({
+        name: name.trim(),
+        opening_balance: Number(openingBalance) || 0,
+        opening_balance_date: openingBalanceDate,
+      })
+      .eq("id", account.id);
     setSaving(false);
     onSaved();
     onClose();
@@ -208,6 +256,30 @@ function EditAccountModal({
             {[account.bank_name, account.last4 && `····${account.last4}`].filter(Boolean).join(" · ") || "—"}
           </p>
           <p className="mt-1 font-mono text-[0.6rem] text-muted">No se puede modificar — solo el nombre.</p>
+        </div>
+        <div>
+          <label className="mb-1 block font-mono text-[0.62rem] font-bold uppercase tracking-[0.12em] text-muted">
+            Saldo inicial
+          </label>
+          <input
+            type="number"
+            step="0.01"
+            value={openingBalance}
+            onChange={(e) => setOpeningBalance(e.target.value)}
+            className="w-full border border-ink/15 bg-sand-2 px-3 py-2 text-sm text-ink focus:border-teal focus:outline-none"
+          />
+        </div>
+        <div>
+          <label className="mb-1 block font-mono text-[0.62rem] font-bold uppercase tracking-[0.12em] text-muted">
+            Fecha del saldo inicial
+          </label>
+          <input
+            type="date"
+            value={openingBalanceDate}
+            onChange={(e) => setOpeningBalanceDate(e.target.value)}
+            required
+            className="w-full border border-ink/15 bg-sand-2 px-3 py-2 text-sm text-ink focus:border-teal focus:outline-none"
+          />
         </div>
         <button type="submit" disabled={saving} className="btn btn-primary w-full">
           {saving ? "Guardando…" : "Guardar cambios"}

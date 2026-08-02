@@ -91,6 +91,51 @@ function periodKey(m: { entry_date: string }, granularity: Granularity): string 
   return granularity === "dia" ? m.entry_date : m.entry_date.slice(0, 7);
 }
 
+// Primer día calendario que cubre una columna — para "mes" es el día 1 de
+// ese mes, para "dia" es la fecha misma.
+function periodStartDate(key: string, granularity: Granularity): string {
+  return granularity === "mes" ? `${key}-01` : key;
+}
+
+// Saldo de una cuenta justo antes de `beforeDate`: su saldo inicial (si ya
+// "empezó a contar" — beforeDate es posterior a la fecha de su saldo
+// inicial) más los movimientos entre esa fecha y beforeDate. Una cuenta
+// cuya fecha de saldo inicial todavía no llega no aporta nada al saldo del
+// rango que se está viendo.
+function accountBalanceBefore(account: TreasuryAccount, movements: TreasuryMovement[], beforeDate: string): number {
+  if (beforeDate < account.opening_balance_date) return 0;
+  const priorMovements = movements.filter(
+    (m) => m.account_id === account.id && m.entry_date >= account.opening_balance_date && m.entry_date < beforeDate,
+  );
+  const net = priorMovements.reduce((sum, m) => sum + (m.type === "ingreso" ? Number(m.amount) : -Number(m.amount)), 0);
+  return Number(account.opening_balance) + net;
+}
+
+function balanceBefore(accounts: TreasuryAccount[], movements: TreasuryMovement[], beforeDate: string): number {
+  return accounts.reduce((sum, a) => sum + accountBalanceBefore(a, movements, beforeDate), 0);
+}
+
+// Saldo inicial de la primera columna visible + saldo final de cada
+// columna (que es el saldo inicial de la siguiente): saldo_final =
+// saldo_inicial + ingresos del periodo - egresos del periodo.
+function runningBalance(
+  accounts: TreasuryAccount[],
+  movements: TreasuryMovement[],
+  periodKeys: string[],
+  granularity: Granularity,
+) {
+  const saldoInicial: number[] = [];
+  const saldoFinal: number[] = [];
+  let running = periodKeys.length > 0 ? balanceBefore(accounts, movements, periodStartDate(periodKeys[0], granularity)) : 0;
+  for (const key of periodKeys) {
+    const t = totals(movements.filter((m) => periodKey(m, granularity) === key));
+    saldoInicial.push(running);
+    running = running + t.entradas - t.salidas;
+    saldoFinal.push(running);
+  }
+  return { saldoInicial, saldoFinal };
+}
+
 interface LineItem {
   movement_id: string;
   entry_date: string;
@@ -202,6 +247,8 @@ export default function ResumenTab({
 
   const scopedMovements =
     limits.perAccountView && accountFilter !== "all" ? movements.filter((m) => m.account_id === accountFilter) : movements;
+  const scopedAccounts =
+    limits.perAccountView && accountFilter !== "all" ? accounts.filter((a) => a.id === accountFilter) : accounts;
 
   const overall = totals(scopedMovements);
   const months = limits.monthComparison ? monthOverMonth(scopedMovements) : [];
@@ -222,6 +269,13 @@ export default function ResumenTab({
 
   const periodKeys =
     granularity === "dia" ? enumerateDays(dayRange.start, dayRange.end) : enumerateMonths(monthRange.start, monthRange.end);
+
+  // Saldo corrido: saldo inicial de la primera columna sale del saldo
+  // inicial configurado en cada cuenta (más los movimientos entre esa
+  // fecha y el inicio del rango visible); de ahí, saldo_final = saldo_
+  // inicial + ingresos - egresos del periodo, y ese saldo_final es el
+  // saldo_inicial del periodo siguiente.
+  const { saldoInicial, saldoFinal } = runningBalance(scopedAccounts, scopedMovements, periodKeys, granularity);
 
   // Una fila por cada categoría del catálogo, tenga o no movimientos en el
   // rango visible — igual que las columnas de fecha, no desaparecen por
@@ -498,6 +552,13 @@ export default function ResumenTab({
               </tr>
             </thead>
             <tbody>
+              <Row
+                label="Saldo inicial"
+                values={saldoInicial}
+                total={saldoInicial[0] ?? 0}
+                emphasis="headline"
+              />
+
               <GroupHeader label={BUCKET_LABELS.ingreso} first />
               {bucketRows("ingreso").map((r) => (
                 <Row key={r.category} label={r.category} values={r.values} total={r.total} />
@@ -571,6 +632,13 @@ export default function ResumenTab({
               )}
 
               <Row label="Utilidad neta" values={utilidadNeta.values} total={utilidadNeta.total} emphasis="headline" />
+
+              <Row
+                label="Saldo final"
+                values={saldoFinal}
+                total={saldoFinal[saldoFinal.length - 1] ?? 0}
+                emphasis="headline"
+              />
             </tbody>
           </table>
         </div>

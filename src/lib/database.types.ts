@@ -209,6 +209,7 @@ export interface TreasuryAccount {
   bank_name: string | null;
   last4: string | null;
   opening_balance: number;
+  opening_balance_date: string;
   bank_import_enabled: boolean;
   created_at: string;
 }

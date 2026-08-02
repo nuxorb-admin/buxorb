@@ -11,7 +11,7 @@ import type { TreasuryTierLimits } from "./limits";
 import { downloadCsv } from "./parseCsv";
 import { insertMovementWithSplits, splitMatches, type SplitLine } from "./splits";
 import { suggestCategory } from "./patterns";
-import { findDuplicate } from "./duplicates";
+import { matchTransaction, MOTIVO_LABELS } from "./reconciliationMatch";
 import { formatDate } from "./dateFormat";
 import SplitEditor from "./SplitEditor";
 import Modal from "../../../admin/components/Modal";
@@ -172,14 +172,17 @@ function NewReconciliationModal({
   const [proposed, setProposed] = useState<ProposedTransaction[] | null>(null);
   const [rowCategory, setRowCategory] = useState<Record<number, string>>({});
   const [splitRows, setSplitRows] = useState<Record<number, SplitLine[]>>({});
-  const [includeDuplicate, setIncludeDuplicate] = useState<Record<number, boolean>>({});
+  // Resolución manual por fila cuando el match automático es una diferencia
+  // (fecha o monto no calzan exacto) — "reconcile" vincula con el
+  // movimiento ya existente, "new" lo registra como uno nuevo aparte.
+  const [rowResolution, setRowResolution] = useState<Record<number, "reconcile" | "new">>({});
 
   function onFile(e: ChangeEvent<HTMLInputElement>) {
     setFile(e.target.files?.[0] ?? null);
     setProposed(null);
     setRowCategory({});
     setSplitRows({});
-    setIncludeDuplicate({});
+    setRowResolution({});
   }
 
   async function fileToBase64(f: File): Promise<string> {
@@ -233,8 +236,51 @@ function NewReconciliationModal({
     return categories[0]?.name ?? "Otros gastos (papelería, seguros, etc.)";
   }
 
-  function rowIsDuplicate(t: ProposedTransaction): boolean {
-    return !!findDuplicate(movements, { account_id: accountId, entry_date: t.date, amount: t.amount });
+  function matchFor(t: ProposedTransaction) {
+    return matchTransaction(t, movements, accountId);
+  }
+
+  // Default: un match exacto ("conciliado") se vincula solo; una diferencia
+  // se registra como nuevo por default (más seguro) hasta que el usuario
+  // confirme a mano que es el mismo movimiento.
+  function resolutionFor(t: ProposedTransaction, i: number): "reconcile" | "new" {
+    if (rowResolution[i]) return rowResolution[i];
+    return matchFor(t).motivo === "conciliado" ? "reconcile" : "new";
+  }
+
+  function summary() {
+    if (!proposed) return { conciliado: 0, diferencia: 0, nuevo: 0 };
+    let conciliado = 0;
+    let diferencia = 0;
+    let nuevo = 0;
+    proposed.forEach((t, i) => {
+      const motivo = matchFor(t).motivo;
+      const resolution = resolutionFor(t, i);
+      if (resolution === "reconcile") conciliado++;
+      else if (motivo === "no_registrado") nuevo++;
+      else diferencia++;
+    });
+    return { conciliado, diferencia, nuevo };
+  }
+
+  function downloadDiscrepancyReport() {
+    if (!proposed) return;
+    const rows: (string | number)[][] = [
+      ["Fecha extracto", "Concepto", "Monto", "Motivo", "Movimiento existente", "Fecha existente", "Monto existente"],
+      ...proposed
+        .map((t) => ({ t, match: matchFor(t) }))
+        .filter(({ match }) => match.motivo !== "no_registrado" && match.motivo !== "conciliado")
+        .map(({ t, match }) => [
+          t.date,
+          t.concept,
+          t.amount,
+          MOTIVO_LABELS[match.motivo],
+          match.movement?.concept ?? "",
+          match.movement?.entry_date ?? "",
+          match.movement ? Number(match.movement.amount) : "",
+        ]),
+    ];
+    downloadCsv(`discrepancias-conciliacion-${new Date().toISOString().slice(0, 10)}.csv`, rows);
   }
 
   async function confirmProposed() {
@@ -242,7 +288,14 @@ function NewReconciliationModal({
     setSaving(true);
     for (let i = 0; i < proposed.length; i++) {
       const t = proposed[i];
-      if (rowIsDuplicate(t) && !includeDuplicate[i]) continue;
+      const match = matchFor(t);
+      const resolution = resolutionFor(t, i);
+
+      if (resolution === "reconcile" && match.movement) {
+        await supabase.from("treasury_movements").update({ reconciled: true }).eq("id", match.movement.id);
+        continue;
+      }
+
       const category = rowCategoryFor(t.concept, i);
       const rowSplits = splitRows[i];
       await insertMovementWithSplits(
@@ -308,60 +361,107 @@ function NewReconciliationModal({
               Transacciones encontradas ({proposed.length}) — asigna categoría o divide cada una
             </p>
             <div className="max-h-80 space-y-2 overflow-y-auto border border-ink/10 bg-white p-2">
-              {proposed.map((t, i) => (
-                <div key={i} className="border-b border-ink/5 pb-2 last:border-b-0">
-                  <div className="flex justify-between px-1 py-1 font-mono text-[0.68rem] text-ink">
-                    <span>
-                      {t.date} · {t.concept}
-                    </span>
-                    <span className={t.type === "ingreso" ? "text-teal" : "text-orange"}>
-                      {t.type === "ingreso" ? "+" : "-"}${t.amount.toLocaleString("es-MX")}
-                    </span>
-                  </div>
-                  {rowIsDuplicate(t) && (
-                    <label className="mx-1 mb-1 flex items-center gap-2 border border-orange/40 bg-orange/10 px-2 py-1 font-mono text-[0.62rem] text-orange">
-                      <input
-                        type="checkbox"
-                        checked={!!includeDuplicate[i]}
-                        onChange={(e) => setIncludeDuplicate((prev) => ({ ...prev, [i]: e.target.checked }))}
-                      />
-                      Parece duplicado (misma cuenta/fecha/monto) — importar de todos modos
-                    </label>
-                  )}
-                  {!splitRows[i] && (
-                    <div className="px-1 pb-1">
-                      <select
-                        value={rowCategoryFor(t.concept, i)}
-                        onChange={(e) => setRowCategory((prev) => ({ ...prev, [i]: e.target.value }))}
-                        className="w-full border border-ink/15 bg-sand-2 px-2 py-1 font-sans text-xs text-ink focus:border-teal focus:outline-none"
-                      >
-                        {categories.map((c) => (
-                          <option key={c.id} value={c.name}>
-                            {c.name}
-                          </option>
-                        ))}
-                      </select>
+              {proposed.map((t, i) => {
+                const match = matchFor(t);
+                const resolution = resolutionFor(t, i);
+                const showEditors = resolution === "new";
+                return (
+                  <div key={i} className="border-b border-ink/5 pb-2 last:border-b-0">
+                    <div className="flex justify-between px-1 py-1 font-mono text-[0.68rem] text-ink">
+                      <span>
+                        {t.date} · {t.concept}
+                      </span>
+                      <span className={t.type === "ingreso" ? "text-teal" : "text-orange"}>
+                        {t.type === "ingreso" ? "+" : "-"}${t.amount.toLocaleString("es-MX")}
+                      </span>
                     </div>
-                  )}
-                  <div className="px-1">
-                    <SplitEditor
-                      total={t.amount}
-                      categories={categories}
-                      splitting={!!splitRows[i]}
-                      onToggle={(on) =>
-                        setSplitRows((prev) => {
-                          const next = { ...prev };
-                          if (on) next[i] = [];
-                          else delete next[i];
-                          return next;
-                        })
-                      }
-                      lines={splitRows[i] ?? []}
-                      onChange={(lines) => setSplitRows((prev) => ({ ...prev, [i]: lines }))}
-                    />
+
+                    {match.motivo === "conciliado" && (
+                      <p className="mx-1 mb-1 border border-teal/40 bg-teal/10 px-2 py-1 font-mono text-[0.62rem] text-teal">
+                        {MOTIVO_LABELS.conciliado} ("{match.movement?.concept}")
+                      </p>
+                    )}
+
+                    {(match.motivo === "diferencia_fecha" || match.motivo === "diferencia_monto") && (
+                      <div className="mx-1 mb-1 space-y-1 border border-orange/40 bg-orange/10 px-2 py-1.5 font-mono text-[0.62rem] text-orange">
+                        <p>
+                          {MOTIVO_LABELS[match.motivo]}: "{match.movement?.concept}" ·{" "}
+                          {match.movement && formatDate(match.movement.entry_date)} · $
+                          {match.movement && Number(match.movement.amount).toLocaleString("es-MX")}
+                        </p>
+                        <label className="flex items-center gap-2 text-ink">
+                          <input
+                            type="radio"
+                            name={`resolution-${i}`}
+                            checked={resolution === "reconcile"}
+                            onChange={() => setRowResolution((prev) => ({ ...prev, [i]: "reconcile" }))}
+                          />
+                          Es el mismo movimiento — vincular y marcar conciliado
+                        </label>
+                        <label className="flex items-center gap-2 text-ink">
+                          <input
+                            type="radio"
+                            name={`resolution-${i}`}
+                            checked={resolution === "new"}
+                            onChange={() => setRowResolution((prev) => ({ ...prev, [i]: "new" }))}
+                          />
+                          Es distinto — registrar como movimiento nuevo
+                        </label>
+                      </div>
+                    )}
+
+                    {showEditors && !splitRows[i] && (
+                      <div className="px-1 pb-1">
+                        <select
+                          value={rowCategoryFor(t.concept, i)}
+                          onChange={(e) => setRowCategory((prev) => ({ ...prev, [i]: e.target.value }))}
+                          className="w-full border border-ink/15 bg-sand-2 px-2 py-1 font-sans text-xs text-ink focus:border-teal focus:outline-none"
+                        >
+                          {categories.map((c) => (
+                            <option key={c.id} value={c.name}>
+                              {c.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+                    {showEditors && (
+                      <div className="px-1">
+                        <SplitEditor
+                          total={t.amount}
+                          categories={categories}
+                          splitting={!!splitRows[i]}
+                          onToggle={(on) =>
+                            setSplitRows((prev) => {
+                              const next = { ...prev };
+                              if (on) next[i] = [];
+                              else delete next[i];
+                              return next;
+                            })
+                          }
+                          lines={splitRows[i] ?? []}
+                          onChange={(lines) => setSplitRows((prev) => ({ ...prev, [i]: lines }))}
+                        />
+                      </div>
+                    )}
                   </div>
-                </div>
-              ))}
+                );
+              })}
+            </div>
+
+            <div className="mt-2 flex items-center justify-between">
+              <p className="font-mono text-[0.62rem] text-muted">
+                {summary().conciliado} conciliado{summary().conciliado === 1 ? "" : "s"} automáticamente ·{" "}
+                {summary().diferencia} con diferencia · {summary().nuevo} nuevo{summary().nuevo === 1 ? "" : "s"}
+              </p>
+              {summary().diferencia > 0 && (
+                <button
+                  onClick={downloadDiscrepancyReport}
+                  className="font-mono text-[0.62rem] uppercase text-teal hover:underline"
+                >
+                  Descargar discrepancias
+                </button>
+              )}
             </div>
           </div>
         )}

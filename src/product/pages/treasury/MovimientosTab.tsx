@@ -15,6 +15,7 @@ import { downloadTreasuryTemplate } from "./treasuryTemplate";
 import { emptySplit, splitMatches, insertMovementWithSplits, type SplitLine } from "./splits";
 import { suggestCategory } from "./patterns";
 import { findDuplicate } from "./duplicates";
+import { formatDate } from "./dateFormat";
 import SplitEditor from "./SplitEditor";
 import Modal from "../../../admin/components/Modal";
 
@@ -91,7 +92,7 @@ export default function MovimientosTab({
                   <p className="text-sm font-semibold text-ink">{p.concepto || "Movimiento proyectado"}</p>
                   <p className="font-mono text-[0.66rem] uppercase tracking-[0.06em] text-muted">
                     {MODULE_LABELS[p.modulo_origen] ?? p.modulo_origen} ·{" "}
-                    {new Date(p.fecha_esperada).toLocaleDateString("es-MX")}
+                    {formatDate(p.fecha_esperada)}
                   </p>
                 </div>
                 <div className="flex items-center gap-3">
@@ -145,7 +146,7 @@ export default function MovimientosTab({
                 {movementSplits.length > 1 ? (
                   <p className="font-mono text-[0.66rem] uppercase tracking-[0.06em] text-muted">
                     {movementSplits.map((s) => s.category).join(" + ")} ·{" "}
-                    {new Date(m.entry_date).toLocaleDateString("es-MX")}
+                    {formatDate(m.entry_date)}
                     {accounts.length > 1 && ` · ${accounts.find((a) => a.id === m.account_id)?.name ?? ""}`}
                   </p>
                 ) : (
@@ -155,7 +156,7 @@ export default function MovimientosTab({
                     ) : (
                       <span className="text-orange">Categoría no reconocida ({m.category})</span>
                     )}{" "}
-                    · {new Date(m.entry_date).toLocaleDateString("es-MX")}
+                    · {formatDate(m.entry_date)}
                     {accounts.length > 1 && ` · ${accounts.find((a) => a.id === m.account_id)?.name ?? ""}`}
                   </p>
                 )}
@@ -424,7 +425,7 @@ function NewMovementModal({
 
         {duplicate && (
           <div className="border border-orange/40 bg-orange/10 px-3 py-2 font-mono text-[0.68rem] text-orange">
-            Ya existe un movimiento de {money(Number(duplicate.amount))} el {new Date(duplicate.entry_date).toLocaleDateString("es-MX")}{" "}
+            Ya existe un movimiento de {money(Number(duplicate.amount))} el {formatDate(duplicate.entry_date)}{" "}
             en esta cuenta ("{duplicate.concept}") — parece duplicado.
             <label className="mt-2 flex items-center gap-2 font-mono text-[0.66rem] normal-case text-ink">
               <input type="checkbox" checked={confirmDuplicate} onChange={(e) => setConfirmDuplicate(e.target.checked)} />
@@ -572,7 +573,7 @@ function LinkProyectadoModal({
         />
         {duplicate && (
           <div className="border border-orange/40 bg-orange/10 px-3 py-2 font-mono text-[0.68rem] text-orange">
-            Ya existe un movimiento de {money(Number(duplicate.amount))} el {new Date(duplicate.entry_date).toLocaleDateString("es-MX")}{" "}
+            Ya existe un movimiento de {money(Number(duplicate.amount))} el {formatDate(duplicate.entry_date)}{" "}
             en esta cuenta ("{duplicate.concept}") — parece duplicado.
             <label className="mt-2 flex items-center gap-2 font-mono text-[0.66rem] normal-case text-ink">
               <input type="checkbox" checked={confirmDuplicate} onChange={(e) => setConfirmDuplicate(e.target.checked)} />

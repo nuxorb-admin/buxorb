@@ -139,7 +139,7 @@ export default function TesoreriaDemo() {
             <div>
               <p className="text-sm font-semibold text-ink">{e.concept}</p>
               <p className="font-mono text-[0.66rem] uppercase tracking-[0.06em] text-muted">
-                {e.category} · {new Date(e.entry_date).toLocaleDateString("es-MX")}
+                {e.category} · {new Date(e.entry_date + "T00:00:00").toLocaleDateString("es-MX")}
               </p>
             </div>
             <div className="flex items-center gap-3">

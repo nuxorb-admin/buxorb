@@ -12,6 +12,7 @@ import { downloadCsv } from "./parseCsv";
 import { insertMovementWithSplits, splitMatches, type SplitLine } from "./splits";
 import { suggestCategory } from "./patterns";
 import { findDuplicate } from "./duplicates";
+import { formatDate } from "./dateFormat";
 import SplitEditor from "./SplitEditor";
 import Modal from "../../../admin/components/Modal";
 
@@ -117,7 +118,7 @@ export default function ConciliacionTab({
             <div>
               <p className="text-sm font-semibold text-ink">{m.concept}</p>
               <p className="font-mono text-[0.66rem] uppercase tracking-[0.06em] text-muted">
-                {new Date(m.entry_date).toLocaleDateString("es-MX")}
+                {formatDate(m.entry_date)}
               </p>
             </div>
             <input type="checkbox" checked={m.reconciled} onChange={() => toggleReconciled(m)} />

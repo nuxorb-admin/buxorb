@@ -336,7 +336,7 @@ export default function ResumenTab({
             </thead>
             <tbody className="divide-y divide-ink/5">
               <tr>
-                <td colSpan={periodKeys.length + 2} className="px-3 pt-3 pb-1 font-mono text-[0.6rem] font-bold uppercase tracking-[0.1em] text-muted">
+                <td colSpan={periodKeys.length + 2} className="sticky left-0 z-10 whitespace-nowrap bg-white px-3 pt-3 pb-1 font-mono text-[0.6rem] font-bold uppercase tracking-[0.1em] text-muted">
                   {BUCKET_LABELS.ingreso}
                 </td>
               </tr>
@@ -346,7 +346,7 @@ export default function ResumenTab({
               <Row label="Total ingresos" values={ingresos.values} total={ingresos.total} bold />
 
               <tr>
-                <td colSpan={periodKeys.length + 2} className="px-3 pt-3 pb-1 font-mono text-[0.6rem] font-bold uppercase tracking-[0.1em] text-muted">
+                <td colSpan={periodKeys.length + 2} className="sticky left-0 z-10 whitespace-nowrap bg-white px-3 pt-3 pb-1 font-mono text-[0.6rem] font-bold uppercase tracking-[0.1em] text-muted">
                   {BUCKET_LABELS.fijo}
                 </td>
               </tr>
@@ -356,7 +356,7 @@ export default function ResumenTab({
               <Row label="Total fijos" values={fijos.values} total={fijos.total} bold />
 
               <tr>
-                <td colSpan={periodKeys.length + 2} className="px-3 pt-3 pb-1 font-mono text-[0.6rem] font-bold uppercase tracking-[0.1em] text-muted">
+                <td colSpan={periodKeys.length + 2} className="sticky left-0 z-10 whitespace-nowrap bg-white px-3 pt-3 pb-1 font-mono text-[0.6rem] font-bold uppercase tracking-[0.1em] text-muted">
                   {BUCKET_LABELS.variable}
                 </td>
               </tr>
@@ -368,7 +368,7 @@ export default function ResumenTab({
               <Row label="Utilidad operativa" values={utilidadOperativa.values} total={utilidadOperativa.total} bold />
 
               <tr>
-                <td colSpan={periodKeys.length + 2} className="px-3 pt-3 pb-1 font-mono text-[0.6rem] font-bold uppercase tracking-[0.1em] text-muted">
+                <td colSpan={periodKeys.length + 2} className="sticky left-0 z-10 whitespace-nowrap bg-white px-3 pt-3 pb-1 font-mono text-[0.6rem] font-bold uppercase tracking-[0.1em] text-muted">
                   {BUCKET_LABELS.operativo}
                 </td>
               </tr>

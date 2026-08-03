@@ -191,17 +191,23 @@ function ProductoModal({
     if (!nombre.trim() || !sku.trim()) return;
     setSaving(true);
     setError(null);
-    const payload = {
-      company_id: companyId,
-      sku: sku.trim(),
-      nombre: nombre.trim(),
-      descripcion: descripcion.trim() || null,
-      unidad,
-      costo_referencia: Number(costoReferencia),
-    };
+    // El costo de referencia no se edita a mano una vez que el producto
+    // existe — es el promedio calculado de facturas/tickets ya
+    // conciliados (ver recalcularCostoReferencia). Al crear sí se manda
+    // un estimado inicial porque todavía no hay historial.
     const { error: dbError } = producto
-      ? await supabase.from("procurement_products").update(payload).eq("id", producto.id)
-      : await supabase.from("procurement_products").insert(payload);
+      ? await supabase
+          .from("procurement_products")
+          .update({ sku: sku.trim(), nombre: nombre.trim(), descripcion: descripcion.trim() || null, unidad })
+          .eq("id", producto.id)
+      : await supabase.from("procurement_products").insert({
+          company_id: companyId,
+          sku: sku.trim(),
+          nombre: nombre.trim(),
+          descripcion: descripcion.trim() || null,
+          unidad,
+          costo_referencia: Number(costoReferencia),
+        });
     setSaving(false);
     if (dbError) {
       setError(dbError.code === "23505" ? "Ya existe un producto con ese SKU." : "No se pudo guardar el producto.");
@@ -235,13 +241,19 @@ function ProductoModal({
           className="w-full border border-ink/15 bg-sand-2 px-3 py-2 text-sm text-ink focus:border-teal focus:outline-none"
         />
         <div className="flex gap-2">
-          <input
-            type="number"
-            value={costoReferencia}
-            onChange={(e) => setCostoReferencia(e.target.value)}
-            placeholder="Costo de referencia"
-            className="w-1/2 border border-ink/15 bg-sand-2 px-3 py-2 text-sm text-ink focus:border-teal focus:outline-none"
-          />
+          {producto ? (
+            <div className="w-1/2 border border-ink/15 bg-sand-2 px-3 py-2 font-mono text-sm text-muted">
+              {money(producto.costo_referencia)} <span className="text-[0.6rem]">(promedio)</span>
+            </div>
+          ) : (
+            <input
+              type="number"
+              value={costoReferencia}
+              onChange={(e) => setCostoReferencia(e.target.value)}
+              placeholder="Costo estimado inicial"
+              className="w-1/2 border border-ink/15 bg-sand-2 px-3 py-2 text-sm text-ink focus:border-teal focus:outline-none"
+            />
+          )}
           <select
             value={unidad}
             onChange={(e) => setUnidad(e.target.value)}
@@ -255,6 +267,11 @@ function ProductoModal({
             ))}
           </select>
         </div>
+        <p className="font-mono text-[0.6rem] text-muted">
+          {producto
+            ? "El costo se recalcula solo, como promedio ponderado de las facturas/tickets que se le vayan asignando a este SKU — no se edita a mano."
+            : "Costo estimado mientras no hay historial — en cuanto se le asignen conceptos de factura/ticket, se recalcula como promedio."}
+        </p>
         <p className="font-mono text-[0.6rem] text-muted">
           Inserta las unidades que necesitas para tu inventario (ejemplo: mides en ml un líquido, debes poner ml; si
           recibes un litro se hará la conversión a 1000 ml).

@@ -2,7 +2,7 @@ import { useEffect, useState, type ChangeEvent, type FormEvent } from "react";
 import { supabase } from "../../../lib/supabase";
 import type { Proveedor, ProcurementProduct, ProcurementUnit, TreasuryMovement } from "../../../lib/database.types";
 import type { CompraFull, FacturaFull } from "./useComprasData";
-import { registrarUsoTicket } from "./useComprasData";
+import { registrarUsoTicket, recalcularCostoReferencia } from "./useComprasData";
 import type { ComprasTierLimits } from "./limits";
 import { parseCfdiXml } from "./parseCfdi";
 import Modal from "../../../admin/components/Modal";
@@ -810,13 +810,16 @@ function ConciliacionModal({
   async function guardar() {
     setSaving(true);
 
+    const asignacionesValidas = Object.entries(asignaciones).filter(([, productoId]) => productoId);
+
     await Promise.all(
-      Object.entries(asignaciones)
-        .filter(([, productoId]) => productoId)
-        .map(([itemId, productoId]) =>
-          supabase.from("procurement_order_items").update({ producto_id: productoId }).eq("id", itemId),
-        ),
+      asignacionesValidas.map(([itemId, productoId]) =>
+        supabase.from("procurement_order_items").update({ producto_id: productoId }).eq("id", itemId),
+      ),
     );
+
+    const productosTocados = new Set(asignacionesValidas.map(([, productoId]) => productoId));
+    await Promise.all([...productosTocados].map((productoId) => recalcularCostoReferencia(productoId)));
 
     if (compraLigada) {
       const porProductoOC = new Map<string, number>();
@@ -930,7 +933,6 @@ function NuevoProductoModal({
   const [nombre, setNombre] = useState(nombreSugerido);
   const [descripcion, setDescripcion] = useState("");
   const [unidad, setUnidad] = useState(unidadesActivas[0]?.codigo ?? "pza");
-  const [costoReferencia, setCostoReferencia] = useState("0");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -939,6 +941,8 @@ function NuevoProductoModal({
     if (!nombre.trim() || !sku.trim()) return;
     setSaving(true);
     setError(null);
+    // Sin costo_referencia manual: en cuanto se guarde la conciliación se
+    // recalcula solo a partir de esta misma línea de factura.
     const { data, error: insertError } = await supabase
       .from("procurement_products")
       .insert({
@@ -947,7 +951,7 @@ function NuevoProductoModal({
         nombre: nombre.trim(),
         descripcion: descripcion.trim() || null,
         unidad,
-        costo_referencia: Number(costoReferencia),
+        costo_referencia: 0,
       })
       .select()
       .single();
@@ -982,27 +986,21 @@ function NuevoProductoModal({
           placeholder="Descripción (opcional)"
           className="w-full border border-ink/15 bg-sand-2 px-3 py-2 text-sm text-ink focus:border-teal focus:outline-none"
         />
-        <div className="flex gap-2">
-          <input
-            type="number"
-            value={costoReferencia}
-            onChange={(e) => setCostoReferencia(e.target.value)}
-            placeholder="Costo de referencia"
-            className="w-1/2 border border-ink/15 bg-sand-2 px-3 py-2 text-sm text-ink focus:border-teal focus:outline-none"
-          />
-          <select
-            value={unidad}
-            onChange={(e) => setUnidad(e.target.value)}
-            className="w-1/2 border border-ink/15 bg-sand-2 px-3 py-2 text-sm text-ink focus:border-teal focus:outline-none"
-          >
-            {unidadesActivas.length === 0 && <option value={unidad}>{unidad}</option>}
-            {unidadesActivas.map((u) => (
-              <option key={u.id} value={u.codigo}>
-                {u.nombre} ({u.codigo})
-              </option>
-            ))}
-          </select>
-        </div>
+        <select
+          value={unidad}
+          onChange={(e) => setUnidad(e.target.value)}
+          className="w-full border border-ink/15 bg-sand-2 px-3 py-2 text-sm text-ink focus:border-teal focus:outline-none"
+        >
+          {unidadesActivas.length === 0 && <option value={unidad}>{unidad}</option>}
+          {unidadesActivas.map((u) => (
+            <option key={u.id} value={u.codigo}>
+              {u.nombre} ({u.codigo})
+            </option>
+          ))}
+        </select>
+        <p className="font-mono text-[0.6rem] text-muted">
+          El costo de referencia se calculará solo, como promedio, en cuanto guardes esta asignación.
+        </p>
         <p className="font-mono text-[0.6rem] text-muted">
           Inserta las unidades que necesitas para tu inventario (ejemplo: mides en ml un líquido, debes poner ml; si
           recibes un litro se hará la conversión a 1000 ml).

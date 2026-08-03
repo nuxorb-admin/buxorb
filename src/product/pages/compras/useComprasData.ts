@@ -204,6 +204,29 @@ export function useComprasData(companyId: string) {
   };
 }
 
+// El costo de referencia de un producto no se captura a mano — es el
+// promedio ponderado (por cantidad) de lo que realmente costó en las
+// facturas/tickets que se le fueron asignando. Se recalcula cada vez
+// que una línea se liga (o desliga) de este producto — nunca se guarda
+// "a ojo": lo que se insertó en la factura fue la presentación real
+// comprada (ej. "1 kg" a tal precio), no un costo unitario supuesto.
+export async function recalcularCostoReferencia(productoId: string) {
+  const { data: items } = await supabase
+    .from("procurement_order_items")
+    .select("cantidad, precio_unitario")
+    .eq("producto_id", productoId)
+    .not("factura_id", "is", null);
+
+  const rows = items ?? [];
+  const cantidadTotal = rows.reduce((sum, i) => sum + Number(i.cantidad), 0);
+  if (cantidadTotal <= 0) return;
+
+  const costoPromedio =
+    rows.reduce((sum, i) => sum + Number(i.cantidad) * Number(i.precio_unitario), 0) / cantidadTotal;
+
+  await supabase.from("procurement_products").update({ costo_referencia: costoPromedio }).eq("id", productoId);
+}
+
 export async function registrarUsoTicket(companyId: string) {
   const periodo = currentPeriod();
   const { data: existing } = await supabase

@@ -10,6 +10,8 @@ import type {
   EvaluacionProveedor,
   FacturaCompra,
   PagoCompra,
+  ProcurementInventoryMovement,
+  ProcurementProduct,
   Proveedor,
   Recepcion,
   ReglaAprobacion,
@@ -21,8 +23,17 @@ export interface CompraFull extends Compra {
   procurement_order_items: CompraDetalle[];
   procurement_order_approvals: AprobacionCompra[];
   procurement_receipts: Recepcion[];
-  procurement_purchase_invoices: FacturaCompra[];
+  procurement_xml_invoices: FacturaCompra[];
   procurement_purchase_payments: PagoCompra[];
+}
+
+// Una factura (o NC) es un documento fiscal independiente: puede o no
+// estar vinculada a una compra, tiene su propio desglose y sus propios
+// pagos, y una NC puede colgar de ella para reducir su saldo.
+export interface FacturaFull extends FacturaCompra {
+  procurement_order_items: CompraDetalle[];
+  procurement_purchase_payments: PagoCompra[];
+  notasCredito: FacturaCompra[];
 }
 
 interface CompanyUserRow {
@@ -43,11 +54,14 @@ export function useComprasData(companyId: string) {
   const [departamentos, setDepartamentos] = useState<Departamento[]>([]);
   const [settings, setSettings] = useState<ComprasSettings>({ company_id: companyId, aprobacion_activada: false });
   const [compras, setCompras] = useState<CompraFull[]>([]);
+  const [facturas, setFacturas] = useState<FacturaFull[]>([]);
   const [requisiciones, setRequisiciones] = useState<Requisicion[]>([]);
   const [reglasAprobacion, setReglasAprobacion] = useState<ReglaAprobacion[]>([]);
   const [companyUsers, setCompanyUsers] = useState<CompanyUserRow[]>([]);
   const [evaluaciones, setEvaluaciones] = useState<EvaluacionProveedor[]>([]);
   const [ticketsUsados, setTicketsUsados] = useState(0);
+  const [productos, setProductos] = useState<ProcurementProduct[]>([]);
+  const [inventario, setInventario] = useState<Record<string, number>>({});
 
   async function load() {
     setLoading(true);
@@ -79,16 +93,24 @@ export function useComprasData(companyId: string) {
       { data: proveedorRows },
       { data: departamentoRows },
       { data: compraRows },
+      { data: facturaRows },
       { data: requisicionRows },
       { data: reglaRows },
       { data: usoRow },
       { data: memberRows },
+      { data: productoRows },
+      { data: movimientoRows },
     ] = await Promise.all([
       supabase.from("procurement_suppliers").select("*").eq("company_id", companyId).order("razon_social"),
       supabase.from("departments").select("*").eq("company_id", companyId).order("nombre"),
       supabase
         .from("procurement_orders")
-        .select("*, procurement_order_items(*), procurement_order_approvals(*), procurement_receipts(*), procurement_purchase_invoices(*), procurement_purchase_payments(*)")
+        .select("*, procurement_order_items(*), procurement_order_approvals(*), procurement_receipts(*), procurement_xml_invoices(*), procurement_purchase_payments(*)")
+        .eq("company_id", companyId)
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("procurement_xml_invoices")
+        .select("*, procurement_order_items(*), procurement_purchase_payments(*)")
         .eq("company_id", companyId)
         .order("created_at", { ascending: false }),
       supabase.from("procurement_requisitions").select("*").eq("company_id", companyId).order("fecha", { ascending: false }),
@@ -100,14 +122,30 @@ export function useComprasData(companyId: string) {
         .eq("periodo", currentPeriod())
         .maybeSingle(),
       supabase.from("company_users").select("user_id").eq("company_id", companyId),
+      supabase.from("procurement_products").select("*").eq("company_id", companyId).order("nombre"),
+      supabase.from("procurement_inventory_movements").select("*").eq("company_id", companyId),
     ]);
 
     setProveedores(proveedorRows ?? []);
     setDepartamentos(departamentoRows ?? []);
     setCompras((compraRows as CompraFull[] | null) ?? []);
+    const facturasBase = (facturaRows as (FacturaCompra & { procurement_order_items: CompraDetalle[]; procurement_purchase_payments: PagoCompra[] })[] | null) ?? [];
+    setFacturas(
+      facturasBase.map((f) => ({
+        ...f,
+        notasCredito: facturasBase.filter((nc) => nc.nc_aplica_factura_id === f.id),
+      })),
+    );
     setRequisiciones(requisicionRows ?? []);
     setReglasAprobacion(reglaRows ?? []);
     setTicketsUsados(usoRow?.veces_usado ?? 0);
+    setProductos(productoRows ?? []);
+    const stock: Record<string, number> = {};
+    for (const m of (movimientoRows as ProcurementInventoryMovement[] | null) ?? []) {
+      const signo = m.tipo === "entrada" ? 1 : -1;
+      stock[m.producto_id] = (stock[m.producto_id] ?? 0) + signo * Number(m.cantidad);
+    }
+    setInventario(stock);
 
     const proveedorIds = (proveedorRows ?? []).map((p) => p.id);
     if (proveedorIds.length > 0) {
@@ -148,11 +186,14 @@ export function useComprasData(companyId: string) {
     departamentos,
     settings,
     compras,
+    facturas,
     requisiciones,
     reglasAprobacion,
     companyUsers,
     evaluaciones,
     ticketsUsados,
+    productos,
+    inventario,
     reload: load,
   };
 }

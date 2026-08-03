@@ -361,12 +361,39 @@ export interface Compra {
 
 export interface CompraDetalle {
   id: string;
-  compra_id: string;
+  compra_id: string | null;
+  factura_id: string | null;
+  producto_id: string | null;
   descripcion: string;
   cantidad: number;
   precio_unitario: number;
   importe: number;
   cantidad_recibida: number;
+  uuid_fiscal: string | null;
+}
+
+export interface ProcurementProduct {
+  id: string;
+  company_id: string;
+  sku: string | null;
+  nombre: string;
+  descripcion: string | null;
+  unidad: string;
+  costo_referencia: number;
+  activo: boolean;
+  created_at: string;
+}
+
+export interface ProcurementInventoryMovement {
+  id: string;
+  company_id: string;
+  producto_id: string;
+  tipo: "entrada" | "salida";
+  cantidad: number;
+  compra_id: string | null;
+  recepcion_id: string | null;
+  fecha: string;
+  created_at: string;
 }
 
 export interface Requisicion {
@@ -411,9 +438,15 @@ export interface Recepcion {
   created_at: string;
 }
 
+export type FacturaTipoDocumento = "factura" | "nota_credito";
+
 export interface FacturaCompra {
   id: string;
-  compra_id: string;
+  company_id: string;
+  proveedor_id: string;
+  compra_id: string | null;
+  tipo_documento: FacturaTipoDocumento;
+  nc_aplica_factura_id: string | null;
   uuid_fiscal: string | null;
   rfc_emisor: string | null;
   fecha_emision: string | null;
@@ -435,7 +468,8 @@ export interface TicketCompra {
 
 export interface PagoCompra {
   id: string;
-  compra_id: string;
+  compra_id: string | null;
+  factura_id: string | null;
   fecha: string;
   monto: number;
   referencia: string | null;

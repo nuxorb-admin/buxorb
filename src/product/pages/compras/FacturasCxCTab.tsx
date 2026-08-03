@@ -1,7 +1,7 @@
 import { useState, type ChangeEvent, type FormEvent } from "react";
 import { supabase } from "../../../lib/supabase";
-import type { Proveedor } from "../../../lib/database.types";
-import type { CompraFull } from "./useComprasData";
+import type { Proveedor, ProcurementProduct } from "../../../lib/database.types";
+import type { CompraFull, FacturaFull } from "./useComprasData";
 import { registrarUsoTicket } from "./useComprasData";
 import type { ComprasTierLimits } from "./limits";
 import { parseCfdiXml } from "./parseCfdi";
@@ -20,14 +20,28 @@ interface TicketResult {
   total: number;
 }
 
-function saldoPendiente(compra: CompraFull) {
+// Saldo de una compra: descuenta pagos hechos directo a la compra y las
+// notas de crédito que quedaron ligadas a ella (compra_id), sin pasar por
+// una factura específica.
+function saldoPendienteCompra(compra: CompraFull) {
   const pagado = compra.procurement_purchase_payments.reduce((sum, p) => sum + Number(p.monto), 0);
-  return Math.max(0, Number(compra.total) - pagado);
+  const nc = compra.procurement_xml_invoices
+    .filter((f) => f.tipo_documento === "nota_credito")
+    .reduce((sum, f) => sum + Number(f.total ?? 0), 0);
+  return Math.max(0, Number(compra.total) - pagado - nc);
 }
 
-function estadoCartera(compra: CompraFull): "al_corriente" | "por_vencer" | "vencida" {
-  if (!compra.fecha_estimada_pago) return "al_corriente";
-  const dias = (new Date(compra.fecha_estimada_pago).getTime() - Date.now()) / 86400000;
+// Saldo de una factura suelta (sin compra, o cuyo pago se sigue por la
+// factura misma): descuenta sus propios pagos y las NC aplicadas a ella.
+function saldoPendienteFactura(factura: FacturaFull) {
+  const pagado = factura.procurement_purchase_payments.reduce((sum, p) => sum + Number(p.monto), 0);
+  const nc = factura.notasCredito.reduce((sum, f) => sum + Number(f.total ?? 0), 0);
+  return Math.max(0, Number(factura.total ?? 0) - pagado - nc);
+}
+
+function estadoCartera(fechaEstimada: string | null): "al_corriente" | "por_vencer" | "vencida" {
+  if (!fechaEstimada) return "al_corriente";
+  const dias = (new Date(fechaEstimada).getTime() - Date.now()) / 86400000;
   if (dias < 0) return "vencida";
   if (dias <= 7) return "por_vencer";
   return "al_corriente";
@@ -36,10 +50,16 @@ function estadoCartera(compra: CompraFull): "al_corriente" | "por_vencer" | "ven
 const CARTERA_LABEL = { al_corriente: "Al corriente", por_vencer: "Por vencer", vencida: "Vencida" };
 const CARTERA_COLOR = { al_corriente: "teal", por_vencer: "orange", vencida: "orange" } as const;
 
+type CuentaPorPagar =
+  | { kind: "compra"; id: string; label: string; proveedorNombre: string; saldo: number; vence: string | null; target: CompraFull }
+  | { kind: "factura"; id: string; label: string; proveedorNombre: string; saldo: number; vence: string | null; target: FacturaFull };
+
 export default function FacturasCxCTab({
   companyId,
   proveedores,
   compras,
+  facturas,
+  productos,
   limits,
   ticketsUsados,
   reload,
@@ -47,18 +67,52 @@ export default function FacturasCxCTab({
   companyId: string;
   proveedores: Proveedor[];
   compras: CompraFull[];
+  facturas: FacturaFull[];
+  productos: ProcurementProduct[];
   limits: ComprasTierLimits;
   ticketsUsados: number;
   reload: () => void;
 }) {
   const [showXml, setShowXml] = useState(false);
   const [showTicket, setShowTicket] = useState(false);
-  const [payingCompra, setPayingCompra] = useState<CompraFull | null>(null);
+  const [pagando, setPagando] = useState<CuentaPorPagar | null>(null);
+  const [conciliando, setConciliando] = useState<FacturaFull | null>(null);
 
   const pendientesFactura = compras.filter(
-    (c) => c.origen === "ticket_ia" && c.procurement_purchase_invoices.length === 0,
+    (c) => c.origen === "ticket_ia" && c.procurement_xml_invoices.length === 0,
   );
-  const conSaldo = compras.filter((c) => saldoPendiente(c) > 0 && c.estado !== "cancelada");
+
+  const porConciliar = facturas.filter(
+    (f) => f.tipo_documento === "factura" && f.procurement_order_items.some((i) => !i.producto_id),
+  );
+
+  const proveedorNombre = (id: string) => proveedores.find((p) => p.id === id)?.razon_social ?? "—";
+
+  const cuentas: CuentaPorPagar[] = [
+    ...compras
+      .filter((c) => c.estado !== "cancelada" && saldoPendienteCompra(c) > 0)
+      .map((c): CuentaPorPagar => ({
+        kind: "compra",
+        id: c.id,
+        label: c.folio,
+        proveedorNombre: proveedorNombre(c.proveedor_id),
+        saldo: saldoPendienteCompra(c),
+        vence: c.fecha_estimada_pago,
+        target: c,
+      })),
+    ...facturas
+      .filter((f) => f.tipo_documento === "factura" && f.compra_id === null && saldoPendienteFactura(f) > 0)
+      .map((f): CuentaPorPagar => ({
+        kind: "factura",
+        id: f.id,
+        label: f.uuid_fiscal ? `Factura ${f.uuid_fiscal.slice(0, 8)}…` : "Factura",
+        proveedorNombre: proveedorNombre(f.proveedor_id),
+        saldo: saldoPendienteFactura(f),
+        vence: f.fecha_emision,
+        target: f,
+      })),
+  ];
+
   const ticketsAgotados = ticketsUsados >= limits.maxTicketsIAPorMes;
 
   return (
@@ -95,27 +149,56 @@ export default function FacturasCxCTab({
         </div>
       )}
 
+      {porConciliar.length > 0 && (
+        <div className="mb-6">
+          <h3 className="mb-2 font-mono text-[0.68rem] font-bold uppercase tracking-[0.1em] text-muted">
+            Facturas por conciliar
+          </h3>
+          <div className="divide-y divide-ink/10 border border-ink/10 bg-white">
+            {porConciliar.map((f) => (
+              <div key={f.id} className="flex items-center justify-between px-4 py-3">
+                <div>
+                  <p className="text-sm font-semibold text-ink">
+                    {proveedorNombre(f.proveedor_id)} · {f.uuid_fiscal ? `${f.uuid_fiscal.slice(0, 8)}…` : "Factura"}
+                  </p>
+                  <p className="font-mono text-[0.66rem] text-muted">{money(f.total ?? 0)}</p>
+                </div>
+                <button
+                  onClick={() => setConciliando(f)}
+                  className="font-mono text-[0.62rem] uppercase text-teal hover:underline"
+                >
+                  Conciliar productos
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <h3 className="mb-2 font-mono text-[0.68rem] font-bold uppercase tracking-[0.1em] text-muted">
         Cuentas por pagar
       </h3>
       <div className="divide-y divide-ink/10 border border-ink/10 bg-white">
-        {conSaldo.length === 0 && <p className="p-4 font-mono text-xs text-muted">Sin saldos pendientes.</p>}
-        {conSaldo.map((c) => {
-          const estado = estadoCartera(c);
+        {cuentas.length === 0 && <p className="p-4 font-mono text-xs text-muted">Sin saldos pendientes.</p>}
+        {cuentas.map((cta) => {
+          const estado = estadoCartera(cta.vence);
           return (
-            <div key={c.id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+            <div key={`${cta.kind}-${cta.id}`} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
               <div>
                 <p className="text-sm font-semibold text-ink">
-                  {proveedores.find((p) => p.id === c.proveedor_id)?.razon_social} · {c.folio}
+                  {cta.proveedorNombre} · {cta.label}
+                  {cta.kind === "factura" && (
+                    <span className="ml-2 font-mono text-[0.6rem] uppercase text-muted">(sin OC)</span>
+                  )}
                 </p>
                 <p className="font-mono text-[0.66rem] text-muted">
-                  Vence {c.fecha_estimada_pago ?? "—"} · Saldo {money(saldoPendiente(c))}
+                  Vence {cta.vence ?? "—"} · Saldo {money(cta.saldo)}
                 </p>
               </div>
               <div className="flex items-center gap-3">
                 <Badge color={CARTERA_COLOR[estado]}>{CARTERA_LABEL[estado]}</Badge>
                 <button
-                  onClick={() => setPayingCompra(c)}
+                  onClick={() => setPagando(cta)}
                   className="font-mono text-[0.62rem] uppercase text-teal hover:underline"
                 >
                   Registrar pago
@@ -126,12 +209,12 @@ export default function FacturasCxCTab({
         })}
       </div>
 
-      {limits.antiguedadYCalendarioPagos && conSaldo.length > 0 && (
+      {limits.antiguedadYCalendarioPagos && cuentas.length > 0 && (
         <>
           <h3 className="mb-2 mt-6 font-mono text-[0.68rem] font-bold uppercase tracking-[0.1em] text-muted">
             Antigüedad de saldos
           </h3>
-          <AntiguedadSaldos compras={conSaldo} />
+          <AntiguedadSaldos cuentas={cuentas} />
         </>
       )}
 
@@ -140,6 +223,7 @@ export default function FacturasCxCTab({
           companyId={companyId}
           proveedores={proveedores}
           pendientesFactura={pendientesFactura}
+          facturas={facturas}
           matchEnabled={limits.matchFacturaVsOC}
           onClose={() => setShowXml(false)}
           onDone={reload}
@@ -150,23 +234,32 @@ export default function FacturasCxCTab({
         <TicketUploadModal companyId={companyId} onClose={() => setShowTicket(false)} onDone={reload} />
       )}
 
-      {payingCompra && (
-        <PagoModal compra={payingCompra} onClose={() => setPayingCompra(null)} onPaid={reload} />
+      {pagando && (
+        <PagoModal cuenta={pagando} onClose={() => setPagando(null)} onPaid={reload} />
+      )}
+
+      {conciliando && (
+        <ConciliacionModal
+          factura={conciliando}
+          compras={compras}
+          productos={productos}
+          onClose={() => setConciliando(null)}
+          onDone={reload}
+        />
       )}
     </div>
   );
 }
 
-function AntiguedadSaldos({ compras }: { compras: CompraFull[] }) {
+function AntiguedadSaldos({ cuentas }: { cuentas: CuentaPorPagar[] }) {
   const buckets = { "1-30": 0, "31-60": 0, "61+": 0, "por vencer": 0 };
-  for (const c of compras) {
-    if (!c.fecha_estimada_pago) continue;
-    const dias = Math.floor((Date.now() - new Date(c.fecha_estimada_pago).getTime()) / 86400000);
-    const saldo = saldoPendiente(c);
-    if (dias < 0) buckets["por vencer"] += saldo;
-    else if (dias <= 30) buckets["1-30"] += saldo;
-    else if (dias <= 60) buckets["31-60"] += saldo;
-    else buckets["61+"] += saldo;
+  for (const cta of cuentas) {
+    if (!cta.vence) continue;
+    const dias = Math.floor((Date.now() - new Date(cta.vence).getTime()) / 86400000);
+    if (dias < 0) buckets["por vencer"] += cta.saldo;
+    else if (dias <= 30) buckets["1-30"] += cta.saldo;
+    else if (dias <= 60) buckets["31-60"] += cta.saldo;
+    else buckets["61+"] += cta.saldo;
   }
   return (
     <div className="grid grid-cols-4 gap-3">
@@ -184,6 +277,7 @@ function XmlUploadModal({
   companyId,
   proveedores,
   pendientesFactura,
+  facturas,
   matchEnabled,
   onClose,
   onDone,
@@ -191,22 +285,34 @@ function XmlUploadModal({
   companyId: string;
   proveedores: Proveedor[];
   pendientesFactura: CompraFull[];
+  facturas: FacturaFull[];
   matchEnabled: boolean;
   onClose: () => void;
   onDone: () => void;
 }) {
   const [parsed, setParsed] = useState<ReturnType<typeof parseCfdiXml> | null>(null);
   const [linkTo, setLinkTo] = useState<string>("");
+  const [ncTarget, setNcTarget] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+
+  const facturasAplicables = facturas.filter((f) => f.tipo_documento === "factura");
 
   async function onFile(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
     setError(null);
+    setLinkTo("");
     try {
       const text = await file.text();
-      setParsed(parseCfdiXml(text));
+      const result = parseCfdiXml(text);
+      setParsed(result);
+      if (result.tipoDocumento === "nota_credito" && result.uuidRelacionado) {
+        const match = facturasAplicables.find((f) => f.uuid_fiscal === result.uuidRelacionado);
+        setNcTarget(match?.id ?? "");
+      } else {
+        setNcTarget("");
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "No se pudo leer el XML");
     }
@@ -214,27 +320,26 @@ function XmlUploadModal({
 
   async function confirm() {
     if (!parsed) return;
-    setSaving(true);
+    setError(null);
 
-    if (linkTo) {
-      const compra = pendientesFactura.find((c) => c.id === linkTo);
-      const estadoMatch =
-        matchEnabled && compra ? (Math.abs(compra.total - parsed.total) > 0.5 ? "con_diferencias" : "ok") : null;
-      await supabase.from("procurement_purchase_invoices").insert({
-        compra_id: linkTo,
-        uuid_fiscal: parsed.uuidFiscal,
-        rfc_emisor: parsed.rfcEmisor,
-        fecha_emision: parsed.fecha,
-        subtotal: parsed.subtotal,
-        iva: parsed.total - parsed.subtotal,
-        total: parsed.total,
-        estado_match: estadoMatch,
-      });
-      setSaving(false);
-      onDone();
-      onClose();
+    if (parsed.uuidFiscal) {
+      const { data: dup } = await supabase
+        .from("procurement_xml_invoices")
+        .select("id")
+        .eq("uuid_fiscal", parsed.uuidFiscal)
+        .maybeSingle();
+      if (dup) {
+        setError("Este CFDI ya fue cargado antes (mismo UUID fiscal).");
+        return;
+      }
+    }
+
+    if (parsed.tipoDocumento === "nota_credito" && !ncTarget) {
+      setError("Selecciona a qué factura aplica esta nota de crédito.");
       return;
     }
+
+    setSaving(true);
 
     let proveedor = proveedores.find((p) => p.rfc === parsed.rfcEmisor);
     if (!proveedor) {
@@ -250,55 +355,59 @@ function XmlUploadModal({
       return;
     }
 
-    const folio = `OC-${Date.now().toString().slice(-6)}`;
-    const { data: compra } = await supabase
-      .from("procurement_orders")
+    const facturaAplicada = ncTarget ? facturasAplicables.find((f) => f.id === ncTarget) : undefined;
+    const compraDestino = linkTo || facturaAplicada?.compra_id || null;
+
+    let estadoMatch: "ok" | "con_diferencias" | null = null;
+    if (parsed.tipoDocumento === "factura" && matchEnabled && linkTo) {
+      const compra = pendientesFactura.find((c) => c.id === linkTo);
+      estadoMatch = compra ? (Math.abs(compra.total - parsed.total) > 0.5 ? "con_diferencias" : "ok") : null;
+    }
+
+    const { data: factura } = await supabase
+      .from("procurement_xml_invoices")
       .insert({
         company_id: companyId,
-        folio,
         proveedor_id: proveedor.id,
-        fecha: parsed.fecha,
-        subtotal: parsed.subtotal,
-        iva: parsed.total - parsed.subtotal,
-        total: parsed.total,
-        moneda: parsed.moneda,
-        condicion_pago: "credito",
-        dias_credito: proveedor.dias_credito_default || 30,
-        fecha_estimada_pago: parsed.fecha,
-        estado: "aprobada",
-        origen: "xml_cfdi",
-      })
-      .select()
-      .single();
-
-    if (compra) {
-      await supabase.from("procurement_order_items").insert(
-        parsed.conceptos.map((c) => ({
-          compra_id: compra.id,
-          descripcion: c.descripcion,
-          cantidad: c.cantidad,
-          precio_unitario: c.precio_unitario,
-          importe: c.importe,
-        })),
-      );
-      await supabase.from("procurement_purchase_invoices").insert({
-        compra_id: compra.id,
+        compra_id: compraDestino,
+        tipo_documento: parsed.tipoDocumento,
+        nc_aplica_factura_id: ncTarget || null,
         uuid_fiscal: parsed.uuidFiscal,
         rfc_emisor: parsed.rfcEmisor,
         fecha_emision: parsed.fecha,
         subtotal: parsed.subtotal,
         iva: parsed.total - parsed.subtotal,
         total: parsed.total,
-      });
-      await supabase.from("expected_movements").insert({
-        company_id: companyId,
-        tipo: "egreso",
-        monto: parsed.total,
-        fecha_esperada: parsed.fecha,
-        modulo_origen: "compras",
-        referencia_id: compra.id,
-        concepto: `Compra ${folio}`,
-      });
+        estado_match: estadoMatch,
+      })
+      .select()
+      .single();
+
+    if (factura) {
+      if (parsed.conceptos.length > 0) {
+        await supabase.from("procurement_order_items").insert(
+          parsed.conceptos.map((c) => ({
+            factura_id: factura.id,
+            compra_id: compraDestino,
+            descripcion: c.descripcion,
+            cantidad: c.cantidad,
+            precio_unitario: c.precio_unitario,
+            importe: c.importe,
+            uuid_fiscal: parsed.uuidFiscal,
+          })),
+        );
+      }
+      if (parsed.tipoDocumento === "factura") {
+        await supabase.from("expected_movements").insert({
+          company_id: companyId,
+          tipo: "egreso",
+          monto: parsed.total,
+          fecha_esperada: parsed.fecha,
+          modulo_origen: "compras",
+          referencia_id: factura.id,
+          concepto: `Factura ${parsed.uuidFiscal ?? factura.id}`,
+        });
+      }
     }
 
     setSaving(false);
@@ -319,32 +428,82 @@ function XmlUploadModal({
         {parsed && (
           <>
             <div className="border border-ink/10 bg-sand-2 p-3 font-mono text-xs text-ink">
+              <p className="mb-1">
+                <Badge color={parsed.tipoDocumento === "nota_credito" ? "orange" : "teal"}>
+                  {parsed.tipoDocumento === "nota_credito" ? "Nota de crédito" : "Factura"}
+                </Badge>
+              </p>
               <p>Emisor: {parsed.nombreEmisor} ({parsed.rfcEmisor})</p>
               <p>Fecha: {parsed.fecha}</p>
               <p>Total: {money(parsed.total)}</p>
-              <p>Conceptos: {parsed.conceptos.length}</p>
+              <p>UUID: {parsed.uuidFiscal ?? "—"}</p>
             </div>
-            {pendientesFactura.length > 0 && (
+            {parsed.conceptos.length > 0 && (
+              <div className="max-h-48 overflow-y-auto border border-ink/10 bg-white">
+                <table className="w-full font-mono text-[0.66rem] text-ink">
+                  <thead>
+                    <tr className="border-b border-ink/10 text-left text-muted">
+                      <th className="px-2 py-1">Concepto</th>
+                      <th className="px-2 py-1 text-right">Cant.</th>
+                      <th className="px-2 py-1 text-right">P. unit.</th>
+                      <th className="px-2 py-1 text-right">Importe</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {parsed.conceptos.map((c, i) => (
+                      <tr key={i} className="border-b border-ink/5">
+                        <td className="px-2 py-1">{c.descripcion}</td>
+                        <td className="px-2 py-1 text-right">{c.cantidad}</td>
+                        <td className="px-2 py-1 text-right">{money(c.precio_unitario)}</td>
+                        <td className="px-2 py-1 text-right">{money(c.importe)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {parsed.tipoDocumento === "nota_credito" ? (
               <div>
                 <label className="mb-1 block font-mono text-[0.62rem] uppercase text-muted">
-                  Vincular con compra pendiente de factura (opcional)
+                  Aplicar a factura
                 </label>
                 <select
-                  value={linkTo}
-                  onChange={(e) => setLinkTo(e.target.value)}
+                  value={ncTarget}
+                  onChange={(e) => setNcTarget(e.target.value)}
                   className="w-full border border-ink/15 bg-sand-2 px-3 py-2 text-sm text-ink focus:border-teal focus:outline-none"
                 >
-                  <option value="">Crear compra nueva</option>
-                  {pendientesFactura.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.folio} · {money(c.total)}
+                  <option value="">Selecciona la factura que abona/cancela</option>
+                  {facturasAplicables.map((f) => (
+                    <option key={f.id} value={f.id}>
+                      {f.uuid_fiscal ? `${f.uuid_fiscal.slice(0, 8)}…` : f.id} · {money(f.total ?? 0)}
                     </option>
                   ))}
                 </select>
               </div>
+            ) : (
+              pendientesFactura.length > 0 && (
+                <div>
+                  <label className="mb-1 block font-mono text-[0.62rem] uppercase text-muted">
+                    Vincular con orden de compra pendiente de factura (opcional)
+                  </label>
+                  <select
+                    value={linkTo}
+                    onChange={(e) => setLinkTo(e.target.value)}
+                    className="w-full border border-ink/15 bg-sand-2 px-3 py-2 text-sm text-ink focus:border-teal focus:outline-none"
+                  >
+                    <option value="">Dejar la factura sin vincular a una OC</option>
+                    {pendientesFactura.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.folio} · {money(c.total)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )
             )}
             <button onClick={confirm} disabled={saving} className="btn btn-primary w-full">
-              {saving ? "Guardando…" : "Confirmar y crear compra"}
+              {saving ? "Guardando…" : "Confirmar"}
             </button>
           </>
         )}
@@ -503,26 +662,148 @@ function TicketUploadModal({
   );
 }
 
+function sugerirProducto(descripcion: string, productos: ProcurementProduct[]): string {
+  const texto = descripcion.trim().toLowerCase();
+  if (!texto) return "";
+  const match = productos.find(
+    (p) => texto.includes(p.nombre.toLowerCase()) || p.nombre.toLowerCase().includes(texto),
+  );
+  return match?.id ?? "";
+}
+
+function ConciliacionModal({
+  factura,
+  compras,
+  productos,
+  onClose,
+  onDone,
+}: {
+  factura: FacturaFull;
+  compras: CompraFull[];
+  productos: ProcurementProduct[];
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const productosActivos = productos.filter((p) => p.activo);
+  const [asignaciones, setAsignaciones] = useState<Record<string, string>>(() => {
+    const init: Record<string, string> = {};
+    for (const item of factura.procurement_order_items) {
+      init[item.id] = item.producto_id ?? sugerirProducto(item.descripcion, productosActivos);
+    }
+    return init;
+  });
+  const [saving, setSaving] = useState(false);
+
+  const compraLigada = factura.compra_id ? compras.find((c) => c.id === factura.compra_id) : undefined;
+
+  async function guardar() {
+    setSaving(true);
+
+    await Promise.all(
+      Object.entries(asignaciones)
+        .filter(([, productoId]) => productoId)
+        .map(([itemId, productoId]) =>
+          supabase.from("procurement_order_items").update({ producto_id: productoId }).eq("id", itemId),
+        ),
+    );
+
+    if (compraLigada) {
+      const porProductoOC = new Map<string, number>();
+      for (const item of compraLigada.procurement_order_items) {
+        if (!item.producto_id) continue;
+        porProductoOC.set(item.producto_id, (porProductoOC.get(item.producto_id) ?? 0) + Number(item.cantidad));
+      }
+      const porProductoFactura = new Map<string, number>();
+      for (const item of factura.procurement_order_items) {
+        const productoId = asignaciones[item.id];
+        if (!productoId) continue;
+        porProductoFactura.set(productoId, (porProductoFactura.get(productoId) ?? 0) + Number(item.cantidad));
+      }
+      const mismosProductos =
+        porProductoOC.size === porProductoFactura.size &&
+        [...porProductoOC.entries()].every(([productoId, cant]) => porProductoFactura.get(productoId) === cant);
+      await supabase
+        .from("procurement_xml_invoices")
+        .update({ estado_match: mismosProductos ? "ok" : "con_diferencias" })
+        .eq("id", factura.id);
+    }
+
+    setSaving(false);
+    onDone();
+    onClose();
+  }
+
+  const faltantes = factura.procurement_order_items.filter((item) => !asignaciones[item.id]).length;
+
+  return (
+    <Modal title="Conciliar productos de la factura" onClose={onClose}>
+      <div className="space-y-3">
+        {compraLigada && (
+          <p className="font-mono text-[0.62rem] text-muted">
+            Ligada a la OC {compraLigada.folio} — se compara producto por producto contra lo pedido.
+          </p>
+        )}
+        <div className="space-y-2">
+          {factura.procurement_order_items.map((item) => (
+            <div key={item.id} className="grid grid-cols-2 gap-2 border border-ink/10 bg-sand-2 p-2">
+              <div className="font-mono text-[0.66rem] text-ink">
+                {item.descripcion}
+                <br />
+                <span className="text-muted">
+                  {item.cantidad} × {money(item.precio_unitario)}
+                </span>
+              </div>
+              <select
+                value={asignaciones[item.id] ?? ""}
+                onChange={(e) => setAsignaciones({ ...asignaciones, [item.id]: e.target.value })}
+                className="border border-ink/15 bg-white px-2 py-1.5 text-sm text-ink focus:border-teal focus:outline-none"
+              >
+                <option value="">Sin producto</option>
+                {productosActivos.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.nombre}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ))}
+        </div>
+        {faltantes > 0 && (
+          <p className="font-mono text-[0.62rem] text-orange">
+            {faltantes} concepto(s) sin producto asignado — se guardarán sin conciliar.
+          </p>
+        )}
+        <button onClick={guardar} disabled={saving} className="btn btn-primary w-full">
+          {saving ? "Guardando…" : "Guardar conciliación"}
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
 function PagoModal({
-  compra,
+  cuenta,
   onClose,
   onPaid,
 }: {
-  compra: CompraFull;
+  cuenta: CuentaPorPagar;
   onClose: () => void;
   onPaid: () => void;
 }) {
-  const [monto, setMonto] = useState(String(saldoPendiente(compra)));
+  const [monto, setMonto] = useState(String(cuenta.saldo));
   const [referencia, setReferencia] = useState("");
   const [saving, setSaving] = useState(false);
 
   async function submit(e: FormEvent) {
     e.preventDefault();
     setSaving(true);
-    await supabase.from("procurement_purchase_payments").insert({ compra_id: compra.id, monto: Number(monto), referencia });
-    const nuevoSaldo = saldoPendiente(compra) - Number(monto);
-    if (nuevoSaldo <= 0) {
-      await supabase.from("procurement_orders").update({ estado: "pagada" }).eq("id", compra.id);
+    if (cuenta.kind === "compra") {
+      await supabase.from("procurement_purchase_payments").insert({ compra_id: cuenta.id, monto: Number(monto), referencia });
+      if (cuenta.saldo - Number(monto) <= 0) {
+        await supabase.from("procurement_orders").update({ estado: "pagada" }).eq("id", cuenta.id);
+      }
+    } else {
+      await supabase.from("procurement_purchase_payments").insert({ factura_id: cuenta.id, monto: Number(monto), referencia });
     }
     setSaving(false);
     onPaid();
@@ -530,7 +811,7 @@ function PagoModal({
   }
 
   return (
-    <Modal title={`Registrar pago — ${compra.folio}`} onClose={onClose}>
+    <Modal title={`Registrar pago — ${cuenta.label}`} onClose={onClose}>
       <form onSubmit={submit} className="space-y-3">
         <input
           type="number"

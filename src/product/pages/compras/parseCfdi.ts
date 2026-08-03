@@ -13,6 +13,8 @@ export interface ParsedCfdiConcepto {
   importe: number;
 }
 
+export type CfdiTipoComprobante = "factura" | "nota_credito";
+
 export interface ParsedCfdi {
   rfcEmisor: string;
   nombreEmisor: string;
@@ -22,6 +24,8 @@ export interface ParsedCfdi {
   moneda: string;
   uuidFiscal: string | null;
   conceptos: ParsedCfdiConcepto[];
+  tipoDocumento: CfdiTipoComprobante;
+  uuidRelacionado: string | null;
 }
 
 function firstElementNS(doc: Document, localName: string): Element | null {
@@ -58,6 +62,16 @@ export function parseCfdiXml(xmlText: string): ParsedCfdi {
     importe: Number(c.getAttribute("Importe") ?? "0"),
   }));
 
+  // TipoDeComprobante "E" (egreso) es como el SAT marca notas de crédito;
+  // "I" (ingreso) es una factura normal.
+  const tipoDocumento: CfdiTipoComprobante =
+    comprobante.getAttribute("TipoDeComprobante") === "E" ? "nota_credito" : "factura";
+
+  // Una NC referencia la factura que abona/cancela vía CfdiRelacionados
+  // (TipoRelacion "01"). Tomamos el primer UUID relacionado como sugerencia.
+  const cfdiRelacionado = firstElementNS(doc, "CfdiRelacionado");
+  const uuidRelacionado = cfdiRelacionado?.getAttribute("UUID") ?? null;
+
   return {
     rfcEmisor: emisor?.getAttribute("Rfc") ?? "",
     nombreEmisor: emisor?.getAttribute("Nombre") ?? "",
@@ -67,5 +81,7 @@ export function parseCfdiXml(xmlText: string): ParsedCfdi {
     moneda: comprobante.getAttribute("Moneda") ?? "MXN",
     uuidFiscal: timbre?.getAttribute("UUID") ?? null,
     conceptos,
+    tipoDocumento,
+    uuidRelacionado,
   };
 }

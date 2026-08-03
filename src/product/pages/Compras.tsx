@@ -5,8 +5,9 @@ import { useComprasData } from "./compras/useComprasData";
 import CicloCompraTab from "./compras/CicloCompraTab";
 import FacturasCxCTab from "./compras/FacturasCxCTab";
 import ProveedoresTab from "./compras/ProveedoresTab";
+import CatalogoTab from "./compras/CatalogoTab";
 
-type Tab = "ciclo" | "facturas" | "proveedores";
+type Tab = "ciclo" | "facturas" | "proveedores" | "catalogo";
 
 export default function Compras() {
   const { scopeId: companyId } = useOutletContext<ProductContext>();
@@ -18,11 +19,14 @@ export default function Compras() {
     departamentos,
     settings,
     compras,
+    facturas,
     requisiciones,
     reglasAprobacion,
     companyUsers,
     evaluaciones,
     ticketsUsados,
+    productos,
+    inventario,
     reload,
   } = useComprasData(companyId);
   const [tab, setTab] = useState<Tab>("ciclo");
@@ -35,6 +39,7 @@ export default function Compras() {
     { id: "ciclo", label: "Ciclo de compra" },
     { id: "facturas", label: "Facturas y CxC" },
     { id: "proveedores", label: "Proveedores" },
+    { id: "catalogo", label: "Catálogo" },
   ];
 
   return (
@@ -73,6 +78,7 @@ export default function Compras() {
             settings={settings}
             limits={limits}
             companyUserCount={companyUsers.length}
+            productos={productos}
             reload={reload}
           />
         )}
@@ -81,6 +87,8 @@ export default function Compras() {
             companyId={companyId}
             proveedores={proveedores}
             compras={compras}
+            facturas={facturas}
+            productos={productos}
             limits={limits}
             ticketsUsados={ticketsUsados}
             reload={reload}
@@ -95,6 +103,9 @@ export default function Compras() {
             limits={limits}
             reload={reload}
           />
+        )}
+        {tab === "catalogo" && (
+          <CatalogoTab companyId={companyId} productos={productos} inventario={inventario} reload={reload} />
         )}
       </div>
     </div>

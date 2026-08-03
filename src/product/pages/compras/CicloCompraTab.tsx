@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { supabase } from "../../../lib/supabase";
-import type { Proveedor, Departamento, Requisicion, ReglaAprobacion } from "../../../lib/database.types";
+import type { Proveedor, Departamento, Requisicion, ReglaAprobacion, ProcurementProduct } from "../../../lib/database.types";
 import type { CompraFull } from "./useComprasData";
 import type { ComprasTierLimits } from "./limits";
 import Modal from "../../../admin/components/Modal";
@@ -58,6 +58,7 @@ export default function CicloCompraTab({
   settings,
   limits,
   companyUserCount,
+  productos,
   reload,
 }: {
   companyId: string;
@@ -69,6 +70,7 @@ export default function CicloCompraTab({
   settings: { aprobacion_activada: boolean };
   limits: ComprasTierLimits;
   companyUserCount: number;
+  productos: ProcurementProduct[];
   reload: () => void;
 }) {
   const [userId, setUserId] = useState<string | null>(null);
@@ -122,7 +124,31 @@ export default function CicloCompraTab({
   }
 
   async function marcarRecibida(compra: CompraFull) {
-    await supabase.from("procurement_receipts").insert({ compra_id: compra.id, tipo: "total" });
+    const { data: recepcion } = await supabase
+      .from("procurement_receipts")
+      .insert({ compra_id: compra.id, tipo: "total" })
+      .select()
+      .single();
+
+    const itemsConProducto = compra.procurement_order_items.filter((i) => i.producto_id);
+    if (recepcion && itemsConProducto.length > 0) {
+      await supabase.from("procurement_inventory_movements").insert(
+        itemsConProducto.map((i) => ({
+          company_id: compra.company_id,
+          producto_id: i.producto_id,
+          tipo: "entrada" as const,
+          cantidad: i.cantidad,
+          compra_id: compra.id,
+          recepcion_id: recepcion.id,
+        })),
+      );
+      await Promise.all(
+        itemsConProducto.map((i) =>
+          supabase.from("procurement_order_items").update({ cantidad_recibida: i.cantidad }).eq("id", i.id),
+        ),
+      );
+    }
+
     await supabase.from("procurement_orders").update({ estado: "recibida" }).eq("id", compra.id);
     reload();
   }
@@ -295,6 +321,7 @@ export default function CicloCompraTab({
           proveedores={proveedores}
           settings={settings}
           companyUserCount={companyUserCount}
+          productos={productos}
           prefillDepartamento={prefillDepartamento}
           onClose={() => setShowNew(false)}
           onCreated={reload}
@@ -329,6 +356,7 @@ function NewCompraModal({
   proveedores,
   settings,
   companyUserCount,
+  productos,
   prefillDepartamento,
   onClose,
   onCreated,
@@ -337,6 +365,7 @@ function NewCompraModal({
   proveedores: Proveedor[];
   settings: { aprobacion_activada: boolean };
   companyUserCount: number;
+  productos: ProcurementProduct[];
   prefillDepartamento: string | null;
   onClose: () => void;
   onCreated: () => void;
@@ -345,7 +374,8 @@ function NewCompraModal({
   const [condicionPago, setCondicionPago] = useState<"contado" | "credito">("contado");
   const [diasCredito, setDiasCredito] = useState("30");
   const [fechaEstimadaPago, setFechaEstimadaPago] = useState(new Date().toISOString().slice(0, 10));
-  const [conceptos, setConceptos] = useState([{ descripcion: "", cantidad: "1", precio_unitario: "0" }]);
+  const productosActivos = productos.filter((p) => p.activo);
+  const [conceptos, setConceptos] = useState([{ producto_id: "", cantidad: "1", precio_unitario: "0" }]);
   const [saving, setSaving] = useState(false);
 
   const subtotal = conceptos.reduce((sum, c) => sum + Number(c.cantidad) * Number(c.precio_unitario), 0);
@@ -387,14 +417,18 @@ function NewCompraModal({
     if (compra) {
       await supabase.from("procurement_order_items").insert(
         conceptos
-          .filter((c) => c.descripcion.trim())
-          .map((c) => ({
-            compra_id: compra.id,
-            descripcion: c.descripcion,
-            cantidad: Number(c.cantidad),
-            precio_unitario: Number(c.precio_unitario),
-            importe: Number(c.cantidad) * Number(c.precio_unitario),
-          })),
+          .filter((c) => c.producto_id)
+          .map((c) => {
+            const producto = productosActivos.find((p) => p.id === c.producto_id);
+            return {
+              compra_id: compra.id,
+              producto_id: c.producto_id,
+              descripcion: producto?.nombre ?? "",
+              cantidad: Number(c.cantidad),
+              precio_unitario: Number(c.precio_unitario),
+              importe: Number(c.cantidad) * Number(c.precio_unitario),
+            };
+          }),
       );
 
       if (!requiereAprobacion) {
@@ -431,19 +465,36 @@ function NewCompraModal({
           ))}
         </select>
 
+        {productosActivos.length === 0 && (
+          <p className="font-mono text-[0.62rem] text-orange">
+            No hay productos activos en el catálogo — agrega uno en la pestaña Catálogo antes de crear una compra.
+          </p>
+        )}
+
         <div className="space-y-2">
           {conceptos.map((c, i) => (
             <div key={i} className="grid grid-cols-6 gap-2">
-              <input
-                value={c.descripcion}
+              <select
+                value={c.producto_id}
                 onChange={(e) => {
+                  const producto = productosActivos.find((p) => p.id === e.target.value);
                   const next = [...conceptos];
-                  next[i] = { ...next[i], descripcion: e.target.value };
+                  next[i] = {
+                    ...next[i],
+                    producto_id: e.target.value,
+                    precio_unitario: producto ? String(producto.costo_referencia) : next[i].precio_unitario,
+                  };
                   setConceptos(next);
                 }}
-                placeholder="Descripción"
                 className="col-span-3 border border-ink/15 bg-sand-2 px-2 py-1.5 text-sm text-ink focus:border-teal focus:outline-none"
-              />
+              >
+                <option value="">Selecciona un producto…</option>
+                {productosActivos.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.nombre}
+                  </option>
+                ))}
+              </select>
               <input
                 type="number"
                 value={c.cantidad}
@@ -477,7 +528,7 @@ function NewCompraModal({
           ))}
           <button
             type="button"
-            onClick={() => setConceptos([...conceptos, { descripcion: "", cantidad: "1", precio_unitario: "0" }])}
+            onClick={() => setConceptos([...conceptos, { producto_id: "", cantidad: "1", precio_unitario: "0" }])}
             className="font-mono text-[0.62rem] uppercase text-teal hover:underline"
           >
             + Concepto

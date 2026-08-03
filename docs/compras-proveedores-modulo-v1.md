@@ -263,5 +263,8 @@ Explícitamente pospuesto — no es que se haya intentado y quedó a medias, es 
 - **Dashboard/ranking de proveedores:** no hay una vista dedicada de ranking por volumen/cumplimiento/variación de precios — los indicadores viven en la fila de cada proveedor, no agregados.
 - **`categoria_gasto_default` del proveedor:** la columna existe pero no se captura en el formulario; su propósito original (heredar categoría al proyectado de Tesorería) perdió sentido al eliminarse el puente `mov_esperados` — habría que redefinir para qué se usaría antes de exponerla.
 - **Proyecciones de flujo de caja hacia Tesorería:** cómo debe verse ahora que no existe el puente `mov_esperados` (tema abierto, a definir en conjunto con Tesorería).
-- **Conversión automática entre unidades de medida** (ej. factura en litros, catálogo en ml): hoy la unidad del producto es fija y no hay tabla de equivalencias.
 - **Automatizaciones N8N** (sección 9): sin diseñar.
+
+**Resuelto (ya no está pendiente, se construyó tras el borrador inicial de esta lista):**
+- **Conversión entre unidades de medida** al calcular el costo promedio: cada línea de factura/ticket guarda en qué unidad vino (`unidad`, con sugerencia automática desde `ClaveUnidad`/`Unidad` del CFDI), y `procurement_units.factor_base` normaliza esa cantidad a la unidad del producto en catálogo antes de promediar (ej. factura en kg, catálogo en g). Sin factor definido (caja, paquete — contenido variable por producto) o entre categorías distintas, se asume 1:1 igual que antes.
+- **Tickets también se concilian contra el catálogo:** nueva sección "Tickets por conciliar" + modal de asignación de SKU, igual que facturas — antes solo las líneas de factura contaban como evidencia real de costo.

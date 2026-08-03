@@ -19,18 +19,6 @@ const ESTADO_COLOR = {
   cancelada: "muted",
 } as const;
 
-async function publicarProyectado(compra: CompraFull) {
-  await supabase.from("expected_movements").insert({
-    company_id: compra.company_id,
-    tipo: "egreso",
-    monto: compra.total,
-    fecha_esperada: compra.fecha_estimada_pago || compra.fecha,
-    modulo_origen: "compras",
-    referencia_id: compra.id,
-    concepto: `Compra ${compra.folio}`,
-  });
-}
-
 function nivelPendiente(compra: CompraFull, reglas: ReglaAprobacion[]): ReglaAprobacion | null {
   const aplicables = reglas
     .filter((r) => {
@@ -114,11 +102,9 @@ export default function CicloCompraTab({
       const siguiente = updated ? nivelPendiente({ ...compra, procurement_order_approvals: updated.procurement_order_approvals }, reglasAprobacion) : null;
       if (!siguiente) {
         await supabase.from("procurement_orders").update({ estado: "aprobada" }).eq("id", compra.id);
-        await publicarProyectado(compra);
       }
     } else {
       await supabase.from("procurement_orders").update({ estado: "aprobada" }).eq("id", compra.id);
-      await publicarProyectado(compra);
     }
     reload();
   }
@@ -433,18 +419,6 @@ function NewCompraModal({
             };
           }),
       );
-
-      if (!requiereAprobacion) {
-        await supabase.from("expected_movements").insert({
-          company_id: companyId,
-          tipo: "egreso",
-          monto: total,
-          fecha_esperada: fechaEstimadaPago,
-          modulo_origen: "compras",
-          referencia_id: compra.id,
-          concepto: `Compra ${folio}`,
-        });
-      }
     }
 
     setSaving(false);

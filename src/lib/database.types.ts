@@ -479,6 +479,7 @@ export interface PagoCompra {
   id: string;
   compra_id: string | null;
   factura_id: string | null;
+  treasury_movement_id: string | null;
   fecha: string;
   monto: number;
   referencia: string | null;

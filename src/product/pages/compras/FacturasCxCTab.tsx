@@ -1,6 +1,6 @@
-import { useState, type ChangeEvent, type FormEvent } from "react";
+import { useEffect, useState, type ChangeEvent, type FormEvent } from "react";
 import { supabase } from "../../../lib/supabase";
-import type { Proveedor, ProcurementProduct, ProcurementUnit } from "../../../lib/database.types";
+import type { Proveedor, ProcurementProduct, ProcurementUnit, TreasuryMovement } from "../../../lib/database.types";
 import type { CompraFull, FacturaFull } from "./useComprasData";
 import { registrarUsoTicket } from "./useComprasData";
 import type { ComprasTierLimits } from "./limits";
@@ -51,8 +51,8 @@ const CARTERA_LABEL = { al_corriente: "Al corriente", por_vencer: "Por vencer", 
 const CARTERA_COLOR = { al_corriente: "teal", por_vencer: "orange", vencida: "orange" } as const;
 
 type CuentaPorPagar =
-  | { kind: "compra"; id: string; label: string; proveedorNombre: string; saldo: number; vence: string | null; target: CompraFull }
-  | { kind: "factura"; id: string; label: string; proveedorNombre: string; saldo: number; vence: string | null; target: FacturaFull };
+  | { kind: "compra"; id: string; label: string; proveedorId: string; proveedorNombre: string; saldo: number; vence: string | null; target: CompraFull }
+  | { kind: "factura"; id: string; label: string; proveedorId: string; proveedorNombre: string; saldo: number; vence: string | null; target: FacturaFull };
 
 export default function FacturasCxCTab({
   companyId,
@@ -79,6 +79,7 @@ export default function FacturasCxCTab({
   const [showTicket, setShowTicket] = useState(false);
   const [pagando, setPagando] = useState<CuentaPorPagar | null>(null);
   const [conciliando, setConciliando] = useState<FacturaFull | null>(null);
+  const [vinculando, setVinculando] = useState<CuentaPorPagar | null>(null);
 
   const pendientesFactura = compras.filter(
     (c) => c.origen === "ticket_ia" && c.procurement_xml_invoices.length === 0,
@@ -97,6 +98,7 @@ export default function FacturasCxCTab({
         kind: "compra",
         id: c.id,
         label: c.folio,
+        proveedorId: c.proveedor_id,
         proveedorNombre: proveedorNombre(c.proveedor_id),
         saldo: saldoPendienteCompra(c),
         vence: c.fecha_estimada_pago,
@@ -108,6 +110,7 @@ export default function FacturasCxCTab({
         kind: "factura",
         id: f.id,
         label: f.uuid_fiscal ? `Factura ${f.uuid_fiscal.slice(0, 8)}…` : "Factura",
+        proveedorId: f.proveedor_id,
         proveedorNombre: proveedorNombre(f.proveedor_id),
         saldo: saldoPendienteFactura(f),
         vence: f.fecha_emision,
@@ -200,6 +203,12 @@ export default function FacturasCxCTab({
               <div className="flex items-center gap-3">
                 <Badge color={CARTERA_COLOR[estado]}>{CARTERA_LABEL[estado]}</Badge>
                 <button
+                  onClick={() => setVinculando(cta)}
+                  className="font-mono text-[0.62rem] uppercase text-muted hover:text-ink"
+                >
+                  Vincular banco
+                </button>
+                <button
                   onClick={() => setPagando(cta)}
                   className="font-mono text-[0.62rem] uppercase text-teal hover:underline"
                 >
@@ -238,6 +247,16 @@ export default function FacturasCxCTab({
 
       {pagando && (
         <PagoModal cuenta={pagando} onClose={() => setPagando(null)} onPaid={reload} />
+      )}
+
+      {vinculando && (
+        <VincularBancoModal
+          companyId={companyId}
+          cuentaInicial={vinculando}
+          cuentas={cuentas.filter((c) => c.proveedorId === vinculando.proveedorId)}
+          onClose={() => setVinculando(null)}
+          onDone={reload}
+        />
       )}
 
       {conciliando && (
@@ -410,17 +429,6 @@ function XmlUploadModal({
             uuid_fiscal: parsed.uuidFiscal,
           })),
         );
-      }
-      if (parsed.tipoDocumento === "factura") {
-        await supabase.from("expected_movements").insert({
-          company_id: companyId,
-          tipo: "egreso",
-          monto: parsed.total,
-          fecha_esperada: parsed.fecha,
-          modulo_origen: "compras",
-          referencia_id: factura.id,
-          concepto: `Factura ${parsed.uuidFiscal ?? factura.id}`,
-        });
       }
     }
 
@@ -622,15 +630,6 @@ function TicketUploadModal({
         compra_id: compra.id,
         resultado_ia: result,
         estado: "confirmado",
-      });
-      await supabase.from("expected_movements").insert({
-        company_id: companyId,
-        tipo: "egreso",
-        monto: result.total,
-        fecha_esperada: result.fecha,
-        modulo_origen: "compras",
-        referencia_id: compra.id,
-        concepto: `Ticket ${result.comercio}`,
       });
     }
 
@@ -974,6 +973,163 @@ function PagoModal({
           {saving ? "Guardando…" : "Registrar pago"}
         </button>
       </form>
+    </Modal>
+  );
+}
+
+// Un egreso bancario ya usado en un match de compras (tiene al menos un
+// procurement_purchase_payments que lo referencia) no puede volver a
+// cruzarse — por eso se excluye aquí, no se filtra por "restante".
+function VincularBancoModal({
+  companyId,
+  cuentaInicial,
+  cuentas,
+  onClose,
+  onDone,
+}: {
+  companyId: string;
+  cuentaInicial: CuentaPorPagar;
+  cuentas: CuentaPorPagar[];
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const [movimientos, setMovimientos] = useState<TreasuryMovement[] | null>(null);
+  const [movimientoId, setMovimientoId] = useState("");
+  const [asignaciones, setAsignaciones] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      const [{ data: egresos }, { data: usados }] = await Promise.all([
+        supabase
+          .from("treasury_movements")
+          .select("*")
+          .eq("company_id", companyId)
+          .eq("type", "egreso")
+          .order("entry_date", { ascending: false })
+          .limit(200),
+        supabase.from("procurement_purchase_payments").select("treasury_movement_id").not("treasury_movement_id", "is", null),
+      ]);
+      const usadosIds = new Set((usados ?? []).map((u) => u.treasury_movement_id));
+      setMovimientos((egresos ?? []).filter((m) => !usadosIds.has(m.id)));
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [companyId]);
+
+  const movimiento = movimientos?.find((m) => m.id === movimientoId) ?? null;
+  const asignado = Object.values(asignaciones).reduce((sum, v) => sum + (Number(v) || 0), 0);
+  const restante = movimiento ? Number(movimiento.amount) - asignado : 0;
+
+  function elegirMovimiento(id: string) {
+    setMovimientoId(id);
+    const mov = movimientos?.find((m) => m.id === id);
+    if (!mov) return;
+    const key = `${cuentaInicial.kind}-${cuentaInicial.id}`;
+    setAsignaciones({ [key]: String(Math.min(cuentaInicial.saldo, Number(mov.amount))) });
+  }
+
+  async function confirmar() {
+    if (!movimiento) return;
+    if (asignado <= 0) {
+      setError("Asigna al menos un monto a alguna cuenta.");
+      return;
+    }
+    if (asignado > Number(movimiento.amount) + 0.01) {
+      setError("La suma asignada no puede superar el monto del movimiento.");
+      return;
+    }
+    setSaving(true);
+    setError(null);
+
+    for (const cta of cuentas) {
+      const key = `${cta.kind}-${cta.id}`;
+      const monto = Number(asignaciones[key] ?? 0);
+      if (monto <= 0) continue;
+      if (cta.kind === "compra") {
+        await supabase.from("procurement_purchase_payments").insert({
+          compra_id: cta.id,
+          monto,
+          referencia: movimiento.concept,
+          treasury_movement_id: movimiento.id,
+        });
+        if (cta.saldo - monto <= 0) {
+          await supabase.from("procurement_orders").update({ estado: "pagada" }).eq("id", cta.id);
+        }
+      } else {
+        await supabase.from("procurement_purchase_payments").insert({
+          factura_id: cta.id,
+          monto,
+          referencia: movimiento.concept,
+          treasury_movement_id: movimiento.id,
+        });
+      }
+    }
+
+    setSaving(false);
+    onDone();
+    onClose();
+  }
+
+  return (
+    <Modal title={`Vincular movimiento bancario — ${cuentaInicial.proveedorNombre}`} onClose={onClose}>
+      <div className="space-y-3">
+        {error && <p className="font-mono text-xs text-orange">{error}</p>}
+        {movimientos === null && <p className="font-mono text-xs text-muted">Cargando egresos…</p>}
+        {movimientos?.length === 0 && (
+          <p className="font-mono text-xs text-muted">No hay egresos bancarios disponibles para cruzar.</p>
+        )}
+        {movimientos && movimientos.length > 0 && (
+          <select
+            value={movimientoId}
+            onChange={(e) => elegirMovimiento(e.target.value)}
+            className="w-full border border-ink/15 bg-sand-2 px-3 py-2 text-sm text-ink focus:border-teal focus:outline-none"
+          >
+            <option value="">Selecciona un egreso bancario…</option>
+            {movimientos.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.entry_date} · {m.concept} · {money(m.amount)}
+              </option>
+            ))}
+          </select>
+        )}
+
+        {movimiento && (
+          <>
+            <p className="font-mono text-[0.62rem] text-muted">
+              Reparte el monto de este egreso entre las cuentas de {cuentaInicial.proveedorNombre} que cubre. Solo
+              puede cruzarse con cuentas del mismo proveedor.
+            </p>
+            <div className="space-y-2">
+              {cuentas.map((cta) => {
+                const key = `${cta.kind}-${cta.id}`;
+                return (
+                  <div key={key} className="grid grid-cols-2 gap-2 border border-ink/10 bg-sand-2 p-2">
+                    <div className="font-mono text-[0.66rem] text-ink">
+                      {cta.label}
+                      <br />
+                      <span className="text-muted">Saldo {money(cta.saldo)}</span>
+                    </div>
+                    <input
+                      type="number"
+                      value={asignaciones[key] ?? ""}
+                      onChange={(e) => setAsignaciones({ ...asignaciones, [key]: e.target.value })}
+                      placeholder="0"
+                      className="border border-ink/15 bg-white px-2 py-1.5 text-sm text-ink focus:border-teal focus:outline-none"
+                    />
+                  </div>
+                );
+              })}
+            </div>
+            <p className="text-right font-mono text-xs text-muted">
+              Restante por asignar: <b className={restante < 0 ? "text-orange" : "text-ink"}>{money(restante)}</b>
+            </p>
+            <button onClick={confirmar} disabled={saving} className="btn btn-primary w-full">
+              {saving ? "Guardando…" : "Confirmar cruce"}
+            </button>
+          </>
+        )}
+      </div>
     </Modal>
   );
 }

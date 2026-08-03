@@ -6,6 +6,7 @@ export interface ComprasTierLimits {
   matchFacturaVsOC: boolean;
   antiguedadYCalendarioPagos: boolean;
   evaluacionProveedores: boolean;
+  catalogoProductos: boolean;
   maxTicketsIAPorMes: number;
 }
 
@@ -17,6 +18,7 @@ const ESSENTIAL: ComprasTierLimits = {
   matchFacturaVsOC: false,
   antiguedadYCalendarioPagos: false,
   evaluacionProveedores: false,
+  catalogoProductos: false,
   maxTicketsIAPorMes: 10,
 };
 
@@ -26,6 +28,7 @@ const PROFESSIONAL: ComprasTierLimits = {
   matchFacturaVsOC: true,
   antiguedadYCalendarioPagos: true,
   evaluacionProveedores: true,
+  catalogoProductos: true,
   maxTicketsIAPorMes: 40,
 };
 

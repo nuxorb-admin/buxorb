@@ -84,9 +84,9 @@ export default function FacturasCxCTab({
     (c) => c.origen === "ticket_ia" && c.procurement_xml_invoices.length === 0,
   );
 
-  const porConciliar = facturas.filter(
-    (f) => f.tipo_documento === "factura" && f.procurement_order_items.some((i) => !i.producto_id),
-  );
+  const porConciliar = limits.catalogoProductos
+    ? facturas.filter((f) => f.tipo_documento === "factura" && f.procurement_order_items.some((i) => !i.producto_id))
+    : [];
 
   const proveedorNombre = (id: string) => proveedores.find((p) => p.id === id)?.razon_social ?? "—";
 

@@ -40,7 +40,7 @@ export default function Compras() {
     { id: "ciclo", label: "Ciclo de compra" },
     { id: "facturas", label: "Facturas y CxC" },
     { id: "proveedores", label: "Proveedores" },
-    { id: "catalogo", label: "Catálogo" },
+    ...(limits.catalogoProductos ? [{ id: "catalogo" as const, label: "Catálogo" }] : []),
   ];
 
   return (
@@ -106,7 +106,7 @@ export default function Compras() {
             reload={reload}
           />
         )}
-        {tab === "catalogo" && (
+        {tab === "catalogo" && limits.catalogoProductos && (
           <CatalogoTab
             companyId={companyId}
             productos={productos}

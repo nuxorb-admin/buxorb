@@ -50,6 +50,7 @@ export default function ProveedoresTab({
   reload: () => void;
 }) {
   const [showNew, setShowNew] = useState(false);
+  const [editing, setEditing] = useState<Proveedor | null>(null);
   const [showImport, setShowImport] = useState(false);
   const [rating, setRating] = useState<Proveedor | null>(null);
 
@@ -102,6 +103,9 @@ export default function ProveedoresTab({
               <div className="flex items-center gap-3 font-mono text-[0.66rem] text-muted">
                 {cumplimientoPct !== null && <span>{cumplimientoPct}% a tiempo</span>}
                 {avgRating && <span>★ {avgRating}</span>}
+                <button onClick={() => setEditing(p)} className="uppercase hover:text-ink">
+                  Editar
+                </button>
                 {limits.evaluacionProveedores && (
                   <button onClick={() => setRating(p)} className="uppercase text-teal hover:underline">
                     Calificar
@@ -135,8 +139,16 @@ export default function ProveedoresTab({
         </>
       )}
 
-      {showNew && (
-        <NewProveedorModal companyId={companyId} onClose={() => setShowNew(false)} onCreated={reload} />
+      {(showNew || editing) && (
+        <ProveedorModal
+          companyId={companyId}
+          proveedor={editing}
+          onClose={() => {
+            setShowNew(false);
+            setEditing(null);
+          }}
+          onSaved={reload}
+        />
       )}
 
       {showImport && (
@@ -150,29 +162,35 @@ export default function ProveedoresTab({
   );
 }
 
-function NewProveedorModal({
+function ProveedorModal({
   companyId,
+  proveedor,
   onClose,
-  onCreated,
+  onSaved,
 }: {
   companyId: string;
+  proveedor: Proveedor | null;
   onClose: () => void;
-  onCreated: () => void;
+  onSaved: () => void;
 }) {
   const [form, setForm] = useState({
-    razon_social: "",
-    rfc: "",
-    contacto_nombre: "",
-    contacto_telefono: "",
-    contacto_correo: "",
-    dias_credito_default: "0",
+    razon_social: proveedor?.razon_social ?? "",
+    rfc: proveedor?.rfc ?? "",
+    contacto_nombre: proveedor?.contacto_nombre ?? "",
+    contacto_telefono: proveedor?.contacto_telefono ?? "",
+    contacto_correo: proveedor?.contacto_correo ?? "",
+    dias_credito_default: String(proveedor?.dias_credito_default ?? "0"),
+    banco: proveedor?.banco ?? "",
+    clabe: proveedor?.clabe ?? "",
+    titular_cuenta: proveedor?.titular_cuenta ?? "",
   });
+  const [showBancarios, setShowBancarios] = useState(!!(proveedor?.banco || proveedor?.clabe || proveedor?.titular_cuenta));
   const [saving, setSaving] = useState(false);
 
   async function submit(e: FormEvent) {
     e.preventDefault();
     setSaving(true);
-    await supabase.from("procurement_suppliers").insert({
+    const payload = {
       company_id: companyId,
       razon_social: form.razon_social,
       rfc: form.rfc || null,
@@ -180,14 +198,22 @@ function NewProveedorModal({
       contacto_telefono: form.contacto_telefono || null,
       contacto_correo: form.contacto_correo || null,
       dias_credito_default: Number(form.dias_credito_default) || 0,
-    });
+      banco: form.banco || null,
+      clabe: form.clabe || null,
+      titular_cuenta: form.titular_cuenta || null,
+    };
+    if (proveedor) {
+      await supabase.from("procurement_suppliers").update(payload).eq("id", proveedor.id);
+    } else {
+      await supabase.from("procurement_suppliers").insert(payload);
+    }
     setSaving(false);
-    onCreated();
+    onSaved();
     onClose();
   }
 
   return (
-    <Modal title="Nuevo proveedor" onClose={onClose}>
+    <Modal title={proveedor ? "Editar proveedor" : "Nuevo proveedor"} onClose={onClose}>
       <form onSubmit={submit} className="space-y-3">
         <FieldInput label="Razón social" value={form.razon_social} onChange={(v) => setForm({ ...form, razon_social: v })} required />
         <FieldInput label="RFC" value={form.rfc} onChange={(v) => setForm({ ...form, rfc: v })} />
@@ -200,8 +226,32 @@ function NewProveedorModal({
           value={form.dias_credito_default}
           onChange={(v) => setForm({ ...form, dias_credito_default: v })}
         />
+
+        {!showBancarios ? (
+          <button
+            type="button"
+            onClick={() => setShowBancarios(true)}
+            className="font-mono text-[0.62rem] uppercase text-teal hover:underline"
+          >
+            + Agregar datos bancarios
+          </button>
+        ) : (
+          <div className="space-y-3 border border-ink/10 bg-sand-2 p-3">
+            <p className="font-mono text-[0.6rem] uppercase tracking-[0.08em] text-muted">
+              Datos bancarios (opcional)
+            </p>
+            <FieldInput label="Banco" value={form.banco} onChange={(v) => setForm({ ...form, banco: v })} />
+            <FieldInput label="CLABE / cuenta" value={form.clabe} onChange={(v) => setForm({ ...form, clabe: v })} />
+            <FieldInput
+              label="Nombre de la cuenta (titular)"
+              value={form.titular_cuenta}
+              onChange={(v) => setForm({ ...form, titular_cuenta: v })}
+            />
+          </div>
+        )}
+
         <button type="submit" disabled={saving} className="btn btn-primary w-full">
-          {saving ? "Guardando…" : "Crear proveedor"}
+          {saving ? "Guardando…" : proveedor ? "Guardar cambios" : "Crear proveedor"}
         </button>
       </form>
     </Modal>

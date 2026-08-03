@@ -65,7 +65,9 @@ export default function CicloCompraTab({
   const [showNew, setShowNew] = useState(false);
   const [showRequisicion, setShowRequisicion] = useState(false);
   const [showReglas, setShowReglas] = useState(false);
+  const [recibiendo, setRecibiendo] = useState<CompraFull | null>(null);
   const [prefillDepartamento, setPrefillDepartamento] = useState<string | null>(null);
+  const [prefillRequisicionId, setPrefillRequisicionId] = useState<string | null>(null);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setUserId(data.user?.id ?? null));
@@ -109,33 +111,59 @@ export default function CicloCompraTab({
     reload();
   }
 
-  async function marcarRecibida(compra: CompraFull) {
+  // Recibe lo indicado en `cantidades` (por order_item_id) — puede ser el
+  // pendiente completo de cada renglón (recepción total) o solo una parte
+  // (recepción parcial), y se puede volver a llamar más veces contra la
+  // misma OC hasta completarla.
+  async function registrarRecepcion(compra: CompraFull, cantidades: Record<string, number>) {
+    const entradas = compra.procurement_order_items
+      .map((i) => ({ item: i, cantidad: cantidades[i.id] ?? 0 }))
+      .filter((e) => e.cantidad > 0);
+    if (entradas.length === 0) return;
+
+    const pendienteTotal = compra.procurement_order_items.reduce(
+      (sum, i) => sum + Math.max(0, Number(i.cantidad) - Number(i.cantidad_recibida)),
+      0,
+    );
+    const seRecibeTodoLoPendiente = entradas.reduce((sum, e) => sum + e.cantidad, 0) >= pendienteTotal - 0.001;
+
     const { data: recepcion } = await supabase
       .from("procurement_receipts")
-      .insert({ compra_id: compra.id, tipo: "total" })
+      .insert({ compra_id: compra.id, tipo: seRecibeTodoLoPendiente ? "total" : "parcial" })
       .select()
       .single();
+    if (!recepcion) return;
 
-    const itemsConProducto = compra.procurement_order_items.filter((i) => i.producto_id);
-    if (recepcion && itemsConProducto.length > 0) {
+    await supabase.from("procurement_receipt_items").insert(
+      entradas.map((e) => ({ recepcion_id: recepcion.id, order_item_id: e.item.id, cantidad: e.cantidad })),
+    );
+
+    await Promise.all(
+      entradas.map((e) =>
+        supabase
+          .from("procurement_order_items")
+          .update({ cantidad_recibida: Number(e.item.cantidad_recibida) + e.cantidad })
+          .eq("id", e.item.id),
+      ),
+    );
+
+    const conProducto = entradas.filter((e) => e.item.producto_id);
+    if (conProducto.length > 0) {
       await supabase.from("procurement_inventory_movements").insert(
-        itemsConProducto.map((i) => ({
+        conProducto.map((e) => ({
           company_id: compra.company_id,
-          producto_id: i.producto_id,
+          producto_id: e.item.producto_id,
           tipo: "entrada" as const,
-          cantidad: i.cantidad,
+          cantidad: e.cantidad,
           compra_id: compra.id,
           recepcion_id: recepcion.id,
         })),
       );
-      await Promise.all(
-        itemsConProducto.map((i) =>
-          supabase.from("procurement_order_items").update({ cantidad_recibida: i.cantidad }).eq("id", i.id),
-        ),
-      );
     }
 
-    await supabase.from("procurement_orders").update({ estado: "recibida" }).eq("id", compra.id);
+    if (seRecibeTodoLoPendiente) {
+      await supabase.from("procurement_orders").update({ estado: "recibida" }).eq("id", compra.id);
+    }
     reload();
   }
 
@@ -203,6 +231,7 @@ export default function CicloCompraTab({
                   <button
                     onClick={() => {
                       setPrefillDepartamento(r.departamento_id);
+                      setPrefillRequisicionId(r.id);
                       setShowNew(true);
                     }}
                     className="font-mono text-[0.62rem] uppercase text-teal hover:underline"
@@ -264,6 +293,7 @@ export default function CicloCompraTab({
         <button
           onClick={() => {
             setPrefillDepartamento(null);
+            setPrefillRequisicionId(null);
             setShowNew(true);
           }}
           className="font-mono text-[0.66rem] uppercase tracking-[0.1em] text-teal hover:underline"
@@ -281,19 +311,24 @@ export default function CicloCompraTab({
               </p>
               <p className="font-mono text-[0.66rem] uppercase tracking-[0.06em] text-muted">
                 {c.fecha} · {money(c.total)}
+                {c.origen === "requisicion" && " · desde requisición"}
+                {c.estado === "aprobada" &&
+                  limits.recepcionParcial &&
+                  c.procurement_order_items.some((i) => Number(i.cantidad_recibida) > 0) &&
+                  " · recepción parcial en curso"}
               </p>
             </div>
             <div className="flex items-center gap-3">
               <Badge color={ESTADO_COLOR[c.estado]}>{c.estado.replace("_", " ")}</Badge>
               <button onClick={() => verOrdenPdf(c)} className="font-mono text-[0.62rem] uppercase text-muted hover:text-ink">
-                PDF
+                Descargar PDF
               </button>
               {c.estado === "aprobada" && (
                 <button
-                  onClick={() => marcarRecibida(c)}
+                  onClick={() => setRecibiendo(c)}
                   className="font-mono text-[0.62rem] uppercase text-teal hover:underline"
                 >
-                  Marcar recibida
+                  Registrar recepción
                 </button>
               )}
             </div>
@@ -310,6 +345,7 @@ export default function CicloCompraTab({
           productos={productos}
           catalogoActivo={limits.catalogoProductos}
           prefillDepartamento={prefillDepartamento}
+          prefillRequisicionId={prefillRequisicionId}
           onClose={() => setShowNew(false)}
           onCreated={reload}
         />
@@ -334,7 +370,90 @@ export default function CicloCompraTab({
           onSaved={reload}
         />
       )}
+
+      {recibiendo && (
+        <RecepcionModal
+          compra={recibiendo}
+          permiteParcial={limits.recepcionParcial}
+          onClose={() => setRecibiendo(null)}
+          onConfirm={async (cantidades) => {
+            await registrarRecepcion(recibiendo, cantidades);
+            setRecibiendo(null);
+          }}
+        />
+      )}
     </div>
+  );
+}
+
+function RecepcionModal({
+  compra,
+  permiteParcial,
+  onClose,
+  onConfirm,
+}: {
+  compra: CompraFull;
+  permiteParcial: boolean;
+  onClose: () => void;
+  onConfirm: (cantidades: Record<string, number>) => Promise<void>;
+}) {
+  const pendientes = compra.procurement_order_items.map((i) => ({
+    item: i,
+    pendiente: Math.max(0, Number(i.cantidad) - Number(i.cantidad_recibida)),
+  }));
+  const [cantidades, setCantidades] = useState<Record<string, string>>(() => {
+    const init: Record<string, string> = {};
+    for (const p of pendientes) init[p.item.id] = String(p.pendiente);
+    return init;
+  });
+  const [saving, setSaving] = useState(false);
+
+  async function confirmar() {
+    setSaving(true);
+    const parsed: Record<string, number> = {};
+    for (const p of pendientes) {
+      const val = Math.min(Number(cantidades[p.item.id] ?? 0), p.pendiente);
+      if (val > 0) parsed[p.item.id] = val;
+    }
+    await onConfirm(parsed);
+    setSaving(false);
+  }
+
+  return (
+    <Modal title={`Registrar recepción — ${compra.folio}`} onClose={onClose}>
+      <div className="space-y-3">
+        {!permiteParcial && (
+          <p className="font-mono text-[0.62rem] text-muted">
+            Tu plan recibe la OC completa de una vez — para recibir por partes, Professional.
+          </p>
+        )}
+        <div className="space-y-2">
+          {pendientes.map(({ item, pendiente }) => (
+            <div key={item.id} className="grid grid-cols-2 gap-2 border border-ink/10 bg-sand-2 p-2">
+              <div className="font-mono text-[0.66rem] text-ink">
+                {item.descripcion}
+                <br />
+                <span className="text-muted">
+                  Ordenado {item.cantidad} · Recibido {item.cantidad_recibida} · Pendiente {pendiente}
+                </span>
+              </div>
+              <input
+                type="number"
+                min={0}
+                max={pendiente}
+                disabled={pendiente <= 0 || !permiteParcial}
+                value={cantidades[item.id] ?? "0"}
+                onChange={(e) => setCantidades({ ...cantidades, [item.id]: e.target.value })}
+                className="border border-ink/15 bg-white px-2 py-1.5 text-sm text-ink focus:border-teal focus:outline-none disabled:opacity-60"
+              />
+            </div>
+          ))}
+        </div>
+        <button onClick={confirmar} disabled={saving} className="btn btn-primary w-full">
+          {saving ? "Guardando…" : "Confirmar recepción"}
+        </button>
+      </div>
+    </Modal>
   );
 }
 
@@ -346,6 +465,7 @@ function NewCompraModal({
   productos,
   catalogoActivo,
   prefillDepartamento,
+  prefillRequisicionId,
   onClose,
   onCreated,
 }: {
@@ -356,6 +476,7 @@ function NewCompraModal({
   productos: ProcurementProduct[];
   catalogoActivo: boolean;
   prefillDepartamento: string | null;
+  prefillRequisicionId: string | null;
   onClose: () => void;
   onCreated: () => void;
 }) {
@@ -397,11 +518,18 @@ function NewCompraModal({
         fecha_estimada_pago: fechaEstimadaPago,
         departamento_id: prefillDepartamento,
         estado: requiereAprobacion ? "pendiente_aprobacion" : "aprobada",
-        origen: prefillDepartamento ? "requisicion" : "manual",
+        origen: prefillRequisicionId ? "requisicion" : "manual",
         created_by: user?.id ?? null,
       })
       .select()
       .single();
+
+    if (compra && prefillRequisicionId) {
+      await supabase
+        .from("procurement_requisitions")
+        .update({ compra_id: compra.id, estado: "convertida_en_compra" })
+        .eq("id", prefillRequisicionId);
+    }
 
     if (compra) {
       await supabase.from("procurement_order_items").insert(

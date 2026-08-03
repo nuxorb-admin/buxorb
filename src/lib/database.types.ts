@@ -314,6 +314,8 @@ export interface Proveedor {
   contacto_telefono: string | null;
   contacto_correo: string | null;
   clabe: string | null;
+  banco: string | null;
+  titular_cuenta: string | null;
   dias_credito_default: number;
   categoria_gasto_default: string | null;
   estado: ProveedorEstado;
@@ -447,6 +449,13 @@ export interface Recepcion {
   tipo: RecepcionTipo;
   notas: string | null;
   created_at: string;
+}
+
+export interface RecepcionItem {
+  id: string;
+  recepcion_id: string;
+  order_item_id: string;
+  cantidad: number;
 }
 
 export type FacturaTipoDocumento = "factura" | "nota_credito";

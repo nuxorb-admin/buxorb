@@ -39,6 +39,23 @@ function saldoPendienteFactura(factura: FacturaFull) {
   return Math.max(0, Number(factura.total ?? 0) - pagado - nc);
 }
 
+// Fecha de vencimiento para el calendario de pagos: fecha de emisión de
+// la factura + días de crédito del proveedor (no la fecha_estimada_pago
+// que se captura a mano en la OC — el calendario se basa en el término
+// real acordado con el proveedor).
+function fechaVencimientoCalendario(cta: CuentaPorPagar, proveedores: Proveedor[]): string | null {
+  const diasCredito = proveedores.find((p) => p.id === cta.proveedorId)?.dias_credito_default ?? 0;
+  const fechaEmision =
+    cta.kind === "factura"
+      ? cta.target.fecha_emision
+      : (cta.target.procurement_xml_invoices.find((f) => f.tipo_documento === "factura" && f.fecha_emision)?.fecha_emision ??
+        cta.target.fecha);
+  if (!fechaEmision) return null;
+  const d = new Date(fechaEmision);
+  d.setDate(d.getDate() + diasCredito);
+  return d.toISOString().slice(0, 10);
+}
+
 function estadoCartera(fechaEstimada: string | null): "al_corriente" | "por_vencer" | "vencida" {
   if (!fechaEstimada) return "al_corriente";
   const dias = (new Date(fechaEstimada).getTime() - Date.now()) / 86400000;
@@ -229,6 +246,10 @@ export default function FacturasCxCTab({
         </>
       )}
 
+      {limits.antiguedadYCalendarioPagos && cuentas.length > 0 && (
+        <CalendarioPagos cuentas={cuentas} proveedores={proveedores} />
+      )}
+
       {showXml && (
         <XmlUploadModal
           companyId={companyId}
@@ -294,6 +315,75 @@ function AntiguedadSaldos({ cuentas }: { cuentas: CuentaPorPagar[] }) {
       ))}
     </div>
   );
+}
+
+function CalendarioPagos({ cuentas, proveedores }: { cuentas: CuentaPorPagar[]; proveedores: Proveedor[] }) {
+  const conFecha = cuentas
+    .map((cta) => ({ cta, fecha: fechaVencimientoCalendario(cta, proveedores) }))
+    .filter((e): e is { cta: CuentaPorPagar; fecha: string } => !!e.fecha)
+    .sort((a, b) => a.fecha.localeCompare(b.fecha));
+
+  const porMes = new Map<string, { cta: CuentaPorPagar; fecha: string }[]>();
+  for (const e of conFecha) {
+    const mes = e.fecha.slice(0, 7);
+    if (!porMes.has(mes)) porMes.set(mes, []);
+    porMes.get(mes)!.push(e);
+  }
+
+  function exportarCsv() {
+    const filas = [
+      ["Fecha de vencimiento", "Proveedor", "Referencia", "Monto"],
+      ...conFecha.map((e) => [e.fecha, e.cta.proveedorNombre, e.cta.label, String(e.cta.saldo)]),
+    ];
+    const csv = filas.map((f) => f.map((v) => `"${v.replace(/"/g, '""')}"`).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `calendario-pagos-${todayIso()}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  return (
+    <div className="mt-6">
+      <div className="mb-2 flex items-center justify-between">
+        <h3 className="font-mono text-[0.68rem] font-bold uppercase tracking-[0.1em] text-muted">
+          Calendario de pagos
+        </h3>
+        {conFecha.length > 0 && (
+          <button onClick={exportarCsv} className="font-mono text-[0.62rem] uppercase text-teal hover:underline">
+            Exportar CSV
+          </button>
+        )}
+      </div>
+      {conFecha.length === 0 && (
+        <p className="font-mono text-xs text-muted">Sin fechas de vencimiento calculables todavía.</p>
+      )}
+      {[...porMes.entries()].map(([mes, entradas]) => (
+        <div key={mes} className="mb-4">
+          <p className="mb-1 font-mono text-[0.62rem] font-bold uppercase tracking-[0.08em] text-ink">
+            {new Date(`${mes}-01T00:00:00`).toLocaleDateString("es-MX", { month: "long", year: "numeric" })} ·{" "}
+            {money(entradas.reduce((sum, e) => sum + e.cta.saldo, 0))}
+          </p>
+          <div className="divide-y divide-ink/10 border border-ink/10 bg-white">
+            {entradas.map((e) => (
+              <div key={`${e.cta.kind}-${e.cta.id}`} className="flex items-center justify-between px-4 py-2">
+                <p className="font-mono text-[0.66rem] text-ink">
+                  {e.fecha} · {e.cta.proveedorNombre} · {e.cta.label}
+                </p>
+                <p className="font-mono text-[0.66rem] font-bold text-ink">{money(e.cta.saldo)}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function todayIso() {
+  return new Date().toISOString().slice(0, 10);
 }
 
 function XmlUploadModal({

@@ -11,6 +11,58 @@ export interface ParsedCfdiConcepto {
   cantidad: number;
   precio_unitario: number;
   importe: number;
+  // Mejor intento de mapear la unidad del CFDI (ClaveUnidad del catálogo
+  // SAT, o el texto libre "Unidad") a uno de nuestros códigos internos
+  // (kg, l, pza…) — null si no se pudo adivinar, y el usuario la
+  // confirma/corrige al conciliar contra el catálogo.
+  unidadSugerida: string | null;
+}
+
+// Claves del catálogo SAT (c_ClaveUnidad) más comunes en compras, y
+// palabras del atributo "Unidad" en texto libre — ambas se intentan,
+// la clave SAT gana por ser inequívoca.
+const CLAVE_SAT_A_CODIGO: Record<string, string> = {
+  KGM: "kg",
+  GRM: "g",
+  TNE: "ton",
+  LTR: "l",
+  MLT: "ml",
+  MTR: "m",
+  CMT: "cm",
+  MTK: "m2",
+  MTQ: "m3",
+  H87: "pza",
+  EA: "pza",
+  XUN: "pza",
+  DZN: "docena",
+};
+
+const TEXTO_A_CODIGO: [RegExp, string][] = [
+  [/kilogramo|kilo\b/i, "kg"],
+  [/gramo/i, "g"],
+  [/tonelada/i, "ton"],
+  [/litro/i, "l"],
+  [/mililitro/i, "ml"],
+  [/metro cuadrado/i, "m2"],
+  [/metro c[uú]bico/i, "m3"],
+  [/metro/i, "m"],
+  [/cent[ií]metro/i, "cm"],
+  [/docena/i, "docena"],
+  [/caja/i, "caja"],
+  [/paquete/i, "paquete"],
+  [/pieza|unidad/i, "pza"],
+];
+
+function adivinarUnidad(claveUnidad: string | null, unidadTexto: string | null): string | null {
+  if (claveUnidad && CLAVE_SAT_A_CODIGO[claveUnidad.toUpperCase()]) {
+    return CLAVE_SAT_A_CODIGO[claveUnidad.toUpperCase()];
+  }
+  if (unidadTexto) {
+    for (const [patron, codigo] of TEXTO_A_CODIGO) {
+      if (patron.test(unidadTexto)) return codigo;
+    }
+  }
+  return null;
 }
 
 export type CfdiTipoComprobante = "factura" | "nota_credito";
@@ -60,6 +112,7 @@ export function parseCfdiXml(xmlText: string): ParsedCfdi {
     cantidad: Number(c.getAttribute("Cantidad") ?? "0"),
     precio_unitario: Number(c.getAttribute("ValorUnitario") ?? "0"),
     importe: Number(c.getAttribute("Importe") ?? "0"),
+    unidadSugerida: adivinarUnidad(c.getAttribute("ClaveUnidad"), c.getAttribute("Unidad")),
   }));
 
   // TipoDeComprobante "E" (egreso) es como el SAT marca notas de crédito;

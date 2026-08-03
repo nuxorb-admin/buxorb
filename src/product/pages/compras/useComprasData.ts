@@ -210,21 +210,64 @@ export function useComprasData(companyId: string) {
 // que una línea se liga (o desliga) de este producto — nunca se guarda
 // "a ojo": lo que se insertó en la factura fue la presentación real
 // comprada (ej. "1 kg" a tal precio), no un costo unitario supuesto.
-export async function recalcularCostoReferencia(productoId: string) {
-  const { data: items } = await supabase
-    .from("procurement_order_items")
-    .select("cantidad, precio_unitario")
-    .eq("producto_id", productoId)
-    .not("factura_id", "is", null);
+// Evidencia real de costo = líneas de factura, o líneas de ticket (join a
+// procurement_orders para saber si esa compra vino de ticket_ia) — nunca
+// líneas de una OC manual, cuyo precio suele ser copiado del propio
+// costo_referencia (sería un círculo, no evidencia).
+async function lineasConEvidencia(productoId: string) {
+  const [{ data: deFactura }, { data: deTicket }] = await Promise.all([
+    supabase
+      .from("procurement_order_items")
+      .select("cantidad, precio_unitario, unidad")
+      .eq("producto_id", productoId)
+      .not("factura_id", "is", null),
+    supabase
+      .from("procurement_order_items")
+      .select("cantidad, precio_unitario, unidad, procurement_orders!inner(origen)")
+      .eq("producto_id", productoId)
+      .is("factura_id", null)
+      .eq("procurement_orders.origen", "ticket_ia"),
+  ]);
+  return [...(deFactura ?? []), ...(deTicket ?? [])];
+}
 
-  const rows = items ?? [];
-  const cantidadTotal = rows.reduce((sum, i) => sum + Number(i.cantidad), 0);
-  if (cantidadTotal <= 0) return;
+// factor_base normaliza cada unidad a la base de su categoría (ej. peso
+// -> gramos) — dividir factor de la línea entre factor del producto
+// convierte la cantidad de la línea a la unidad en la que se lleva el
+// producto. Si falta el factor de alguna (ej. "caja", que no tiene
+// equivalencia fija) o son de categorías distintas, se asume 1:1 como
+// antes — mejor un número aproximado que uno que truene.
+function factorConversion(unidadLinea: string | null, unidadProducto: string, catalogo: ProcurementUnit[]): number {
+  if (!unidadLinea || unidadLinea === unidadProducto) return 1;
+  const uLinea = catalogo.find((u) => u.codigo === unidadLinea);
+  const uProducto = catalogo.find((u) => u.codigo === unidadProducto);
+  if (!uLinea?.factor_base || !uProducto?.factor_base || uLinea.categoria !== uProducto.categoria) return 1;
+  return uLinea.factor_base / uProducto.factor_base;
+}
 
-  const costoPromedio =
-    rows.reduce((sum, i) => sum + Number(i.cantidad) * Number(i.precio_unitario), 0) / cantidadTotal;
+export async function recalcularCostoReferencia(productoId: string, unidadesCatalogo: ProcurementUnit[]) {
+  const { data: producto } = await supabase
+    .from("procurement_products")
+    .select("unidad")
+    .eq("id", productoId)
+    .single();
+  if (!producto) return;
 
-  await supabase.from("procurement_products").update({ costo_referencia: costoPromedio }).eq("id", productoId);
+  const rows = await lineasConEvidencia(productoId);
+
+  let costoTotal = 0;
+  let cantidadConvertidaTotal = 0;
+  for (const r of rows) {
+    const factor = factorConversion(r.unidad, producto.unidad, unidadesCatalogo);
+    costoTotal += Number(r.cantidad) * Number(r.precio_unitario);
+    cantidadConvertidaTotal += Number(r.cantidad) * factor;
+  }
+  if (cantidadConvertidaTotal <= 0) return;
+
+  await supabase
+    .from("procurement_products")
+    .update({ costo_referencia: costoTotal / cantidadConvertidaTotal })
+    .eq("id", productoId);
 }
 
 export async function registrarUsoTicket(companyId: string) {

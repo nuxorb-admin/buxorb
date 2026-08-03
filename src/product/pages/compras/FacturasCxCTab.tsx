@@ -96,6 +96,7 @@ export default function FacturasCxCTab({
   const [showTicket, setShowTicket] = useState(false);
   const [pagando, setPagando] = useState<CuentaPorPagar | null>(null);
   const [conciliando, setConciliando] = useState<FacturaFull | null>(null);
+  const [conciliandoTicket, setConciliandoTicket] = useState<CompraFull | null>(null);
   const [vinculando, setVinculando] = useState<CuentaPorPagar | null>(null);
 
   const pendientesFactura = compras.filter(
@@ -104,6 +105,10 @@ export default function FacturasCxCTab({
 
   const porConciliar = limits.catalogoProductos
     ? facturas.filter((f) => f.tipo_documento === "factura" && f.procurement_order_items.some((i) => !i.producto_id))
+    : [];
+
+  const ticketsPorConciliar = limits.catalogoProductos
+    ? compras.filter((c) => c.origen === "ticket_ia" && c.procurement_order_items.some((i) => !i.producto_id))
     : [];
 
   const proveedorNombre = (id: string) => proveedores.find((p) => p.id === id)?.razon_social ?? "—";
@@ -190,6 +195,32 @@ export default function FacturasCxCTab({
                   className="font-mono text-[0.62rem] uppercase text-teal hover:underline"
                 >
                   Asignar SKU's por conceptos
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {ticketsPorConciliar.length > 0 && (
+        <div className="mb-6">
+          <h3 className="mb-2 font-mono text-[0.68rem] font-bold uppercase tracking-[0.1em] text-muted">
+            Tickets por conciliar
+          </h3>
+          <div className="divide-y divide-ink/10 border border-ink/10 bg-white">
+            {ticketsPorConciliar.map((c) => (
+              <div key={c.id} className="flex items-center justify-between px-4 py-3">
+                <div>
+                  <p className="text-sm font-semibold text-ink">
+                    {proveedorNombre(c.proveedor_id)} · {c.folio}
+                  </p>
+                  <p className="font-mono text-[0.66rem] text-muted">{money(c.total)}</p>
+                </div>
+                <button
+                  onClick={() => setConciliandoTicket(c)}
+                  className="font-mono text-[0.62rem] uppercase text-teal hover:underline"
+                >
+                  Asignar SKU
                 </button>
               </div>
             ))}
@@ -288,6 +319,17 @@ export default function FacturasCxCTab({
           productos={productos}
           unidadesActivas={unidadesActivas}
           onClose={() => setConciliando(null)}
+          onDone={reload}
+        />
+      )}
+
+      {conciliandoTicket && (
+        <ConciliarTicketModal
+          companyId={companyId}
+          compra={conciliandoTicket}
+          productos={productos}
+          unidadesActivas={unidadesActivas}
+          onClose={() => setConciliandoTicket(null)}
           onDone={reload}
         />
       )}
@@ -517,6 +559,7 @@ function XmlUploadModal({
             precio_unitario: c.precio_unitario,
             importe: c.importe,
             uuid_fiscal: parsed.uuidFiscal,
+            unidad: c.unidadSugerida,
           })),
         );
       }
@@ -802,6 +845,14 @@ function ConciliacionModal({
     }
     return init;
   });
+  const [unidadesLinea, setUnidadesLinea] = useState<Record<string, string>>(() => {
+    const init: Record<string, string> = {};
+    for (const item of factura.procurement_order_items) {
+      const producto = productosActivos.find((p) => p.id === (item.producto_id ?? asignaciones[item.id]));
+      init[item.id] = item.unidad ?? producto?.unidad ?? "";
+    }
+    return init;
+  });
   const [creandoPara, setCreandoPara] = useState<{ itemId: string; descripcion: string } | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -814,12 +865,17 @@ function ConciliacionModal({
 
     await Promise.all(
       asignacionesValidas.map(([itemId, productoId]) =>
-        supabase.from("procurement_order_items").update({ producto_id: productoId }).eq("id", itemId),
+        supabase
+          .from("procurement_order_items")
+          .update({ producto_id: productoId, unidad: unidadesLinea[itemId] || null })
+          .eq("id", itemId),
       ),
     );
 
     const productosTocados = new Set(asignacionesValidas.map(([, productoId]) => productoId));
-    await Promise.all([...productosTocados].map((productoId) => recalcularCostoReferencia(productoId)));
+    await Promise.all(
+      [...productosTocados].map((productoId) => recalcularCostoReferencia(productoId, unidadesActivas)),
+    );
 
     if (compraLigada) {
       const porProductoOC = new Map<string, number>();
@@ -859,7 +915,7 @@ function ConciliacionModal({
         )}
         <div className="space-y-2">
           {factura.procurement_order_items.map((item) => (
-            <div key={item.id} className="grid grid-cols-2 gap-2 border border-ink/10 bg-sand-2 p-2">
+            <div key={item.id} className="grid grid-cols-3 gap-2 border border-ink/10 bg-sand-2 p-2">
               <div className="font-mono text-[0.66rem] text-ink">
                 {item.descripcion}
                 <br />
@@ -874,7 +930,11 @@ function ConciliacionModal({
                     setCreandoPara({ itemId: item.id, descripcion: item.descripcion });
                     return;
                   }
+                  const producto = productosActivos.find((p) => p.id === e.target.value);
                   setAsignaciones({ ...asignaciones, [item.id]: e.target.value });
+                  if (producto && !unidadesLinea[item.id]) {
+                    setUnidadesLinea({ ...unidadesLinea, [item.id]: producto.unidad });
+                  }
                 }}
                 className="border border-ink/15 bg-white px-2 py-1.5 text-sm text-ink focus:border-teal focus:outline-none"
               >
@@ -886,9 +946,25 @@ function ConciliacionModal({
                 ))}
                 <option value={NUEVO_PRODUCTO}>+ Crear nuevo producto…</option>
               </select>
+              <select
+                value={unidadesLinea[item.id] ?? ""}
+                onChange={(e) => setUnidadesLinea({ ...unidadesLinea, [item.id]: e.target.value })}
+                className="border border-ink/15 bg-white px-2 py-1.5 text-sm text-ink focus:border-teal focus:outline-none"
+              >
+                <option value="">¿En qué unidad viene?</option>
+                {unidadesActivas.map((u) => (
+                  <option key={u.id} value={u.codigo}>
+                    {u.nombre} ({u.codigo})
+                  </option>
+                ))}
+              </select>
             </div>
           ))}
         </div>
+        <p className="font-mono text-[0.6rem] text-muted">
+          La unidad de cada línea se usa para convertir contra la unidad del producto en el catálogo al calcular su
+          costo promedio (ej. factura en kg, catálogo en g).
+        </p>
         {faltantes > 0 && (
           <p className="font-mono text-[0.62rem] text-orange">
             {faltantes} concepto(s) sin producto asignado — se guardarán sin conciliar.
@@ -909,6 +985,108 @@ function ConciliacionModal({
             setProductosCreados([...productosCreados, producto]);
             setAsignaciones({ ...asignaciones, [creandoPara.itemId]: producto.id });
             setCreandoPara(null);
+          }}
+        />
+      )}
+    </Modal>
+  );
+}
+
+function ConciliarTicketModal({
+  companyId,
+  compra,
+  productos,
+  unidadesActivas,
+  onClose,
+  onDone,
+}: {
+  companyId: string;
+  compra: CompraFull;
+  productos: ProcurementProduct[];
+  unidadesActivas: ProcurementUnit[];
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const [productosCreados, setProductosCreados] = useState<ProcurementProduct[]>([]);
+  const productosActivos = [...productos.filter((p) => p.activo), ...productosCreados];
+  const item = compra.procurement_order_items[0];
+  const [productoId, setProductoId] = useState(item?.producto_id ?? sugerirProducto(item?.descripcion ?? "", productosActivos));
+  const [unidadLinea, setUnidadLinea] = useState(item?.unidad ?? "");
+  const [creandoProducto, setCreandoProducto] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  async function guardar() {
+    if (!item || !productoId) return;
+    setSaving(true);
+    await supabase
+      .from("procurement_order_items")
+      .update({ producto_id: productoId, unidad: unidadLinea || null })
+      .eq("id", item.id);
+    await recalcularCostoReferencia(productoId, unidadesActivas);
+    setSaving(false);
+    onDone();
+    onClose();
+  }
+
+  if (!item) return null;
+
+  return (
+    <Modal title={`Asignar SKU — ${compra.folio}`} onClose={onClose}>
+      <div className="space-y-3">
+        <p className="font-mono text-[0.66rem] text-ink">
+          {item.descripcion}
+          <br />
+          <span className="text-muted">{money(item.precio_unitario)}</span>
+        </p>
+        <select
+          value={productoId}
+          onChange={(e) => {
+            if (e.target.value === NUEVO_PRODUCTO) {
+              setCreandoProducto(true);
+              return;
+            }
+            setProductoId(e.target.value);
+            const producto = productosActivos.find((p) => p.id === e.target.value);
+            if (producto && !unidadLinea) setUnidadLinea(producto.unidad);
+          }}
+          className="w-full border border-ink/15 bg-sand-2 px-3 py-2 text-sm text-ink focus:border-teal focus:outline-none"
+        >
+          <option value="">Sin producto</option>
+          {productosActivos.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.nombre} {p.sku ? `(${p.sku})` : ""}
+            </option>
+          ))}
+          <option value={NUEVO_PRODUCTO}>+ Crear nuevo producto…</option>
+        </select>
+        <select
+          value={unidadLinea}
+          onChange={(e) => setUnidadLinea(e.target.value)}
+          className="w-full border border-ink/15 bg-sand-2 px-3 py-2 text-sm text-ink focus:border-teal focus:outline-none"
+        >
+          <option value="">¿En qué unidad viene?</option>
+          {unidadesActivas.map((u) => (
+            <option key={u.id} value={u.codigo}>
+              {u.nombre} ({u.codigo})
+            </option>
+          ))}
+        </select>
+        <button onClick={guardar} disabled={saving || !productoId} className="btn btn-primary w-full">
+          {saving ? "Guardando…" : "Guardar"}
+        </button>
+      </div>
+
+      {creandoProducto && (
+        <NuevoProductoModal
+          companyId={companyId}
+          nombreSugerido={item.descripcion}
+          unidadesActivas={unidadesActivas}
+          onClose={() => setCreandoProducto(false)}
+          onCreated={(producto) => {
+            setProductosCreados([...productosCreados, producto]);
+            setProductoId(producto.id);
+            setUnidadLinea((prev) => prev || producto.unidad);
+            setCreandoProducto(false);
           }}
         />
       )}

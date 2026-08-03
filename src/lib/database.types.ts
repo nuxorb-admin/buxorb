@@ -350,6 +350,7 @@ export interface ProcurementUnit {
   nombre: string;
   categoria: "pieza" | "peso" | "volumen" | "longitud" | "otro";
   orden: number;
+  factor_base: number | null;
 }
 
 export interface Compra {
@@ -383,6 +384,7 @@ export interface CompraDetalle {
   importe: number;
   cantidad_recibida: number;
   uuid_fiscal: string | null;
+  unidad: string | null;
 }
 
 export interface ProcurementProduct {

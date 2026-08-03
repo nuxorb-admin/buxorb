@@ -247,6 +247,8 @@ export interface TreasuryMovement {
   reconciled: boolean;
   created_by: string | null;
   created_at: string;
+  factura_uuid_ref: string | null;
+  proveedor_ref: string | null;
 }
 
 export interface TreasuryCategoryPattern {

@@ -35,6 +35,8 @@ export async function insertMovementWithSplits(
     source: string;
     created_by: string | null;
     reconciled?: boolean;
+    factura_uuid_ref?: string | null;
+    proveedor_ref?: string | null;
   },
   splits: SplitLine[],
 ): Promise<{ id: string } | null> {

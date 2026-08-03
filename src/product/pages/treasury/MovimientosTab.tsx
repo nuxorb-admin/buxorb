@@ -222,6 +222,11 @@ export default function MovimientosTab({
                     {accounts.length > 1 && ` · ${accounts.find((a) => a.id === m.account_id)?.name ?? ""}`}
                   </p>
                 )}
+                {(m.proveedor_ref || m.factura_uuid_ref) && (
+                  <p className="font-mono text-[0.62rem] text-muted">
+                    {[m.proveedor_ref, m.factura_uuid_ref].filter(Boolean).join(" · ")}
+                  </p>
+                )}
                 {!categoryValid && movementSplits.length <= 1 && (
                   <select
                     onChange={(e) => e.target.value && fixCategory(m.id, e.target.value)}
@@ -336,6 +341,8 @@ function NewMovementModal({
     category: categories[0]?.name ?? "Otros gastos (papelería, seguros, etc.)",
     amount: "",
     account_id: accounts[0]?.id ?? "",
+    factura_uuid_ref: "",
+    proveedor_ref: "",
   });
 
   // Mientras el usuario no haya elegido categoría a mano, cada vez que
@@ -368,6 +375,8 @@ function NewMovementModal({
         entry_date: form.entry_date,
         source: "manual",
         created_by: userId,
+        factura_uuid_ref: form.factura_uuid_ref.trim() || null,
+        proveedor_ref: form.proveedor_ref.trim() || null,
       },
       splitting ? splitLines : [emptySplit(form.category)].map((l) => ({ ...l, amount: form.amount })),
     );
@@ -489,6 +498,29 @@ function NewMovementModal({
               Tu plan incluye 1 cuenta bancaria — pásate a Professional para agregar más.
             </p>
           )}
+        </div>
+
+        <div>
+          <label className="mb-1 block font-mono text-[0.62rem] font-bold uppercase tracking-[0.12em] text-muted">
+            Referencia de factura (opcional)
+          </label>
+          <div className="flex gap-2">
+            <input
+              value={form.factura_uuid_ref}
+              onChange={(e) => setForm({ ...form, factura_uuid_ref: e.target.value })}
+              placeholder="UUID fiscal"
+              className="w-1/2 border border-ink/15 bg-sand-2 px-3 py-2 text-sm text-ink focus:border-teal focus:outline-none"
+            />
+            <input
+              value={form.proveedor_ref}
+              onChange={(e) => setForm({ ...form, proveedor_ref: e.target.value })}
+              placeholder="Proveedor"
+              className="w-1/2 border border-ink/15 bg-sand-2 px-3 py-2 text-sm text-ink focus:border-teal focus:outline-none"
+            />
+          </div>
+          <p className="mt-1 font-mono text-[0.6rem] text-muted">
+            Solo como anotación tuya — no se relaciona con el módulo de Compras/CxC.
+          </p>
         </div>
 
         {duplicate && (

@@ -169,7 +169,7 @@ export default function FacturasCxCTab({
                   onClick={() => setConciliando(f)}
                   className="font-mono text-[0.62rem] uppercase text-teal hover:underline"
                 >
-                  Conciliar productos
+                  Asignar SKU's por conceptos
                 </button>
               </div>
             ))}
@@ -758,7 +758,7 @@ function ConciliacionModal({
   const faltantes = factura.procurement_order_items.filter((item) => !asignaciones[item.id]).length;
 
   return (
-    <Modal title="Conciliar productos de la factura" onClose={onClose}>
+    <Modal title="Asignar SKU's por conceptos" onClose={onClose}>
       <div className="space-y-3">
         {compraLigada && (
           <p className="font-mono text-[0.62rem] text-muted">

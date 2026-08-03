@@ -240,6 +240,7 @@ export default function FacturasCxCTab({
 
       {conciliando && (
         <ConciliacionModal
+          companyId={companyId}
           factura={conciliando}
           compras={compras}
           productos={productos}
@@ -681,20 +682,25 @@ function sugerirProducto(descripcion: string, productos: ProcurementProduct[]): 
   return match?.id ?? "";
 }
 
+const NUEVO_PRODUCTO = "__nuevo__";
+
 function ConciliacionModal({
+  companyId,
   factura,
   compras,
   productos,
   onClose,
   onDone,
 }: {
+  companyId: string;
   factura: FacturaFull;
   compras: CompraFull[];
   productos: ProcurementProduct[];
   onClose: () => void;
   onDone: () => void;
 }) {
-  const productosActivos = productos.filter((p) => p.activo);
+  const [productosCreados, setProductosCreados] = useState<ProcurementProduct[]>([]);
+  const productosActivos = [...productos.filter((p) => p.activo), ...productosCreados];
   const [asignaciones, setAsignaciones] = useState<Record<string, string>>(() => {
     const init: Record<string, string> = {};
     for (const item of factura.procurement_order_items) {
@@ -702,6 +708,7 @@ function ConciliacionModal({
     }
     return init;
   });
+  const [creandoPara, setCreandoPara] = useState<{ itemId: string; descripcion: string } | null>(null);
   const [saving, setSaving] = useState(false);
 
   const compraLigada = factura.compra_id ? compras.find((c) => c.id === factura.compra_id) : undefined;
@@ -765,15 +772,22 @@ function ConciliacionModal({
               </div>
               <select
                 value={asignaciones[item.id] ?? ""}
-                onChange={(e) => setAsignaciones({ ...asignaciones, [item.id]: e.target.value })}
+                onChange={(e) => {
+                  if (e.target.value === NUEVO_PRODUCTO) {
+                    setCreandoPara({ itemId: item.id, descripcion: item.descripcion });
+                    return;
+                  }
+                  setAsignaciones({ ...asignaciones, [item.id]: e.target.value });
+                }}
                 className="border border-ink/15 bg-white px-2 py-1.5 text-sm text-ink focus:border-teal focus:outline-none"
               >
                 <option value="">Sin producto</option>
                 {productosActivos.map((p) => (
                   <option key={p.id} value={p.id}>
-                    {p.nombre}
+                    {p.nombre} {p.sku ? `(${p.sku})` : ""}
                   </option>
                 ))}
+                <option value={NUEVO_PRODUCTO}>+ Crear nuevo producto…</option>
               </select>
             </div>
           ))}
@@ -787,6 +801,108 @@ function ConciliacionModal({
           {saving ? "Guardando…" : "Guardar conciliación"}
         </button>
       </div>
+
+      {creandoPara && (
+        <NuevoProductoModal
+          companyId={companyId}
+          nombreSugerido={creandoPara.descripcion}
+          onClose={() => setCreandoPara(null)}
+          onCreated={(producto) => {
+            setProductosCreados([...productosCreados, producto]);
+            setAsignaciones({ ...asignaciones, [creandoPara.itemId]: producto.id });
+            setCreandoPara(null);
+          }}
+        />
+      )}
+    </Modal>
+  );
+}
+
+function NuevoProductoModal({
+  companyId,
+  nombreSugerido,
+  onClose,
+  onCreated,
+}: {
+  companyId: string;
+  nombreSugerido: string;
+  onClose: () => void;
+  onCreated: (producto: ProcurementProduct) => void;
+}) {
+  const [sku, setSku] = useState("");
+  const [nombre, setNombre] = useState(nombreSugerido);
+  const [descripcion, setDescripcion] = useState("");
+  const [unidad, setUnidad] = useState("pza");
+  const [costoReferencia, setCostoReferencia] = useState("0");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    if (!nombre.trim()) return;
+    setSaving(true);
+    setError(null);
+    const { data, error: insertError } = await supabase
+      .from("procurement_products")
+      .insert({
+        company_id: companyId,
+        sku: sku.trim() || null,
+        nombre: nombre.trim(),
+        descripcion: descripcion.trim() || null,
+        unidad,
+        costo_referencia: Number(costoReferencia),
+      })
+      .select()
+      .single();
+    setSaving(false);
+    if (insertError || !data) {
+      setError("No se pudo crear el producto.");
+      return;
+    }
+    onCreated(data);
+  }
+
+  return (
+    <Modal title="Nuevo producto en el catálogo" onClose={onClose}>
+      <form onSubmit={submit} className="space-y-3">
+        {error && <p className="font-mono text-xs text-orange">{error}</p>}
+        <input
+          value={nombre}
+          onChange={(e) => setNombre(e.target.value)}
+          placeholder="Nombre"
+          className="w-full border border-ink/15 bg-sand-2 px-3 py-2 text-sm text-ink focus:border-teal focus:outline-none"
+        />
+        <input
+          value={sku}
+          onChange={(e) => setSku(e.target.value)}
+          placeholder="SKU interno (opcional)"
+          className="w-full border border-ink/15 bg-sand-2 px-3 py-2 text-sm text-ink focus:border-teal focus:outline-none"
+        />
+        <textarea
+          value={descripcion}
+          onChange={(e) => setDescripcion(e.target.value)}
+          placeholder="Descripción (opcional)"
+          className="w-full border border-ink/15 bg-sand-2 px-3 py-2 text-sm text-ink focus:border-teal focus:outline-none"
+        />
+        <div className="flex gap-2">
+          <input
+            value={unidad}
+            onChange={(e) => setUnidad(e.target.value)}
+            placeholder="Unidad (pza, kg, lt…)"
+            className="w-1/2 border border-ink/15 bg-sand-2 px-3 py-2 text-sm text-ink focus:border-teal focus:outline-none"
+          />
+          <input
+            type="number"
+            value={costoReferencia}
+            onChange={(e) => setCostoReferencia(e.target.value)}
+            placeholder="Costo de referencia"
+            className="w-1/2 border border-ink/15 bg-sand-2 px-3 py-2 text-sm text-ink focus:border-teal focus:outline-none"
+          />
+        </div>
+        <button type="submit" disabled={saving || !nombre.trim()} className="btn btn-primary w-full">
+          {saving ? "Guardando…" : "Crear producto y usarlo aquí"}
+        </button>
+      </form>
     </Modal>
   );
 }

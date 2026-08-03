@@ -50,6 +50,7 @@ export default function MovimientosTab({
   patterns,
   proyectados,
   limits,
+  comprasActivo,
   reload,
 }: {
   companyId: string;
@@ -60,6 +61,7 @@ export default function MovimientosTab({
   patterns: TreasuryCategoryPattern[];
   proyectados: MovEsperado[];
   limits: TreasuryTierLimits;
+  comprasActivo: boolean;
   reload: () => void;
 }) {
   const [userId, setUserId] = useState<string | null>(null);
@@ -273,6 +275,7 @@ export default function MovimientosTab({
           movements={movements}
           lockAccount={limits.maxAccounts <= 1}
           userId={userId}
+          comprasActivo={comprasActivo}
           onClose={() => setShowNew(false)}
           onCreated={reload}
         />
@@ -316,6 +319,7 @@ function NewMovementModal({
   movements,
   lockAccount,
   userId,
+  comprasActivo,
   onClose,
   onCreated,
 }: {
@@ -326,6 +330,7 @@ function NewMovementModal({
   movements: TreasuryMovement[];
   lockAccount: boolean;
   userId: string | null;
+  comprasActivo: boolean;
   onClose: () => void;
   onCreated: () => void;
 }) {
@@ -500,28 +505,28 @@ function NewMovementModal({
           )}
         </div>
 
-        <div>
-          <label className="mb-1 block font-mono text-[0.62rem] font-bold uppercase tracking-[0.12em] text-muted">
-            Referencia de factura (opcional)
-          </label>
-          <div className="flex gap-2">
-            <input
-              value={form.factura_uuid_ref}
-              onChange={(e) => setForm({ ...form, factura_uuid_ref: e.target.value })}
-              placeholder="UUID fiscal"
-              className="w-1/2 border border-ink/15 bg-sand-2 px-3 py-2 text-sm text-ink focus:border-teal focus:outline-none"
-            />
-            <input
-              value={form.proveedor_ref}
-              onChange={(e) => setForm({ ...form, proveedor_ref: e.target.value })}
-              placeholder="Proveedor"
-              className="w-1/2 border border-ink/15 bg-sand-2 px-3 py-2 text-sm text-ink focus:border-teal focus:outline-none"
-            />
+        {!comprasActivo && (
+          <div>
+            <label className="mb-1 block font-mono text-[0.62rem] font-bold uppercase tracking-[0.12em] text-muted">
+              Referencia de factura (opcional)
+            </label>
+            <div className="flex gap-2">
+              <input
+                value={form.factura_uuid_ref}
+                onChange={(e) => setForm({ ...form, factura_uuid_ref: e.target.value })}
+                placeholder="UUID fiscal"
+                className="w-1/2 border border-ink/15 bg-sand-2 px-3 py-2 text-sm text-ink focus:border-teal focus:outline-none"
+              />
+              <input
+                value={form.proveedor_ref}
+                onChange={(e) => setForm({ ...form, proveedor_ref: e.target.value })}
+                placeholder="Proveedor"
+                className="w-1/2 border border-ink/15 bg-sand-2 px-3 py-2 text-sm text-ink focus:border-teal focus:outline-none"
+              />
+            </div>
+            <p className="mt-1 font-mono text-[0.6rem] text-muted">Solo como anotación tuya.</p>
           </div>
-          <p className="mt-1 font-mono text-[0.6rem] text-muted">
-            Solo como anotación tuya — no se relaciona con el módulo de Compras/CxC.
-          </p>
-        </div>
+        )}
 
         {duplicate && (
           <div className="border border-orange/40 bg-orange/10 px-3 py-2 font-mono text-[0.68rem] text-orange">

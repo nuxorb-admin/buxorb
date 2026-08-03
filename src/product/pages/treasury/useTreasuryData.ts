@@ -15,6 +15,7 @@ import { limitsForTier, type TreasuryTierLimits } from "./limits";
 export function useTreasuryData(companyId: string) {
   const [loading, setLoading] = useState(true);
   const [tier, setTier] = useState<CompanyModuleTier | null>(null);
+  const [comprasActivo, setComprasActivo] = useState(false);
   const [accounts, setAccounts] = useState<TreasuryAccount[]>([]);
   const [categories, setCategories] = useState<TreasuryCategory[]>([]);
   const [movements, setMovements] = useState<TreasuryMovement[]>([]);
@@ -33,6 +34,18 @@ export function useTreasuryData(companyId: string) {
       .eq("module", "tesoreria")
       .maybeSingle();
     setTier(moduleRow?.tier ?? null);
+
+    // Solo para decidir si mostrar la anotación libre de UUID/proveedor en
+    // movimientos manuales — si Compras está activo, el match real (que sí
+    // liga contra facturas de verdad) se hace desde ahí, no aquí.
+    const { data: comprasRow } = await supabase
+      .schema("nuxorb").from("company_modules")
+      .select("module")
+      .eq("company_id", companyId)
+      .eq("module", "compras_proveedores")
+      .eq("active", true)
+      .maybeSingle();
+    setComprasActivo(!!comprasRow);
 
     let { data: accountRows } = await supabase
       .from("treasury_accounts")
@@ -100,5 +113,5 @@ export function useTreasuryData(companyId: string) {
 
   const limits: TreasuryTierLimits = limitsForTier(tier);
 
-  return { loading, tier, limits, accounts, categories, movements, splits, patterns, imports, proyectados, reload: load };
+  return { loading, tier, limits, comprasActivo, accounts, categories, movements, splits, patterns, imports, proyectados, reload: load };
 }

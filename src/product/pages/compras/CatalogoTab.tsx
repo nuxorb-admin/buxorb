@@ -184,25 +184,29 @@ function ProductoModal({
   const [unidad, setUnidad] = useState(producto?.unidad ?? unidadesActivas[0]?.codigo ?? "pza");
   const [costoReferencia, setCostoReferencia] = useState(String(producto?.costo_referencia ?? "0"));
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   async function submit(e: FormEvent) {
     e.preventDefault();
-    if (!nombre.trim()) return;
+    if (!nombre.trim() || !sku.trim()) return;
     setSaving(true);
+    setError(null);
     const payload = {
       company_id: companyId,
-      sku: sku.trim() || null,
+      sku: sku.trim(),
       nombre: nombre.trim(),
       descripcion: descripcion.trim() || null,
       unidad,
       costo_referencia: Number(costoReferencia),
     };
-    if (producto) {
-      await supabase.from("procurement_products").update(payload).eq("id", producto.id);
-    } else {
-      await supabase.from("procurement_products").insert(payload);
-    }
+    const { error: dbError } = producto
+      ? await supabase.from("procurement_products").update(payload).eq("id", producto.id)
+      : await supabase.from("procurement_products").insert(payload);
     setSaving(false);
+    if (dbError) {
+      setError(dbError.code === "23505" ? "Ya existe un producto con ese SKU." : "No se pudo guardar el producto.");
+      return;
+    }
     onSaved();
     onClose();
   }
@@ -210,6 +214,7 @@ function ProductoModal({
   return (
     <Modal title={producto ? "Editar producto" : "Nuevo producto"} onClose={onClose}>
       <form onSubmit={submit} className="space-y-3">
+        {error && <p className="font-mono text-xs text-orange">{error}</p>}
         <input
           value={nombre}
           onChange={(e) => setNombre(e.target.value)}
@@ -219,7 +224,8 @@ function ProductoModal({
         <input
           value={sku}
           onChange={(e) => setSku(e.target.value)}
-          placeholder="SKU (opcional)"
+          placeholder="SKU"
+          required
           className="w-full border border-ink/15 bg-sand-2 px-3 py-2 text-sm text-ink focus:border-teal focus:outline-none"
         />
         <textarea
@@ -254,7 +260,7 @@ function ProductoModal({
             No hay unidades habilitadas — usa "Configurar unidades" para elegir cuáles mostrar.
           </p>
         )}
-        <button type="submit" disabled={saving || !nombre.trim()} className="btn btn-primary w-full">
+        <button type="submit" disabled={saving || !nombre.trim() || !sku.trim()} className="btn btn-primary w-full">
           {saving ? "Guardando…" : "Guardar"}
         </button>
       </form>

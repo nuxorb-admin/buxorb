@@ -847,14 +847,14 @@ function NuevoProductoModal({
 
   async function submit(e: FormEvent) {
     e.preventDefault();
-    if (!nombre.trim()) return;
+    if (!nombre.trim() || !sku.trim()) return;
     setSaving(true);
     setError(null);
     const { data, error: insertError } = await supabase
       .from("procurement_products")
       .insert({
         company_id: companyId,
-        sku: sku.trim() || null,
+        sku: sku.trim(),
         nombre: nombre.trim(),
         descripcion: descripcion.trim() || null,
         unidad,
@@ -864,7 +864,7 @@ function NuevoProductoModal({
       .single();
     setSaving(false);
     if (insertError || !data) {
-      setError("No se pudo crear el producto.");
+      setError(insertError?.code === "23505" ? "Ya existe un producto con ese SKU." : "No se pudo crear el producto.");
       return;
     }
     onCreated(data);
@@ -883,7 +883,8 @@ function NuevoProductoModal({
         <input
           value={sku}
           onChange={(e) => setSku(e.target.value)}
-          placeholder="SKU interno (opcional)"
+          placeholder="SKU interno"
+          required
           className="w-full border border-ink/15 bg-sand-2 px-3 py-2 text-sm text-ink focus:border-teal focus:outline-none"
         />
         <textarea
@@ -913,7 +914,7 @@ function NuevoProductoModal({
             className="w-1/2 border border-ink/15 bg-sand-2 px-3 py-2 text-sm text-ink focus:border-teal focus:outline-none"
           />
         </div>
-        <button type="submit" disabled={saving || !nombre.trim()} className="btn btn-primary w-full">
+        <button type="submit" disabled={saving || !nombre.trim() || !sku.trim()} className="btn btn-primary w-full">
           {saving ? "Guardando…" : "Crear producto y usarlo aquí"}
         </button>
       </form>

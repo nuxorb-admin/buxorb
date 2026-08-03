@@ -384,7 +384,7 @@ export interface CompraDetalle {
 export interface ProcurementProduct {
   id: string;
   company_id: string;
-  sku: string | null;
+  sku: string;
   nombre: string;
   descripcion: string | null;
   unidad: string;

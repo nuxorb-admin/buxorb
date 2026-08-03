@@ -364,7 +364,7 @@ function XmlUploadModal({
       estadoMatch = compra ? (Math.abs(compra.total - parsed.total) > 0.5 ? "con_diferencias" : "ok") : null;
     }
 
-    const { data: factura } = await supabase
+    const { data: factura, error: insertError } = await supabase
       .from("procurement_xml_invoices")
       .insert({
         company_id: companyId,
@@ -382,6 +382,16 @@ function XmlUploadModal({
       })
       .select()
       .single();
+
+    if (insertError) {
+      setError(
+        insertError.code === "23505"
+          ? "Este CFDI ya fue cargado antes (mismo UUID fiscal)."
+          : "No se pudo guardar la factura.",
+      );
+      setSaving(false);
+      return;
+    }
 
     if (factura) {
       if (parsed.conceptos.length > 0) {

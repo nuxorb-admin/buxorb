@@ -894,6 +894,13 @@ function NuevoProductoModal({
           className="w-full border border-ink/15 bg-sand-2 px-3 py-2 text-sm text-ink focus:border-teal focus:outline-none"
         />
         <div className="flex gap-2">
+          <input
+            type="number"
+            value={costoReferencia}
+            onChange={(e) => setCostoReferencia(e.target.value)}
+            placeholder="Costo de referencia"
+            className="w-1/2 border border-ink/15 bg-sand-2 px-3 py-2 text-sm text-ink focus:border-teal focus:outline-none"
+          />
           <select
             value={unidad}
             onChange={(e) => setUnidad(e.target.value)}
@@ -906,14 +913,11 @@ function NuevoProductoModal({
               </option>
             ))}
           </select>
-          <input
-            type="number"
-            value={costoReferencia}
-            onChange={(e) => setCostoReferencia(e.target.value)}
-            placeholder="Costo de referencia"
-            className="w-1/2 border border-ink/15 bg-sand-2 px-3 py-2 text-sm text-ink focus:border-teal focus:outline-none"
-          />
         </div>
+        <p className="font-mono text-[0.6rem] text-muted">
+          Inserta las unidades que necesitas para tu inventario (ejemplo: mides en ml un líquido, debes poner ml; si
+          recibes un litro se hará la conversión a 1000 ml).
+        </p>
         <button type="submit" disabled={saving || !nombre.trim() || !sku.trim()} className="btn btn-primary w-full">
           {saving ? "Guardando…" : "Crear producto y usarlo aquí"}
         </button>

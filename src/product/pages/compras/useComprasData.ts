@@ -12,6 +12,7 @@ import type {
   PagoCompra,
   ProcurementInventoryMovement,
   ProcurementProduct,
+  ProcurementUnit,
   Proveedor,
   Recepcion,
   ReglaAprobacion,
@@ -62,6 +63,7 @@ export function useComprasData(companyId: string) {
   const [ticketsUsados, setTicketsUsados] = useState(0);
   const [productos, setProductos] = useState<ProcurementProduct[]>([]);
   const [inventario, setInventario] = useState<Record<string, number>>({});
+  const [unidadesCatalogo, setUnidadesCatalogo] = useState<ProcurementUnit[]>([]);
 
   async function load() {
     setLoading(true);
@@ -100,6 +102,7 @@ export function useComprasData(companyId: string) {
       { data: memberRows },
       { data: productoRows },
       { data: movimientoRows },
+      { data: unidadRows },
     ] = await Promise.all([
       supabase.from("procurement_suppliers").select("*").eq("company_id", companyId).order("razon_social"),
       supabase.from("departments").select("*").eq("company_id", companyId).order("nombre"),
@@ -124,6 +127,7 @@ export function useComprasData(companyId: string) {
       supabase.from("company_users").select("user_id").eq("company_id", companyId),
       supabase.from("procurement_products").select("*").eq("company_id", companyId).order("nombre"),
       supabase.from("procurement_inventory_movements").select("*").eq("company_id", companyId),
+      supabase.from("procurement_units").select("*").order("orden"),
     ]);
 
     setProveedores(proveedorRows ?? []);
@@ -146,6 +150,7 @@ export function useComprasData(companyId: string) {
       stock[m.producto_id] = (stock[m.producto_id] ?? 0) + signo * Number(m.cantidad);
     }
     setInventario(stock);
+    setUnidadesCatalogo(unidadRows ?? []);
 
     const proveedorIds = (proveedorRows ?? []).map((p) => p.id);
     if (proveedorIds.length > 0) {
@@ -194,6 +199,7 @@ export function useComprasData(companyId: string) {
     ticketsUsados,
     productos,
     inventario,
+    unidadesCatalogo,
     reload: load,
   };
 }

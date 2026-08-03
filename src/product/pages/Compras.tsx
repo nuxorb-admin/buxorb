@@ -27,6 +27,7 @@ export default function Compras() {
     ticketsUsados,
     productos,
     inventario,
+    unidadesCatalogo,
     reload,
   } = useComprasData(companyId);
   const [tab, setTab] = useState<Tab>("ciclo");
@@ -89,6 +90,7 @@ export default function Compras() {
             compras={compras}
             facturas={facturas}
             productos={productos}
+            unidadesActivas={unidadesCatalogo.filter((u) => (settings.unidades_activas ?? []).includes(u.codigo))}
             limits={limits}
             ticketsUsados={ticketsUsados}
             reload={reload}
@@ -105,7 +107,14 @@ export default function Compras() {
           />
         )}
         {tab === "catalogo" && (
-          <CatalogoTab companyId={companyId} productos={productos} inventario={inventario} reload={reload} />
+          <CatalogoTab
+            companyId={companyId}
+            productos={productos}
+            inventario={inventario}
+            unidadesCatalogo={unidadesCatalogo}
+            settings={settings}
+            reload={reload}
+          />
         )}
       </div>
     </div>

@@ -1,6 +1,6 @@
 import { useState, type ChangeEvent, type FormEvent } from "react";
 import { supabase } from "../../../lib/supabase";
-import type { Proveedor, ProcurementProduct } from "../../../lib/database.types";
+import type { Proveedor, ProcurementProduct, ProcurementUnit } from "../../../lib/database.types";
 import type { CompraFull, FacturaFull } from "./useComprasData";
 import { registrarUsoTicket } from "./useComprasData";
 import type { ComprasTierLimits } from "./limits";
@@ -60,6 +60,7 @@ export default function FacturasCxCTab({
   compras,
   facturas,
   productos,
+  unidadesActivas,
   limits,
   ticketsUsados,
   reload,
@@ -69,6 +70,7 @@ export default function FacturasCxCTab({
   compras: CompraFull[];
   facturas: FacturaFull[];
   productos: ProcurementProduct[];
+  unidadesActivas: ProcurementUnit[];
   limits: ComprasTierLimits;
   ticketsUsados: number;
   reload: () => void;
@@ -244,6 +246,7 @@ export default function FacturasCxCTab({
           factura={conciliando}
           compras={compras}
           productos={productos}
+          unidadesActivas={unidadesActivas}
           onClose={() => setConciliando(null)}
           onDone={reload}
         />
@@ -689,6 +692,7 @@ function ConciliacionModal({
   factura,
   compras,
   productos,
+  unidadesActivas,
   onClose,
   onDone,
 }: {
@@ -696,6 +700,7 @@ function ConciliacionModal({
   factura: FacturaFull;
   compras: CompraFull[];
   productos: ProcurementProduct[];
+  unidadesActivas: ProcurementUnit[];
   onClose: () => void;
   onDone: () => void;
 }) {
@@ -806,6 +811,7 @@ function ConciliacionModal({
         <NuevoProductoModal
           companyId={companyId}
           nombreSugerido={creandoPara.descripcion}
+          unidadesActivas={unidadesActivas}
           onClose={() => setCreandoPara(null)}
           onCreated={(producto) => {
             setProductosCreados([...productosCreados, producto]);
@@ -821,18 +827,20 @@ function ConciliacionModal({
 function NuevoProductoModal({
   companyId,
   nombreSugerido,
+  unidadesActivas,
   onClose,
   onCreated,
 }: {
   companyId: string;
   nombreSugerido: string;
+  unidadesActivas: ProcurementUnit[];
   onClose: () => void;
   onCreated: (producto: ProcurementProduct) => void;
 }) {
   const [sku, setSku] = useState("");
   const [nombre, setNombre] = useState(nombreSugerido);
   const [descripcion, setDescripcion] = useState("");
-  const [unidad, setUnidad] = useState("pza");
+  const [unidad, setUnidad] = useState(unidadesActivas[0]?.codigo ?? "pza");
   const [costoReferencia, setCostoReferencia] = useState("0");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -885,12 +893,18 @@ function NuevoProductoModal({
           className="w-full border border-ink/15 bg-sand-2 px-3 py-2 text-sm text-ink focus:border-teal focus:outline-none"
         />
         <div className="flex gap-2">
-          <input
+          <select
             value={unidad}
             onChange={(e) => setUnidad(e.target.value)}
-            placeholder="Unidad (pza, kg, lt…)"
             className="w-1/2 border border-ink/15 bg-sand-2 px-3 py-2 text-sm text-ink focus:border-teal focus:outline-none"
-          />
+          >
+            {unidadesActivas.length === 0 && <option value={unidad}>{unidad}</option>}
+            {unidadesActivas.map((u) => (
+              <option key={u.id} value={u.codigo}>
+                {u.nombre} ({u.codigo})
+              </option>
+            ))}
+          </select>
           <input
             type="number"
             value={costoReferencia}

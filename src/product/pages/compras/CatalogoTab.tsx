@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { supabase } from "../../../lib/supabase";
-import type { ProcurementProduct } from "../../../lib/database.types";
+import type { ComprasSettings, ProcurementProduct, ProcurementUnit } from "../../../lib/database.types";
 import Modal from "../../../admin/components/Modal";
 import Badge from "../../../admin/components/Badge";
 
@@ -12,15 +12,22 @@ export default function CatalogoTab({
   companyId,
   productos,
   inventario,
+  unidadesCatalogo,
+  settings,
   reload,
 }: {
   companyId: string;
   productos: ProcurementProduct[];
   inventario: Record<string, number>;
+  unidadesCatalogo: ProcurementUnit[];
+  settings: ComprasSettings;
   reload: () => void;
 }) {
   const [showNew, setShowNew] = useState(false);
   const [editing, setEditing] = useState<ProcurementProduct | null>(null);
+  const [showUnidades, setShowUnidades] = useState(false);
+
+  const unidadesActivas = unidadesCatalogo.filter((u) => (settings.unidades_activas ?? []).includes(u.codigo));
 
   async function toggleActivo(p: ProcurementProduct) {
     await supabase.from("procurement_products").update({ activo: !p.activo }).eq("id", p.id);
@@ -33,9 +40,14 @@ export default function CatalogoTab({
         <h3 className="font-mono text-[0.68rem] font-bold uppercase tracking-[0.1em] text-muted">
           Catálogo de productos
         </h3>
-        <button onClick={() => setShowNew(true)} className="font-mono text-[0.66rem] uppercase tracking-[0.1em] text-teal hover:underline">
-          + Nuevo producto
-        </button>
+        <div className="flex gap-4">
+          <button onClick={() => setShowUnidades(true)} className="font-mono text-[0.66rem] uppercase tracking-[0.1em] text-muted hover:text-ink">
+            Configurar unidades
+          </button>
+          <button onClick={() => setShowNew(true)} className="font-mono text-[0.66rem] uppercase tracking-[0.1em] text-teal hover:underline">
+            + Nuevo producto
+          </button>
+        </div>
       </div>
 
       <div className="divide-y divide-ink/10 border border-ink/10 bg-white">
@@ -67,6 +79,7 @@ export default function CatalogoTab({
         <ProductoModal
           companyId={companyId}
           producto={editing}
+          unidadesActivas={unidadesActivas}
           onClose={() => {
             setShowNew(false);
             setEditing(null);
@@ -74,25 +87,101 @@ export default function CatalogoTab({
           onSaved={reload}
         />
       )}
+
+      {showUnidades && (
+        <UnidadesModal
+          companyId={companyId}
+          unidadesCatalogo={unidadesCatalogo}
+          activas={settings.unidades_activas ?? []}
+          onClose={() => setShowUnidades(false)}
+          onSaved={reload}
+        />
+      )}
     </div>
+  );
+}
+
+const CATEGORIA_LABEL = { pieza: "Pieza", peso: "Peso", volumen: "Volumen", longitud: "Longitud", otro: "Otro" };
+
+function UnidadesModal({
+  companyId,
+  unidadesCatalogo,
+  activas,
+  onClose,
+  onSaved,
+}: {
+  companyId: string;
+  unidadesCatalogo: ProcurementUnit[];
+  activas: string[];
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [seleccion, setSeleccion] = useState<string[]>(activas);
+  const [saving, setSaving] = useState(false);
+
+  function toggle(codigo: string) {
+    setSeleccion((prev) => (prev.includes(codigo) ? prev.filter((c) => c !== codigo) : [...prev, codigo]));
+  }
+
+  async function guardar() {
+    setSaving(true);
+    await supabase.from("procurement_settings").update({ unidades_activas: seleccion }).eq("company_id", companyId);
+    setSaving(false);
+    onSaved();
+    onClose();
+  }
+
+  const porCategoria = unidadesCatalogo.reduce<Record<string, ProcurementUnit[]>>((acc, u) => {
+    (acc[u.categoria] ??= []).push(u);
+    return acc;
+  }, {});
+
+  return (
+    <Modal title="Configurar unidades de medida" onClose={onClose}>
+      <div className="space-y-4">
+        <p className="font-mono text-[0.62rem] text-muted">
+          Elige qué unidades aparecen al capturar un producto en el catálogo.
+        </p>
+        {Object.entries(porCategoria).map(([categoria, unidades]) => (
+          <div key={categoria}>
+            <p className="mb-1 font-mono text-[0.6rem] font-bold uppercase tracking-[0.1em] text-muted">
+              {CATEGORIA_LABEL[categoria as keyof typeof CATEGORIA_LABEL] ?? categoria}
+            </p>
+            <div className="flex flex-wrap gap-3">
+              {unidades.map((u) => (
+                <label key={u.id} className="flex items-center gap-1.5 font-mono text-xs text-ink">
+                  <input type="checkbox" checked={seleccion.includes(u.codigo)} onChange={() => toggle(u.codigo)} />
+                  {u.nombre} ({u.codigo})
+                </label>
+              ))}
+            </div>
+          </div>
+        ))}
+        <button onClick={guardar} disabled={saving} className="btn btn-primary w-full">
+          {saving ? "Guardando…" : "Guardar"}
+        </button>
+      </div>
+    </Modal>
   );
 }
 
 function ProductoModal({
   companyId,
   producto,
+  unidadesActivas,
   onClose,
   onSaved,
 }: {
   companyId: string;
   producto: ProcurementProduct | null;
+  unidadesActivas: ProcurementUnit[];
   onClose: () => void;
   onSaved: () => void;
 }) {
   const [sku, setSku] = useState(producto?.sku ?? "");
   const [nombre, setNombre] = useState(producto?.nombre ?? "");
   const [descripcion, setDescripcion] = useState(producto?.descripcion ?? "");
-  const [unidad, setUnidad] = useState(producto?.unidad ?? "pza");
+  const [unidad, setUnidad] = useState(producto?.unidad ?? unidadesActivas[0]?.codigo ?? "pza");
   const [costoReferencia, setCostoReferencia] = useState(String(producto?.costo_referencia ?? "0"));
   const [saving, setSaving] = useState(false);
 
@@ -140,12 +229,18 @@ function ProductoModal({
           className="w-full border border-ink/15 bg-sand-2 px-3 py-2 text-sm text-ink focus:border-teal focus:outline-none"
         />
         <div className="flex gap-2">
-          <input
+          <select
             value={unidad}
             onChange={(e) => setUnidad(e.target.value)}
-            placeholder="Unidad (pza, kg, lt…)"
             className="w-1/2 border border-ink/15 bg-sand-2 px-3 py-2 text-sm text-ink focus:border-teal focus:outline-none"
-          />
+          >
+            {unidadesActivas.length === 0 && <option value={unidad}>{unidad}</option>}
+            {unidadesActivas.map((u) => (
+              <option key={u.id} value={u.codigo}>
+                {u.nombre} ({u.codigo})
+              </option>
+            ))}
+          </select>
           <input
             type="number"
             value={costoReferencia}
@@ -154,6 +249,11 @@ function ProductoModal({
             className="w-1/2 border border-ink/15 bg-sand-2 px-3 py-2 text-sm text-ink focus:border-teal focus:outline-none"
           />
         </div>
+        {unidadesActivas.length === 0 && (
+          <p className="font-mono text-[0.6rem] text-orange">
+            No hay unidades habilitadas — usa "Configurar unidades" para elegir cuáles mostrar.
+          </p>
+        )}
         <button type="submit" disabled={saving || !nombre.trim()} className="btn btn-primary w-full">
           {saving ? "Guardando…" : "Guardar"}
         </button>

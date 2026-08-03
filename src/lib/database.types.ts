@@ -337,6 +337,15 @@ export interface Departamento {
 export interface ComprasSettings {
   company_id: string;
   aprobacion_activada: boolean;
+  unidades_activas?: string[];
+}
+
+export interface ProcurementUnit {
+  id: string;
+  codigo: string;
+  nombre: string;
+  categoria: "pieza" | "peso" | "volumen" | "longitud" | "otro";
+  orden: number;
 }
 
 export interface Compra {

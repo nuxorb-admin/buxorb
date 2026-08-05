@@ -1,7 +1,7 @@
 # Módulo: Tesorería
 [[tesorería]]
-**Versión:** 1.1
-**Fecha:** 19 de julio de 2026 (v1.0) — actualizado 26 de agosto de 2026 para reflejar lo construido
+**Versión:** 1.2
+**Fecha:** 19 de julio de 2026 (v1.0) — actualizado 26 de agosto de 2026 para reflejar lo construido — actualizado 4 de agosto de 2026 (sección 3a: Compras/Proveedores dejó de usar `expected_movements`, ver nota)
 **Estado:** En producción (Essential + Professional) — pendiente de pricing (ver `tesoreria-pendientes.md`)
 
 > Esta versión documenta lo que **existe hoy en el código y la base de datos**, no solo el plan original. Donde la implementación se desvió del plan v1.0 (para bien o porque algo quedó pendiente), se marca explícitamente con ✅ **Construido** o ⏳ **Pendiente**.
@@ -39,6 +39,10 @@ Dar a negocios (emprendimientos y PyMEs) visibilidad y control sobre su flujo de
 - `confirmed_movements` (antes `mov_confirmados`): mismos campos + fecha_real, treasury_movement_id
 
 Cualquier módulo inserta en `expected_movements`; Tesorería la lee y muestra como "proyectado" en la pestaña Movimientos, con botón "Registrar como real" que crea el movimiento y lo vincula en `confirmed_movements`.
+
+**Excepción — Compras/Proveedores ya no usa este puente.** Se probó (Compras publicaba el proyectado al aprobar una OC) y se abandonó: el resultado de conciliar en Tesorería nunca regresaba a Compras, así que la OC/factura nunca quedaba marcada como pagada de ese lado. Se reemplazó por un match directo — ver `compras-proveedores-modulo-v1.md` sección 8: desde Compras se elige un `treasury_movements` (egreso real, sin usar) y se reparte su monto entre una o varias OC/facturas del mismo proveedor; cada reparto se guarda como un pago de Compras con `treasury_movement_id` apuntando al movimiento, y esa referencia es lo que lo "bloquea" para no volver a cruzarse. Tesorería no necesita saber nada de esto — el movimiento bancario en sí no cambia, solo queda referenciado desde afuera.
+
+**Anotación libre sin dependencia de Compras:** `treasury_movements` tiene dos columnas opcionales, puramente de texto — `factura_uuid_ref` y `proveedor_ref` — para que una empresa que NO tiene Compras/CxC activo pueda anotar a mano a qué factura/proveedor correspondió un egreso, como bitácora. Si la empresa SÍ tiene Compras activo, estos dos campos se ocultan en el formulario de captura manual (`NewMovementModal`) a favor del match real descrito arriba — mostrar ambos caminos a la vez confundía sobre cuál usar.
 
 ### 3b. Usuarios y permisos
 

@@ -14,8 +14,12 @@ import type {
   Oportunidad,
   Pedido,
   PedidoDetalle,
+  ProcurementProduct,
+  ProcurementUnit,
   ProductoServicio,
   Prospecto,
+  SalesProductKitItem,
+  SalesProductRecipeItem,
   VentasSettings,
 } from "../../../lib/database.types";
 import { limitsForTier, type VentasTierLimits } from "./limits";
@@ -49,6 +53,10 @@ export function useVentasData(companyId: string) {
   const [motivosPerdida, setMotivosPerdida] = useState<MotivoPerdida[]>([]);
   const [oportunidades, setOportunidades] = useState<Oportunidad[]>([]);
   const [productosServicios, setProductosServicios] = useState<ProductoServicio[]>([]);
+  const [recetaItems, setRecetaItems] = useState<SalesProductRecipeItem[]>([]);
+  const [kitItems, setKitItems] = useState<SalesProductKitItem[]>([]);
+  const [insumosCompra, setInsumosCompra] = useState<ProcurementProduct[]>([]);
+  const [unidadesCatalogo, setUnidadesCatalogo] = useState<ProcurementUnit[]>([]);
   const [settings, setSettings] = useState<VentasSettings>({ company_id: companyId, umbral_descuento_pct: 20 });
   const [cotizaciones, setCotizaciones] = useState<CotizacionFull[]>([]);
   const [pedidos, setPedidos] = useState<PedidoFull[]>([]);
@@ -84,6 +92,10 @@ export function useVentasData(companyId: string) {
       { data: pedidoRows },
       { data: facturaRows },
       { data: memberRows },
+      { data: recetaRows },
+      { data: kitRows },
+      { data: insumoRows },
+      { data: unidadRows },
     ] = await Promise.all([
       supabase.from("sales_customers").select("*").eq("company_id", companyId).order("razon_social"),
       supabase.from("sales_prospects").select("*").eq("company_id", companyId).order("created_at", { ascending: false }),
@@ -107,6 +119,10 @@ export function useVentasData(companyId: string) {
         .eq("company_id", companyId)
         .order("created_at", { ascending: false }),
       supabase.from("company_users").select("user_id").eq("company_id", companyId),
+      supabase.from("sales_product_recipe_items").select("*, sales_products_services!inner(company_id)").eq("sales_products_services.company_id", companyId),
+      supabase.from("sales_product_kit_items").select("*, sales_products_services!inner(company_id)").eq("sales_products_services.company_id", companyId),
+      supabase.from("procurement_products").select("*").eq("company_id", companyId).eq("activo", true).order("nombre"),
+      supabase.from("procurement_units").select("*").order("orden"),
     ]);
 
     setClientes(clienteRows ?? []);
@@ -115,6 +131,10 @@ export function useVentasData(companyId: string) {
     setMotivosPerdida(motivoRows ?? []);
     setOportunidades(oportunidadRows ?? []);
     setProductosServicios(productoRows ?? []);
+    setRecetaItems((recetaRows as SalesProductRecipeItem[] | null) ?? []);
+    setKitItems((kitRows as SalesProductKitItem[] | null) ?? []);
+    setInsumosCompra(insumoRows ?? []);
+    setUnidadesCatalogo(unidadRows ?? []);
     setCotizaciones((cotizacionRows as CotizacionFull[] | null) ?? []);
     setPedidos((pedidoRows as PedidoFull[] | null) ?? []);
     setFacturas((facturaRows as FacturaFull[] | null) ?? []);
@@ -147,6 +167,10 @@ export function useVentasData(companyId: string) {
     motivosPerdida,
     oportunidades,
     productosServicios,
+    recetaItems,
+    kitItems,
+    insumosCompra,
+    unidadesCatalogo,
     settings,
     cotizaciones,
     pedidos,

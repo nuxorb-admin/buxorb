@@ -73,7 +73,6 @@ export default function CotizacionesTab({
   limits: VentasTierLimits;
   reload: () => void;
 }) {
-  const [showNewProducto, setShowNewProducto] = useState(false);
   const [showNewCotizacion, setShowNewCotizacion] = useState(false);
   const [showNewPedido, setShowNewPedido] = useState(false);
   const [anticipando, setAnticipando] = useState<PedidoFull | null>(null);
@@ -160,24 +159,6 @@ export default function CotizacionesTab({
 
   return (
     <div>
-      <div className="mb-3 flex items-center justify-between">
-        <h3 className="font-mono text-[0.68rem] font-bold uppercase tracking-[0.1em] text-muted">Catálogo de productos y servicios</h3>
-        <button onClick={() => setShowNewProducto(true)} className="font-mono text-[0.66rem] uppercase text-teal hover:underline">
-          + Nuevo producto/servicio
-        </button>
-      </div>
-      <div className="mb-8 divide-y divide-ink/10 border border-ink/10 bg-white">
-        {productosServicios.length === 0 && <p className="p-4 font-mono text-xs text-muted">Sin productos/servicios todavía.</p>}
-        {productosServicios.map((p) => (
-          <div key={p.id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
-            <p className="text-sm font-semibold text-ink">{p.nombre}</p>
-            <p className="font-mono text-xs text-muted">
-              {money(p.precio_unitario)}/{p.unidad} · IVA {p.tasa_iva === "exento" ? "exento" : `${p.tasa_iva}%`}
-            </p>
-          </div>
-        ))}
-      </div>
-
       <div className="mb-3 flex items-center justify-between">
         <h3 className="font-mono text-[0.68rem] font-bold uppercase tracking-[0.1em] text-muted">Cotizaciones</h3>
         <button onClick={() => setShowNewCotizacion(true)} className="font-mono text-[0.66rem] uppercase text-teal hover:underline">
@@ -266,7 +247,6 @@ export default function CotizacionesTab({
         })}
       </div>
 
-      {showNewProducto && <NewProductoModal companyId={companyId} onClose={() => setShowNewProducto(false)} onCreated={reload} />}
       {showNewPedido && (
         <NewPedidoModal
           companyId={companyId}
@@ -300,78 +280,6 @@ interface ProductoServicioLite {
   unidad: string;
   precio_unitario: number;
   tasa_iva: string;
-}
-
-function NewProductoModal({ companyId, onClose, onCreated }: { companyId: string; onClose: () => void; onCreated: () => void }) {
-  const [nombre, setNombre] = useState("");
-  const [descripcion, setDescripcion] = useState("");
-  const [unidad, setUnidad] = useState("pza");
-  const [precio, setPrecio] = useState("0");
-  const [tasaIva, setTasaIva] = useState<"16" | "0" | "exento">("16");
-  const [saving, setSaving] = useState(false);
-
-  async function submit(e: FormEvent) {
-    e.preventDefault();
-    setSaving(true);
-    await supabase.from("sales_products_services").insert({
-      company_id: companyId,
-      nombre,
-      descripcion: descripcion || null,
-      unidad,
-      precio_unitario: Number(precio) || 0,
-      tasa_iva: tasaIva,
-    });
-    setSaving(false);
-    onCreated();
-    onClose();
-  }
-
-  return (
-    <Modal title="Nuevo producto/servicio" onClose={onClose}>
-      <form onSubmit={submit} className="space-y-3">
-        <input
-          value={nombre}
-          onChange={(e) => setNombre(e.target.value)}
-          placeholder="Nombre"
-          required
-          className="w-full border border-ink/15 bg-sand-2 px-3 py-2 text-sm text-ink focus:border-teal focus:outline-none"
-        />
-        <input
-          value={descripcion}
-          onChange={(e) => setDescripcion(e.target.value)}
-          placeholder="Descripción"
-          className="w-full border border-ink/15 bg-sand-2 px-3 py-2 text-sm text-ink focus:border-teal focus:outline-none"
-        />
-        <div className="grid grid-cols-3 gap-2">
-          <input
-            value={unidad}
-            onChange={(e) => setUnidad(e.target.value)}
-            placeholder="Unidad"
-            className="border border-ink/15 bg-sand-2 px-3 py-2 text-sm text-ink focus:border-teal focus:outline-none"
-          />
-          <input
-            type="number"
-            value={precio}
-            onChange={(e) => setPrecio(e.target.value)}
-            placeholder="Precio"
-            className="border border-ink/15 bg-sand-2 px-3 py-2 text-sm text-ink focus:border-teal focus:outline-none"
-          />
-          <select
-            value={tasaIva}
-            onChange={(e) => setTasaIva(e.target.value as typeof tasaIva)}
-            className="border border-ink/15 bg-sand-2 px-3 py-2 text-sm text-ink focus:border-teal focus:outline-none"
-          >
-            <option value="16">IVA 16%</option>
-            <option value="0">IVA 0%</option>
-            <option value="exento">Exento</option>
-          </select>
-        </div>
-        <button type="submit" disabled={saving || !nombre} className="btn btn-primary w-full">
-          {saving ? "Guardando…" : "Crear"}
-        </button>
-      </form>
-    </Modal>
-  );
 }
 
 function NewCotizacionModal({

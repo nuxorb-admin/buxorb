@@ -693,6 +693,8 @@ export interface Oportunidad {
   created_at: string;
 }
 
+export type TipoCosteo = "comercializado" | "receta" | "kit";
+
 export interface ProductoServicio {
   id: string;
   company_id: string;
@@ -702,7 +704,24 @@ export interface ProductoServicio {
   precio_unitario: number;
   tasa_iva: TasaIva;
   activo: boolean;
+  tipo_costeo: TipoCosteo;
+  producto_compra_id: string | null;
   created_at: string;
+}
+
+export interface SalesProductRecipeItem {
+  id: string;
+  sales_product_id: string;
+  procurement_product_id: string;
+  cantidad: number;
+  unidad: string;
+}
+
+export interface SalesProductKitItem {
+  id: string;
+  sales_product_id: string;
+  componente_producto_id: string;
+  cantidad: number;
 }
 
 export interface VentasSettings {

@@ -4,11 +4,12 @@ import { supabase } from "../../lib/supabase";
 import type { ProductContext } from "../ProductLayout";
 import { useVentasData } from "./ventas/useVentasData";
 import ProspectosTab from "./ventas/ProspectosTab";
+import CatalogoTab from "./ventas/CatalogoTab";
 import CotizacionesTab from "./ventas/CotizacionesTab";
 import FacturacionTab from "./ventas/FacturacionTab";
 import CobranzaTab from "./ventas/CobranzaTab";
 
-type Tab = "prospectos" | "cotizaciones" | "facturacion" | "cobranza";
+type Tab = "prospectos" | "catalogo" | "cotizaciones" | "facturacion" | "cobranza";
 
 export default function Ventas() {
   const { scopeId: companyId } = useOutletContext<ProductContext>();
@@ -22,6 +23,10 @@ export default function Ventas() {
     motivosPerdida,
     oportunidades,
     productosServicios,
+    recetaItems,
+    kitItems,
+    insumosCompra,
+    unidadesCatalogo,
     settings,
     cotizaciones,
     pedidos,
@@ -42,6 +47,7 @@ export default function Ventas() {
 
   const tabs: { id: Tab; label: string }[] = [
     { id: "prospectos", label: "Prospectos y oportunidades" },
+    { id: "catalogo", label: "Catálogo" },
     { id: "cotizaciones", label: "Cotizaciones y pedidos" },
     { id: "facturacion", label: "Facturación" },
     { id: "cobranza", label: "Cobranza" },
@@ -82,6 +88,17 @@ export default function Ventas() {
             oportunidades={oportunidades}
             companyUsers={companyUsers}
             limits={limits}
+            reload={reload}
+          />
+        )}
+        {tab === "catalogo" && (
+          <CatalogoTab
+            companyId={companyId}
+            productos={productosServicios}
+            recetaItems={recetaItems}
+            kitItems={kitItems}
+            insumosCompra={insumosCompra}
+            unidadesCatalogo={unidadesCatalogo}
             reload={reload}
           />
         )}

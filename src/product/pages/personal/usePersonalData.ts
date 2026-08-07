@@ -87,7 +87,7 @@ export function usePersonalData(companyId: string) {
       supabase.from("hr_payroll_concepts").select("*"),
       supabase
         .from("hr_payroll_periods")
-        .select("*, hr_payroll_receipts(*, hr_payroll_receipt_items(*))")
+        .select("*, recibo_nomina:hr_payroll_receipts(*, recibo_detalle:hr_payroll_receipt_items(*))")
         .eq("company_id", companyId)
         .order("fecha_inicio", { ascending: false }),
       supabase.from("company_users").select("user_id").eq("company_id", companyId),

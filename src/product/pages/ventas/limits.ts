@@ -6,6 +6,7 @@ export interface VentasTierLimits {
   vigenciaConAlerta: boolean;
   facturacionParcial: boolean;
   recordatoriosYAntiguedad: boolean;
+  catalogoCosteo: boolean;
 }
 
 const ESSENTIAL: VentasTierLimits = {
@@ -14,6 +15,7 @@ const ESSENTIAL: VentasTierLimits = {
   vigenciaConAlerta: false,
   facturacionParcial: false,
   recordatoriosYAntiguedad: false,
+  catalogoCosteo: false,
 };
 
 const PROFESSIONAL: VentasTierLimits = {
@@ -22,6 +24,7 @@ const PROFESSIONAL: VentasTierLimits = {
   vigenciaConAlerta: true,
   facturacionParcial: true,
   recordatoriosYAntiguedad: true,
+  catalogoCosteo: true,
 };
 
 // Enterprise no está desarrollado — se le dan los límites de Professional.

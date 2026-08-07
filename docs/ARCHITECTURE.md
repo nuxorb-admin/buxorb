@@ -77,7 +77,9 @@ Personal, Ventas y CxC.
 | Módulo | Archivo | Estado |
 |---|---|---|
 | Tesorería | `src/product/pages/Tesoreria.tsx` + `src/product/pages/treasury/` | **Funcional, nivel producción** — Essential/Professional reales contra `treasury_accounts/categories/movements/statement_imports`, filtrado por `company_id` (no `scope_id`) |
-| Compras y Proveedores / Gestión de Personal / Ventas y CxC | `src/product/pages/{Compras,Personal,Ventas}.tsx` | Maqueta — datos fijos de `src/product/sampleData.ts`, pendientes de construir según `docs/*-modulo-v1.md` |
+| Compras y Proveedores | `src/product/pages/Compras.tsx` + `src/product/pages/compras/` | **Funcional, nivel producción** — Essential/Professional reales, filtrado por `company_id`. Ver `docs/compras-proveedores-modulo-v1.md` para lo construido vs. pendiente ("Pendiente V2") |
+| Gestión de Personal | `src/product/pages/Personal.tsx` + `src/product/pages/personal/` | **Funcional, nivel producción** — Essential/Professional reales, filtrado por `company_id`. Ver `docs/gestion-personal-modulo-v1.md` |
+| Ventas y CxC | `src/product/pages/Ventas.tsx` + `src/product/pages/ventas/` | **Funcional, nivel producción** — Essential/Professional reales, filtrado por `company_id`. Ver `docs/ventas-cxc-modulo-V1.md` |
 
 Cada módulo tiene dos puntos de entrada que renderizan páginas con distinto
 nivel de realismo, solo cambia el `scopeId`/esquema de datos:
@@ -195,10 +197,11 @@ ANTHROPIC_API_KEY=...`, no se inyecta solo como el service role key).
   esa tabla solo tenga datos de ejemplo/prueba (como ahora) — **no meter ahí
   información financiera real de un cliente pagando** sin antes reescribir la
   policy con una verificación de identidad real.
-- **Compras, Personal y Ventas no tienen lógica de negocio todavía** — son
-  vistas con datos fijos, no leen ni escriben nada. No prometerle a un cliente
-  real que esos módulos "funcionan". Se construyen uno a la vez siguiendo
-  `docs/*-modulo-v1.md`.
+- **Los 4 módulos (Tesorería, Compras, Personal, Ventas) están en producción**
+  — cada `docs/*-modulo-v1.md` documenta con ✅/⏳ qué se construyó de cada
+  subproceso y qué queda en "Pendiente para V2" (no roto, decidido dejar
+  para después). Revisar esa sección antes de prometerle a un cliente una
+  funcionalidad específica.
 - El correo de la empresa vive en GoDaddy, fuera del control de Vercel — no
   tocar los nameservers raíz de `nuxorb.com` (ver sección de subdominios).
 
@@ -259,8 +262,10 @@ src/
 │   ├── TenantAuthProvider.tsx · TenantLogin.tsx   # login real del portal (kind='client')
 │   └── pages/
 │       ├── Tesoreria.tsx (producción, real) · treasury/ (tabs + lógica)
-│       ├── TesoreriaDemo.tsx (el simple, solo para /demo-saas)
-│       ├── Compras.tsx · Personal.tsx · Ventas.tsx (maqueta, pendientes)
+│       ├── Compras.tsx (producción, real) · compras/ (tabs + lógica)
+│       ├── Personal.tsx (producción, real) · personal/ (tabs + lógica)
+│       ├── Ventas.tsx (producción, real) · ventas/ (tabs + lógica)
+│       ├── TesoreriaDemo.tsx · ComprasDemo.tsx · PersonalDemo.tsx · VentasDemo.tsx (el simple, solo para /demo-saas)
 │       └── UsersRoles.tsx
 └── lib/                       # supabase.ts, database.types.ts, slugify.ts, moduleCategories.ts
 
@@ -275,16 +280,21 @@ docs/ARQUITECTURA.md           # visión a futuro (multi-tenant real, fuera de a
 
 **Antes de escribir el prompt: pega o menciona este archivo
 (`docs/ARCHITECTURE.md`)** — le da a Claude Code el contexto completo (qué es
-real, qué es maqueta, dónde vive cada cosa) sin que tenga que adivinar.
+real, dónde vive cada cosa) sin que tenga que adivinar.
 
-El patrón de referencia es Tesorería (`src/product/pages/Tesoreria.tsx` +
-`src/product/pages/treasury/`) — el único módulo ya llevado a nivel producción
-con Essential/Professional reales. La fuente de verdad de **qué construir**
-para cada módulo es su MD en `docs/` (`tesoreria-modulo-v1.md`,
-`compras-proveedores-modulo-v1.md`, `gestion-personal-modulo-v1.md`,
-`ventas-cxc-modulo-V1.md`, `productos-adicionales.md`) — mucho más detallado
-que el copy de la landing (`src/data/modules.ts`). Cualquier módulo nuevo
-debería seguir la misma receta:
+Los 4 módulos ya están en producción (Tesorería, Compras y Proveedores,
+Gestión de Personal, Ventas y CxC), pero ninguno tiene el 100% de lo que su
+MD describe — cada uno tiene su propia sección "Pendiente para V2" al final
+del doc con lo que se dejó fuera a propósito. El patrón de referencia
+arquitectónico es Tesorería (`src/product/pages/Tesoreria.tsx` +
+`src/product/pages/treasury/`) — el primer módulo llevado a producción y el
+que fija la convención de tabs/límites/hooks que los demás siguieron. La
+fuente de verdad de **qué se construyó y qué falta** para cada módulo es su
+MD en `docs/` (`tesoreria-modulo-v1.md`, `compras-proveedores-modulo-v1.md`,
+`gestion-personal-modulo-v1.md`, `ventas-cxc-modulo-V1.md`,
+`productos-adicionales.md`) — mucho más detallado que el copy de la landing
+(`src/data/modules.ts`). Cualquier trabajo nuevo sobre un módulo existente,
+o un módulo nuevo, debería seguir la misma receta:
 
 1. Tabla(s) en Supabase con RLS por `company_id` (equipo todo,
    `is_company_member()`/`is_company_owner()` para la empresa dueña — mismo
@@ -308,18 +318,22 @@ debería seguir la misma receta:
 
 **Ejemplos de instrucciones:**
 
-> El módulo de Compras y Proveedores en `src/product/pages/Compras.tsx` es
-> maqueta con datos de `sampleData.ts`. Hazlo funcional siguiendo
-> `docs/compras-proveedores-modulo-v1.md` — empieza por el subproceso de
-> Ciclo de compra (sección 4), Essential nada más. Usa
-> `src/product/pages/treasury/` como referencia de estructura (tabs, límites
-> por nivel, tabla `Nombre_movements` con `company_id`).
+> Cierra uno de los puntos de "Pendiente para V2" en
+> `docs/gestion-personal-modulo-v1.md` — el dashboard comparativo de
+> Professional (§6.6: comparativo periodo a periodo, por departamento,
+> ausentismo, rotación). Usa `src/product/pages/personal/NominaTab.tsx` como
+> punto de partida, el flag `limits.dashboardComparativo` ya existe pero no
+> se usa en ningún lado todavía.
 
 > Agrega el subproceso de Conciliación bancaria de Tesorería
 > (`docs/tesoreria-modulo-v1.md` sección 5) — hoy `treasury/ConciliacionTab.tsx`
 > ya cubre esto a nivel básico, revisa qué falta contra el MD (ej. el reporte
 > de discrepancias por motivo en Professional).
 
-> Agrega el producto adicional Inventario (`docs/productos-adicionales.md`
-> #5) — depende de Compras y Proveedores (consume su vista `entradas_compra`
-> una vez que ese módulo esté construido).
+> Nota: el producto adicional Inventario (`docs/productos-adicionales.md` #5)
+> ya no aplica tal cual está escrito — se decidió meter el catálogo de
+> productos + kardex **dentro** de Compras y Proveedores (Professional) en
+> vez de como addon aparte, ver `docs/compras-proveedores-modulo-v1.md`
+> sección 7. Si se retoma como addon independiente en el futuro, sería para
+> variantes por giro (recetas, multi-almacén) que hoy están fuera de
+> alcance.

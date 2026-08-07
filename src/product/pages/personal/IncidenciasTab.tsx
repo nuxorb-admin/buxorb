@@ -1,8 +1,9 @@
 import { useState, type ChangeEvent, type FormEvent } from "react";
 import { supabase } from "../../../lib/supabase";
-import type { Empleado, Incidencia, IncidenciaTipo } from "../../../lib/database.types";
+import type { Empleado, HrSettings, Incidencia, IncidenciaTipo, SaldoVacaciones } from "../../../lib/database.types";
 import type { PersonalTierLimits } from "./limits";
 import { diasVacacionesLFT } from "./calculoNomina";
+import { aniversarioActual, registrarDiaGozado } from "./vacaciones";
 import { parseCsv } from "../treasury/parseCsv";
 import Modal from "../../../admin/components/Modal";
 import Badge from "../../../admin/components/Badge";
@@ -25,14 +26,20 @@ function antiguedadAnios(fechaIngreso: string): number {
 }
 
 export default function IncidenciasTab({
+  companyId,
   empleados,
   incidencias,
+  saldosVacaciones,
+  settings,
   limits,
   userId,
   reload,
 }: {
+  companyId: string;
   empleados: Empleado[];
   incidencias: Incidencia[];
+  saldosVacaciones: SaldoVacaciones[];
+  settings: HrSettings;
   limits: PersonalTierLimits;
   userId: string | null;
   reload: () => void;
@@ -40,6 +47,7 @@ export default function IncidenciasTab({
   const [showNew, setShowNew] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [showChecador, setShowChecador] = useState(false);
+  const [showReglas, setShowReglas] = useState(false);
   const [filtroEmpleado, setFiltroEmpleado] = useState("");
 
   const pendientesAprobacion = limits.solicitudAprobacionVacaciones
@@ -51,6 +59,10 @@ export default function IncidenciasTab({
   async function aprobar(inc: Incidencia) {
     if (!userId) return;
     await supabase.from("hr_incidents").update({ aprobado_por: userId }).eq("id", inc.id);
+    if (inc.tipo === "vacaciones") {
+      const empleado = empleados.find((e) => e.id === inc.empleado_id);
+      if (empleado) await registrarDiaGozado(empleado.id, empleado.fecha_ingreso);
+    }
     reload();
   }
 
@@ -102,9 +114,14 @@ export default function IncidenciasTab({
         </select>
         <div className="flex gap-3">
           {limits.importacionChecador && (
-            <button onClick={() => setShowChecador(true)} className="font-mono text-[0.66rem] uppercase text-teal hover:underline">
-              + Importar checador
-            </button>
+            <>
+              <button onClick={() => setShowReglas(true)} className="font-mono text-[0.66rem] uppercase text-teal hover:underline">
+                Reglas de retardos
+              </button>
+              <button onClick={() => setShowChecador(true)} className="font-mono text-[0.66rem] uppercase text-teal hover:underline">
+                + Importar checador
+              </button>
+            </>
           )}
           <button onClick={() => setShowImport(true)} className="font-mono text-[0.66rem] uppercase text-teal hover:underline">
             + Importar plantilla
@@ -141,7 +158,14 @@ export default function IncidenciasTab({
       </div>
 
       {showNew && (
-        <NewIncidenciaModal empleados={empleados} userId={userId} onClose={() => setShowNew(false)} onCreated={reload} />
+        <NewIncidenciaModal
+          empleados={empleados}
+          saldosVacaciones={saldosVacaciones}
+          limits={limits}
+          userId={userId}
+          onClose={() => setShowNew(false)}
+          onCreated={reload}
+        />
       )}
       {showImport && (
         <ImportIncidenciasModal empleados={empleados} origen="template" onClose={() => setShowImport(false)} onImported={reload} />
@@ -149,17 +173,69 @@ export default function IncidenciasTab({
       {showChecador && (
         <ImportIncidenciasModal empleados={empleados} origen="checador" onClose={() => setShowChecador(false)} onImported={reload} />
       )}
+      {showReglas && <ReglasRetardosModal companyId={companyId} settings={settings} onClose={() => setShowReglas(false)} onSaved={reload} />}
     </div>
+  );
+}
+
+function ReglasRetardosModal({
+  companyId,
+  settings,
+  onClose,
+  onSaved,
+}: {
+  companyId: string;
+  settings: HrSettings;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [retardosPorFalta, setRetardosPorFalta] = useState(String(settings.retardos_por_falta));
+  const [saving, setSaving] = useState(false);
+
+  async function guardar() {
+    setSaving(true);
+    await supabase.from("hr_settings").update({ retardos_por_falta: Number(retardosPorFalta) || 0 }).eq("company_id", companyId);
+    setSaving(false);
+    onSaved();
+    onClose();
+  }
+
+  return (
+    <Modal title="Reglas de retardos" onClose={onClose}>
+      <div className="space-y-3">
+        <label className="flex flex-col gap-1 font-mono text-xs text-ink">
+          Retardos que equivalen a 1 falta en el periodo (0 = regla apagada)
+          <input
+            type="number"
+            min="0"
+            value={retardosPorFalta}
+            onChange={(e) => setRetardosPorFalta(e.target.value)}
+            className="border border-ink/15 bg-sand-2 px-3 py-2 text-sm text-ink focus:border-teal focus:outline-none"
+          />
+        </label>
+        <p className="font-mono text-[0.6rem] text-muted">
+          Se aplica al calcular la prenómina: cada bloque de N retardos dentro del periodo descuenta como una falta
+          adicional.
+        </p>
+        <button onClick={guardar} disabled={saving} className="btn btn-primary w-full">
+          {saving ? "Guardando…" : "Guardar"}
+        </button>
+      </div>
+    </Modal>
   );
 }
 
 function NewIncidenciaModal({
   empleados,
+  saldosVacaciones,
+  limits,
   userId,
   onClose,
   onCreated,
 }: {
   empleados: Empleado[];
+  saldosVacaciones: SaldoVacaciones[];
+  limits: PersonalTierLimits;
   userId: string | null;
   onClose: () => void;
   onCreated: () => void;
@@ -172,7 +248,14 @@ function NewIncidenciaModal({
   const [saving, setSaving] = useState(false);
 
   const empleado = empleados.find((e) => e.id === empleadoId);
-  const saldoVacaciones = empleado ? diasVacacionesLFT(antiguedadAnios(empleado.fecha_ingreso)) : 0;
+  const saldoActual = empleado
+    ? saldosVacaciones.find((s) => s.empleado_id === empleado.id && s.aniversario === aniversarioActual(empleado.fecha_ingreso))
+    : null;
+  const saldoVacaciones = saldoActual
+    ? saldoActual.dias_derecho - saldoActual.dias_gozados
+    : empleado
+      ? diasVacacionesLFT(antiguedadAnios(empleado.fecha_ingreso))
+      : 0;
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -186,6 +269,12 @@ function NewIncidenciaModal({
       folio_incapacidad: tipo === "incapacidad" ? folio || null : null,
       created_by: userId,
     });
+    // Sin aprobación (Essential, o tipos que no la requieren) el día se
+    // cuenta como gozado de inmediato; con aprobación (Professional) se
+    // cuenta hasta que se aprueba — ver aprobar() arriba.
+    if (tipo === "vacaciones" && !limits.solicitudAprobacionVacaciones && empleado) {
+      await registrarDiaGozado(empleado.id, empleado.fecha_ingreso);
+    }
     setSaving(false);
     onCreated();
     onClose();
@@ -218,7 +307,9 @@ function NewIncidenciaModal({
           ))}
         </select>
         {tipo === "vacaciones" && (
-          <p className="font-mono text-[0.62rem] text-muted">Saldo de derecho por antigüedad (LFT): {saldoVacaciones} días.</p>
+          <p className="font-mono text-[0.62rem] text-muted">
+            {saldoActual ? `Saldo disponible: ${saldoVacaciones} días.` : `Derecho por antigüedad (LFT): ${saldoVacaciones} días.`}
+          </p>
         )}
         <input
           type="date"

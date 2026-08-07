@@ -1,6 +1,6 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { supabase } from "../../../lib/supabase";
-import type { Cliente } from "../../../lib/database.types";
+import type { Cliente, TreasuryMovement } from "../../../lib/database.types";
 import type { FacturaFull } from "./useVentasData";
 import type { VentasTierLimits } from "./limits";
 import Modal from "../../../admin/components/Modal";
@@ -22,17 +22,20 @@ const CARTERA_LABEL = { al_corriente: "Al corriente", por_vencer: "Por vencer", 
 const CARTERA_COLOR = { al_corriente: "teal", por_vencer: "orange", vencida: "orange" } as const;
 
 export default function CobranzaTab({
+  companyId,
   clientes,
   facturas,
   limits,
   reload,
 }: {
+  companyId: string;
   clientes: Cliente[];
   facturas: FacturaFull[];
   limits: VentasTierLimits;
   reload: () => void;
 }) {
   const [cobrando, setCobrando] = useState<FacturaFull | null>(null);
+  const [vinculando, setVinculando] = useState<FacturaFull | null>(null);
   const [verEstadoCuenta, setVerEstadoCuenta] = useState<Cliente | null>(null);
 
   const conSaldo = facturas.filter((f) => f.saldo_pendiente > 0 && f.estado !== "cancelada");
@@ -56,6 +59,9 @@ export default function CobranzaTab({
               </div>
               <div className="flex items-center gap-3">
                 <Badge color={CARTERA_COLOR[estado]}>{CARTERA_LABEL[estado]}</Badge>
+                <button onClick={() => setVinculando(f)} className="font-mono text-[0.62rem] uppercase text-muted hover:text-ink">
+                  Vincular banco
+                </button>
                 <button onClick={() => setCobrando(f)} className="font-mono text-[0.62rem] uppercase text-teal hover:underline">
                   Registrar cobro
                 </button>
@@ -89,6 +95,16 @@ export default function CobranzaTab({
       )}
 
       {cobrando && <CobroModal factura={cobrando} onClose={() => setCobrando(null)} onCobrado={reload} />}
+      {vinculando && (
+        <VincularBancoModal
+          companyId={companyId}
+          clienteNombre={clientes.find((c) => c.id === vinculando.cliente_id)?.razon_social ?? "—"}
+          facturaInicial={vinculando}
+          facturas={conSaldo.filter((f) => f.cliente_id === vinculando.cliente_id)}
+          onClose={() => setVinculando(null)}
+          onDone={reload}
+        />
+      )}
       {verEstadoCuenta && (
         <EstadoCuentaModal cliente={verEstadoCuenta} facturas={facturas.filter((f) => f.cliente_id === verEstadoCuenta.id)} onClose={() => setVerEstadoCuenta(null)} />
       )}
@@ -163,6 +179,155 @@ function CobroModal({ factura, onClose, onCobrado }: { factura: FacturaFull; onC
           {saving ? "Guardando…" : "Registrar cobro"}
         </button>
       </form>
+    </Modal>
+  );
+}
+
+// Un ingreso bancario ya usado en un match de ventas (tiene al menos un
+// sales_collections que lo referencia) no puede volver a cruzarse — por eso
+// se excluye aquí, no se filtra por "restante".
+function VincularBancoModal({
+  companyId,
+  clienteNombre,
+  facturaInicial,
+  facturas,
+  onClose,
+  onDone,
+}: {
+  companyId: string;
+  clienteNombre: string;
+  facturaInicial: FacturaFull;
+  facturas: FacturaFull[];
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const [movimientos, setMovimientos] = useState<TreasuryMovement[] | null>(null);
+  const [movimientoId, setMovimientoId] = useState("");
+  const [asignaciones, setAsignaciones] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      const [{ data: ingresos }, { data: usados }] = await Promise.all([
+        supabase
+          .from("treasury_movements")
+          .select("*")
+          .eq("company_id", companyId)
+          .eq("type", "ingreso")
+          .order("entry_date", { ascending: false })
+          .limit(200),
+        supabase.from("sales_collections").select("treasury_movement_id").not("treasury_movement_id", "is", null),
+      ]);
+      const usadosIds = new Set((usados ?? []).map((u) => u.treasury_movement_id));
+      setMovimientos((ingresos ?? []).filter((m) => !usadosIds.has(m.id)));
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [companyId]);
+
+  const movimiento = movimientos?.find((m) => m.id === movimientoId) ?? null;
+  const asignado = Object.values(asignaciones).reduce((sum, v) => sum + (Number(v) || 0), 0);
+  const restante = movimiento ? Number(movimiento.amount) - asignado : 0;
+
+  function elegirMovimiento(id: string) {
+    setMovimientoId(id);
+    const mov = movimientos?.find((m) => m.id === id);
+    if (!mov) return;
+    setAsignaciones({ [facturaInicial.id]: String(Math.min(facturaInicial.saldo_pendiente, Number(mov.amount))) });
+  }
+
+  async function confirmar() {
+    if (!movimiento) return;
+    if (asignado <= 0) {
+      setError("Asigna al menos un monto a alguna factura.");
+      return;
+    }
+    if (asignado > Number(movimiento.amount) + 0.01) {
+      setError("La suma asignada no puede superar el monto del movimiento.");
+      return;
+    }
+    setSaving(true);
+    setError(null);
+
+    for (const f of facturas) {
+      const monto = Number(asignaciones[f.id] ?? 0);
+      if (monto <= 0) continue;
+      await supabase.from("sales_collections").insert({
+        factura_id: f.id,
+        monto,
+        tipo: f.saldo_pendiente - monto <= 0 ? "total" : "parcial",
+        referencia: movimiento.concept,
+        origen: "tesoreria",
+        treasury_movement_id: movimiento.id,
+      });
+      const nuevoSaldo = Math.max(0, f.saldo_pendiente - monto);
+      await supabase
+        .from("sales_invoices")
+        .update({ saldo_pendiente: nuevoSaldo, estado: nuevoSaldo <= 0 ? "pagada" : "parcial" })
+        .eq("id", f.id);
+    }
+
+    setSaving(false);
+    onDone();
+    onClose();
+  }
+
+  return (
+    <Modal title={`Vincular movimiento bancario — ${clienteNombre}`} onClose={onClose}>
+      <div className="space-y-3">
+        {error && <p className="font-mono text-xs text-orange">{error}</p>}
+        {movimientos === null && <p className="font-mono text-xs text-muted">Cargando ingresos…</p>}
+        {movimientos?.length === 0 && (
+          <p className="font-mono text-xs text-muted">No hay ingresos bancarios disponibles para cruzar.</p>
+        )}
+        {movimientos && movimientos.length > 0 && (
+          <select
+            value={movimientoId}
+            onChange={(e) => elegirMovimiento(e.target.value)}
+            className="w-full border border-ink/15 bg-sand-2 px-3 py-2 text-sm text-ink focus:border-teal focus:outline-none"
+          >
+            <option value="">Selecciona un ingreso bancario…</option>
+            {movimientos.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.entry_date} · {m.concept} · {money(m.amount)}
+              </option>
+            ))}
+          </select>
+        )}
+
+        {movimiento && (
+          <>
+            <p className="font-mono text-[0.62rem] text-muted">
+              Reparte el monto de este ingreso entre las facturas de este cliente que cubre. Solo puede cruzarse con
+              facturas del mismo cliente.
+            </p>
+            <div className="space-y-2">
+              {facturas.map((f) => (
+                <div key={f.id} className="grid grid-cols-2 gap-2 border border-ink/10 bg-sand-2 p-2">
+                  <div className="font-mono text-[0.66rem] text-ink">
+                    {f.folio_interno}
+                    <br />
+                    <span className="text-muted">Saldo {money(f.saldo_pendiente)}</span>
+                  </div>
+                  <input
+                    type="number"
+                    value={asignaciones[f.id] ?? ""}
+                    onChange={(e) => setAsignaciones({ ...asignaciones, [f.id]: e.target.value })}
+                    placeholder="0"
+                    className="border border-ink/15 bg-white px-2 py-1.5 text-sm text-ink focus:border-teal focus:outline-none"
+                  />
+                </div>
+              ))}
+            </div>
+            <p className="text-right font-mono text-xs text-muted">
+              Restante por asignar: <b className={restante < 0 ? "text-orange" : "text-ink"}>{money(restante)}</b>
+            </p>
+            <button onClick={confirmar} disabled={saving} className="btn btn-primary w-full">
+              {saving ? "Guardando…" : "Confirmar cruce"}
+            </button>
+          </>
+        )}
+      </div>
     </Modal>
   );
 }

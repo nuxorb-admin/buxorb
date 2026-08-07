@@ -1,16 +1,19 @@
 import { useState, type FormEvent } from "react";
 import { supabase } from "../../../lib/supabase";
-import type { ConceptoNomina, Empleado, Finiquito, Incidencia, PeriodicidadPago } from "../../../lib/database.types";
+import type { ConceptoNomina, Empleado, Finiquito, HrSettings, Incidencia, PeriodicidadPago } from "../../../lib/database.types";
 import type { PeriodoFull } from "./usePersonalData";
 import type { PersonalTierLimits } from "./limits";
 import {
   calcularAguinaldo,
   calcularFiniquito,
+  calcularHorasExtra,
   calcularIMSSObrero,
   calcularISRPeriodo,
   calcularPrimaVacacional,
+  calcularSubsidioEmpleo,
   diasVacacionesLFT,
   type FormulaImssObrero,
+  type SubsidioEmpleo,
   type TramoISR,
 } from "./calculoNomina";
 import { downloadCsv } from "../treasury/parseCsv";
@@ -74,17 +77,27 @@ function calcularConceptosEmpleado(
   tramosISR: TramoISR[],
   umaDiaria: number,
   formulaImss: FormulaImssObrero | null,
+  subsidioEmpleo: SubsidioEmpleo | null,
+  retardosPorFalta: number,
 ): ConceptoMonto[] {
   const dias = diasEnPeriodo(periodo.fecha_inicio, periodo.fecha_fin);
   const enPeriodo = incidenciasEmpleado.filter((i) => i.fecha >= periodo.fecha_inicio && i.fecha <= periodo.fecha_fin);
-  const diasFalta = enPeriodo.filter((i) => i.tipo === "falta" || i.tipo === "permiso_sin_goce").length;
+  const diasFaltaDirecta = enPeriodo.filter((i) => i.tipo === "falta" || i.tipo === "permiso_sin_goce").length;
+  // Regla configurable (Professional): cada bloque de N retardos del
+  // periodo cuenta como una falta adicional — apagada si retardosPorFalta
+  // es 0 (Essential, o Professional sin configurarla).
+  const retardos = enPeriodo.filter((i) => i.tipo === "retardo").length;
+  const diasFaltaPorRetardos = retardosPorFalta > 0 ? Math.floor(retardos / retardosPorFalta) : 0;
+  const diasFalta = diasFaltaDirecta + diasFaltaPorRetardos;
   const sueldoPeriodo = round2(emp.sueldo_diario * Math.max(0, dias - diasFalta));
 
   const conceptos: ConceptoMonto[] = [{ clave: "sueldo", tipo: "percepcion", monto: sueldoPeriodo }];
 
   if (limits.horasExtraYPrimaDominical) {
-    const horasExtra = enPeriodo.filter((i) => i.tipo === "hora_extra").reduce((sum, i) => sum + (i.horas ?? 0), 0);
-    if (horasExtra > 0) conceptos.push({ clave: "horas_extra_dobles", tipo: "percepcion", monto: round2(horasExtra * (emp.sueldo_diario / 8) * 2) });
+    const horaExtraIncidencias = enPeriodo.filter((i) => i.tipo === "hora_extra").map((i) => ({ fecha: i.fecha, horas: i.horas ?? 0 }));
+    const { horasDobles, horasTriples, montoDobles, montoTriples } = calcularHorasExtra(emp.sueldo_diario, horaExtraIncidencias);
+    if (horasDobles > 0) conceptos.push({ clave: "horas_extra_dobles", tipo: "percepcion", monto: montoDobles });
+    if (horasTriples > 0) conceptos.push({ clave: "horas_extra_triples", tipo: "percepcion", monto: montoTriples });
     const primaDominicalDias = enPeriodo.filter((i) => i.tipo === "prima_dominical").length;
     if (primaDominicalDias > 0) conceptos.push({ clave: "prima_dominical", tipo: "percepcion", monto: round2(primaDominicalDias * emp.sueldo_diario * 0.25) });
   }
@@ -104,7 +117,11 @@ function calcularConceptosEmpleado(
 
   const totalPercepciones = conceptos.reduce((sum, c) => sum + c.monto, 0);
 
-  const isr = calcularISRPeriodo(totalPercepciones, dias, tramosISR);
+  const isrCausado = calcularISRPeriodo(totalPercepciones, dias, tramosISR);
+  const subsidio = calcularSubsidioEmpleo(totalPercepciones, dias, subsidioEmpleo);
+  // El subsidio se resta directo del ISR causado (no es una percepción
+  // aparte) — nunca deja el ISR a retener en negativo.
+  const isr = round2(Math.max(0, isrCausado - subsidio));
   conceptos.push({ clave: "isr", tipo: "deduccion", monto: isr });
 
   if (formulaImss) {
@@ -128,10 +145,12 @@ export default function NominaTab({
   conceptos,
   periodos,
   finiquitos,
+  settings,
   limits,
   tramosISR,
   umaDiaria,
   formulaImss,
+  subsidioEmpleo,
   reload,
 }: {
   companyId: string;
@@ -140,10 +159,12 @@ export default function NominaTab({
   conceptos: ConceptoNomina[];
   periodos: PeriodoFull[];
   finiquitos: Finiquito[];
+  settings: HrSettings;
   limits: PersonalTierLimits;
   tramosISR: TramoISR[];
   umaDiaria: number;
   formulaImss: FormulaImssObrero | null;
+  subsidioEmpleo: SubsidioEmpleo | null;
   reload: () => void;
 }) {
   const [showNewPeriodo, setShowNewPeriodo] = useState(false);
@@ -254,10 +275,12 @@ export default function NominaTab({
           empleados={empleados}
           incidencias={incidencias}
           conceptos={conceptos}
+          settings={settings}
           limits={limits}
           tramosISR={tramosISR}
           umaDiaria={umaDiaria}
           formulaImss={formulaImss}
+          subsidioEmpleo={subsidioEmpleo}
           onClose={() => setPeriodoAbierto(null)}
           onSaved={reload}
         />
@@ -354,10 +377,12 @@ function PrenominaModal({
   empleados,
   incidencias,
   conceptos,
+  settings,
   limits,
   tramosISR,
   umaDiaria,
   formulaImss,
+  subsidioEmpleo,
   onClose,
   onSaved,
 }: {
@@ -366,10 +391,12 @@ function PrenominaModal({
   empleados: Empleado[];
   incidencias: Incidencia[];
   conceptos: ConceptoNomina[];
+  settings: HrSettings;
   limits: PersonalTierLimits;
   tramosISR: TramoISR[];
   umaDiaria: number;
   formulaImss: FormulaImssObrero | null;
+  subsidioEmpleo: SubsidioEmpleo | null;
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -403,6 +430,8 @@ function PrenominaModal({
         tramosISR,
         umaDiaria,
         formulaImss,
+        subsidioEmpleo,
+        limits.importacionChecador ? settings.retardos_por_falta : 0,
       );
       const totalPercepciones = round2(items.filter((i) => i.tipo === "percepcion").reduce((s, i) => s + i.monto, 0));
       const totalDeducciones = round2(items.filter((i) => i.tipo === "deduccion").reduce((s, i) => s + i.monto, 0));

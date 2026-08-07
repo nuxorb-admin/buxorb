@@ -148,6 +148,7 @@ function NewFacturaModal({
   const [partidas, setPartidas] = useState<Partida[]>([{ ...PARTIDA_VACIA }]);
   const [cantidadesParciales, setCantidadesParciales] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const pedido = pedidosFacturables.find((p) => p.id === pedidoId);
   const lineasPedido = pedido
@@ -176,8 +177,8 @@ function NewFacturaModal({
     const finalClienteId = origen === "pedido" ? pedido?.cliente_id : clienteId;
     if (!finalClienteId) return;
     setSaving(true);
+    setError(null);
 
-    const folio = `FAC-${String(facturasCount + 1).padStart(4, "0")}`;
     const fechaEmision = new Date().toISOString().slice(0, 10);
     const fechaVencimiento =
       condicion === "credito"
@@ -188,80 +189,92 @@ function NewFacturaModal({
     const totalAnticipos = anticiposDisponibles.reduce((s, a) => s + Number(a.monto), 0);
     const saldoInicial = Math.max(0, total - totalAnticipos);
 
-    const { data: factura } = await supabase
-      .from("sales_invoices")
-      .insert({
-        company_id: companyId,
-        pedido_id: origen === "pedido" ? pedidoId : null,
-        cliente_id: finalClienteId,
-        folio_interno: folio,
-        fecha_emision: fechaEmision,
-        condicion,
-        fecha_vencimiento: fechaVencimiento,
-        subtotal,
-        iva,
-        total,
-        saldo_pendiente: saldoInicial,
-        estado: saldoInicial <= 0 ? "pagada" : totalAnticipos > 0 ? "parcial" : "pendiente",
-      })
-      .select()
-      .single();
-
-    if (factura) {
-      await supabase.from("sales_invoice_items").insert(
-        partidasEfectivas
-          .filter((p) => p.descripcion.trim())
-          .map((p) => {
-            const cantidad = Number(p.cantidad) || 0;
-            const precio = Number(p.precio_unitario) || 0;
-            const descPct = Number(p.descuento_pct) || 0;
-            return {
-              factura_id: factura.id,
-              descripcion: p.descripcion,
-              cantidad,
-              precio_unitario: precio,
-              descuento_pct: descPct,
-              importe: cantidad * precio * (1 - descPct / 100),
-            };
-          }),
-      );
-
-      for (const anticipo of anticiposDisponibles) {
-        await supabase.from("sales_collections").insert({ factura_id: factura.id, monto: anticipo.monto, tipo: "anticipo" });
-        await supabase.from("sales_order_advances").update({ factura_id: factura.id }).eq("id", anticipo.id);
-      }
-
-      if (origen === "pedido" && pedido) {
-        for (const l of lineasPedido) {
-          const facturado = limits.facturacionParcial ? Number(cantidadesParciales[l.detalle.id] ?? l.pendiente) : l.pendiente;
-          if (facturado > 0) {
-            await supabase
-              .from("sales_order_items")
-              .update({ cantidad_facturada: Number(l.detalle.cantidad_facturada) + facturado })
-              .eq("id", l.detalle.id);
-          }
-        }
-        const totalPendienteRestante = lineasPedido.reduce((s, l) => {
-          const facturado = limits.facturacionParcial ? Number(cantidadesParciales[l.detalle.id] ?? l.pendiente) : l.pendiente;
-          return s + Math.max(0, l.pendiente - facturado);
-        }, 0);
-        await supabase
-          .from("sales_orders")
-          .update({ estado: totalPendienteRestante > 0 ? "facturado_parcial" : "facturado" })
-          .eq("id", pedidoId);
-      }
-
-      if (saldoInicial > 0) {
-        await supabase.from("expected_movements").insert({
+    // El folio se calcula del conteo local (facturasCount) — dos facturas
+    // creadas casi al mismo tiempo pueden pedir el mismo consecutivo. La
+    // constraint unique(company_id, folio_interno) lo detecta (23505);
+    // reintentamos con el siguiente número en vez de fallar en silencio.
+    let factura: { id: string } | null = null;
+    let intento = 0;
+    while (!factura && intento < 5) {
+      const folio = `FAC-${String(facturasCount + 1 + intento).padStart(4, "0")}`;
+      const { data, error: insertError } = await supabase
+        .from("sales_invoices")
+        .insert({
           company_id: companyId,
-          tipo: "ingreso",
-          monto: saldoInicial,
-          fecha_esperada: fechaVencimiento ?? fechaEmision,
-          modulo_origen: "ventas",
-          referencia_id: factura.id,
-          concepto: `Factura ${folio}`,
-        });
+          pedido_id: origen === "pedido" ? pedidoId : null,
+          cliente_id: finalClienteId,
+          folio_interno: folio,
+          fecha_emision: fechaEmision,
+          condicion,
+          fecha_vencimiento: fechaVencimiento,
+          subtotal,
+          iva,
+          total,
+          saldo_pendiente: saldoInicial,
+          estado: saldoInicial <= 0 ? "pagada" : totalAnticipos > 0 ? "parcial" : "pendiente",
+        })
+        .select()
+        .single();
+
+      if (data) {
+        factura = data;
+        break;
       }
+      if (insertError?.code !== "23505") {
+        setSaving(false);
+        setError("No se pudo crear la factura.");
+        return;
+      }
+      intento++;
+    }
+
+    if (!factura) {
+      setSaving(false);
+      setError("No se pudo generar un folio disponible — intenta de nuevo.");
+      return;
+    }
+
+    await supabase.from("sales_invoice_items").insert(
+      partidasEfectivas
+        .filter((p) => p.descripcion.trim())
+        .map((p) => {
+          const cantidad = Number(p.cantidad) || 0;
+          const precio = Number(p.precio_unitario) || 0;
+          const descPct = Number(p.descuento_pct) || 0;
+          return {
+            factura_id: factura.id,
+            descripcion: p.descripcion,
+            cantidad,
+            precio_unitario: precio,
+            descuento_pct: descPct,
+            importe: cantidad * precio * (1 - descPct / 100),
+          };
+        }),
+    );
+
+    for (const anticipo of anticiposDisponibles) {
+      await supabase.from("sales_collections").insert({ factura_id: factura.id, monto: anticipo.monto, tipo: "anticipo" });
+      await supabase.from("sales_order_advances").update({ factura_id: factura.id }).eq("id", anticipo.id);
+    }
+
+    if (origen === "pedido" && pedido) {
+      for (const l of lineasPedido) {
+        const facturado = limits.facturacionParcial ? Number(cantidadesParciales[l.detalle.id] ?? l.pendiente) : l.pendiente;
+        if (facturado > 0) {
+          await supabase
+            .from("sales_order_items")
+            .update({ cantidad_facturada: Number(l.detalle.cantidad_facturada) + facturado })
+            .eq("id", l.detalle.id);
+        }
+      }
+      const totalPendienteRestante = lineasPedido.reduce((s, l) => {
+        const facturado = limits.facturacionParcial ? Number(cantidadesParciales[l.detalle.id] ?? l.pendiente) : l.pendiente;
+        return s + Math.max(0, l.pendiente - facturado);
+      }, 0);
+      await supabase
+        .from("sales_orders")
+        .update({ estado: totalPendienteRestante > 0 ? "facturado_parcial" : "facturado" })
+        .eq("id", pedidoId);
     }
 
     setSaving(false);
@@ -272,6 +285,7 @@ function NewFacturaModal({
   return (
     <Modal title="Nueva factura" onClose={onClose}>
       <form onSubmit={submit} className="space-y-3">
+        {error && <p className="font-mono text-xs text-orange">{error}</p>}
         <div className="flex gap-2">
           <label className="flex items-center gap-1 font-mono text-xs">
             <input type="radio" checked={origen === "pedido"} onChange={() => setOrigen("pedido")} disabled={pedidosFacturables.length === 0} />

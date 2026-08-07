@@ -60,6 +60,8 @@ export default function ProspectosTab({
   const [showMotivos, setShowMotivos] = useState(false);
   const [perdiendo, setPerdiendo] = useState<Oportunidad | null>(null);
   const [filtroEstado, setFiltroEstado] = useState<OportunidadEstado | "">("");
+  const [nuevoCliente, setNuevoCliente] = useState(false);
+  const [editandoCliente, setEditandoCliente] = useState<Cliente | null>(null);
 
   function nombreProspectoOCliente(o: Oportunidad) {
     if (o.cliente_id) return clientes.find((c) => c.id === o.cliente_id)?.razon_social ?? "—";
@@ -104,6 +106,33 @@ export default function ProspectosTab({
               <p className="text-sm font-semibold text-ink">{p.nombre}</p>
               <p className="font-mono text-[0.66rem] uppercase tracking-[0.06em] text-muted">{p.origen}</p>
             </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="mb-6 flex items-center justify-between">
+        <h3 className="font-mono text-[0.68rem] font-bold uppercase tracking-[0.1em] text-muted">Clientes</h3>
+        <button onClick={() => setNuevoCliente(true)} className="font-mono text-[0.66rem] uppercase text-teal hover:underline">
+          + Nuevo cliente
+        </button>
+      </div>
+      <div className="mb-8 divide-y divide-ink/10 border border-ink/10 bg-white">
+        {clientes.length === 0 && (
+          <p className="p-4 font-mono text-xs text-muted">
+            Sin clientes todavía — se crean solos al ganar una oportunidad, o dalos de alta aquí directo.
+          </p>
+        )}
+        {clientes.map((c) => (
+          <div key={c.id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+            <div>
+              <p className="text-sm font-semibold text-ink">{c.razon_social}</p>
+              <p className="font-mono text-[0.66rem] uppercase tracking-[0.06em] text-muted">
+                {c.rfc || "Sin RFC"} · {c.email || "sin correo"} · {c.dias_credito > 0 ? `${c.dias_credito}d crédito` : "contado"}
+              </p>
+            </div>
+            <button onClick={() => setEditandoCliente(c)} className="font-mono text-[0.62rem] uppercase text-muted hover:text-ink">
+              Editar
+            </button>
           </div>
         ))}
       </div>
@@ -196,6 +225,17 @@ export default function ProspectosTab({
       )}
 
       {showNewProspecto && <NewProspectoModal companyId={companyId} onClose={() => setShowNewProspecto(false)} onCreated={reload} />}
+      {(nuevoCliente || editandoCliente) && (
+        <ClienteModal
+          companyId={companyId}
+          cliente={editandoCliente}
+          onClose={() => {
+            setNuevoCliente(false);
+            setEditandoCliente(null);
+          }}
+          onSaved={reload}
+        />
+      )}
       {showNewOportunidad && (
         <NewOportunidadModal
           companyId={companyId}
@@ -297,6 +337,138 @@ function NewProspectoModal({ companyId, onClose, onCreated }: { companyId: strin
         />
         <button type="submit" disabled={saving || !nombre} className="btn btn-primary w-full">
           {saving ? "Guardando…" : "Crear prospecto"}
+        </button>
+      </form>
+    </Modal>
+  );
+}
+
+function ClienteModal({
+  companyId,
+  cliente,
+  onClose,
+  onSaved,
+}: {
+  companyId: string;
+  cliente: Cliente | null;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [razonSocial, setRazonSocial] = useState(cliente?.razon_social ?? "");
+  const [nombreComercial, setNombreComercial] = useState(cliente?.nombre_comercial ?? "");
+  const [rfc, setRfc] = useState(cliente?.rfc ?? "");
+  const [regimenFiscal, setRegimenFiscal] = useState(cliente?.regimen_fiscal ?? "");
+  const [usoCfdi, setUsoCfdi] = useState(cliente?.uso_cfdi ?? "");
+  const [codigoPostal, setCodigoPostal] = useState(cliente?.codigo_postal_fiscal ?? "");
+  const [email, setEmail] = useState(cliente?.email ?? "");
+  const [telefono, setTelefono] = useState(cliente?.telefono ?? "");
+  const [diasCredito, setDiasCredito] = useState(String(cliente?.dias_credito ?? 0));
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    if (!razonSocial.trim()) return;
+    setSaving(true);
+    setError(null);
+
+    const payload = {
+      company_id: companyId,
+      razon_social: razonSocial.trim(),
+      nombre_comercial: nombreComercial.trim() || null,
+      rfc: rfc.trim() || null,
+      regimen_fiscal: regimenFiscal.trim() || null,
+      uso_cfdi: usoCfdi.trim() || null,
+      codigo_postal_fiscal: codigoPostal.trim() || null,
+      email: email.trim() || null,
+      telefono: telefono.trim() || null,
+      dias_credito: Number(diasCredito) || 0,
+    };
+
+    const { error: dbError } = cliente
+      ? await supabase.from("sales_customers").update(payload).eq("id", cliente.id)
+      : await supabase.from("sales_customers").insert(payload);
+
+    setSaving(false);
+    if (dbError) {
+      setError("No se pudo guardar el cliente.");
+      return;
+    }
+    onSaved();
+    onClose();
+  }
+
+  return (
+    <Modal title={cliente ? "Editar cliente" : "Nuevo cliente"} onClose={onClose}>
+      <form onSubmit={submit} className="space-y-3">
+        {error && <p className="font-mono text-xs text-orange">{error}</p>}
+        <input
+          value={razonSocial}
+          onChange={(e) => setRazonSocial(e.target.value)}
+          placeholder="Razón social"
+          required
+          className="w-full border border-ink/15 bg-sand-2 px-3 py-2 text-sm text-ink focus:border-teal focus:outline-none"
+        />
+        <input
+          value={nombreComercial}
+          onChange={(e) => setNombreComercial(e.target.value)}
+          placeholder="Nombre comercial (opcional)"
+          className="w-full border border-ink/15 bg-sand-2 px-3 py-2 text-sm text-ink focus:border-teal focus:outline-none"
+        />
+        <div className="grid grid-cols-2 gap-2">
+          <input
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="Correo"
+            className="border border-ink/15 bg-sand-2 px-3 py-2 text-sm text-ink focus:border-teal focus:outline-none"
+          />
+          <input
+            value={telefono}
+            onChange={(e) => setTelefono(e.target.value)}
+            placeholder="Teléfono"
+            className="border border-ink/15 bg-sand-2 px-3 py-2 text-sm text-ink focus:border-teal focus:outline-none"
+          />
+        </div>
+        <div>
+          <label className="mb-1 block font-mono text-[0.6rem] uppercase text-muted">Días de crédito (0 = contado)</label>
+          <input
+            type="number"
+            value={diasCredito}
+            onChange={(e) => setDiasCredito(e.target.value)}
+            className="w-full border border-ink/15 bg-sand-2 px-3 py-2 text-sm text-ink focus:border-teal focus:outline-none"
+          />
+        </div>
+        <p className="font-mono text-[0.6rem] uppercase tracking-[0.08em] text-muted">
+          Datos fiscales (necesarios solo si el negocio timbra CFDI)
+        </p>
+        <div className="grid grid-cols-2 gap-2">
+          <input
+            value={rfc}
+            onChange={(e) => setRfc(e.target.value)}
+            placeholder="RFC"
+            className="border border-ink/15 bg-sand-2 px-3 py-2 text-sm text-ink focus:border-teal focus:outline-none"
+          />
+          <input
+            value={codigoPostal}
+            onChange={(e) => setCodigoPostal(e.target.value)}
+            placeholder="CP fiscal"
+            className="border border-ink/15 bg-sand-2 px-3 py-2 text-sm text-ink focus:border-teal focus:outline-none"
+          />
+          <input
+            value={regimenFiscal}
+            onChange={(e) => setRegimenFiscal(e.target.value)}
+            placeholder="Régimen fiscal"
+            className="border border-ink/15 bg-sand-2 px-3 py-2 text-sm text-ink focus:border-teal focus:outline-none"
+          />
+          <input
+            value={usoCfdi}
+            onChange={(e) => setUsoCfdi(e.target.value)}
+            placeholder="Uso CFDI"
+            className="border border-ink/15 bg-sand-2 px-3 py-2 text-sm text-ink focus:border-teal focus:outline-none"
+          />
+        </div>
+        <button type="submit" disabled={saving || !razonSocial.trim()} className="btn btn-primary w-full">
+          {saving ? "Guardando…" : cliente ? "Guardar cambios" : "Crear cliente"}
         </button>
       </form>
     </Modal>

@@ -105,14 +105,37 @@ export default function CotizacionesTab({
   }
 
   async function generarPedido(c: CotizacionFull) {
-    if (!c.cliente_id) return;
-    const cliente = clientes.find((cl) => cl.id === c.cliente_id);
+    // Una cotización puede nacer de un prospecto sin oportunidad previa (el
+    // objetivo del módulo permite entrar en cualquier punto del ciclo) — al
+    // aceptarla, si todavía no tiene cliente_id, se convierte el prospecto a
+    // cliente aquí mismo en vez de fallar en silencio (mismo patrón que
+    // marcarGanada en ProspectosTab.tsx).
+    let clienteId = c.cliente_id;
+    if (!clienteId && c.prospecto_id) {
+      const prospecto = prospectos.find((p) => p.id === c.prospecto_id);
+      const { data: cliente, error: clienteError } = await supabase
+        .from("sales_customers")
+        .insert({
+          company_id: companyId,
+          razon_social: prospecto?.nombre ?? "Cliente nuevo",
+          email: prospecto?.contacto_correo,
+          telefono: prospecto?.contacto_telefono,
+        })
+        .select()
+        .single();
+      if (clienteError || !cliente) return;
+      clienteId = cliente.id;
+      await supabase.from("sales_quotes").update({ cliente_id: clienteId }).eq("id", c.id);
+    }
+    if (!clienteId) return;
+
+    const cliente = clientes.find((cl) => cl.id === clienteId);
     const { data: pedido } = await supabase
       .from("sales_orders")
       .insert({
         company_id: companyId,
         cotizacion_id: c.id,
-        cliente_id: c.cliente_id,
+        cliente_id: clienteId,
         condicion_pago: (cliente?.dias_credito ?? 0) > 0 ? "credito" : "contado",
         dias_credito: cliente?.dias_credito ?? 0,
         subtotal: c.subtotal,

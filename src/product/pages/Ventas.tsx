@@ -99,6 +99,7 @@ export default function Ventas() {
             kitItems={kitItems}
             insumosCompra={insumosCompra}
             unidadesCatalogo={unidadesCatalogo}
+            limits={limits}
             reload={reload}
           />
         )}
@@ -119,7 +120,9 @@ export default function Ventas() {
         {tab === "facturacion" && (
           <FacturacionTab companyId={companyId} clientes={clientes} pedidos={pedidos} facturas={facturas} limits={limits} reload={reload} />
         )}
-        {tab === "cobranza" && <CobranzaTab clientes={clientes} facturas={facturas} limits={limits} reload={reload} />}
+        {tab === "cobranza" && (
+          <CobranzaTab companyId={companyId} clientes={clientes} facturas={facturas} limits={limits} reload={reload} />
+        )}
       </div>
     </div>
   );

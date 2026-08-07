@@ -1,7 +1,17 @@
-import { useState, type ChangeEvent, type FormEvent } from "react";
+import { useEffect, useState, type ChangeEvent, type FormEvent } from "react";
 import { supabase } from "../../../lib/supabase";
-import type { DepartamentoPersonal, Empleado, HistorialSueldo, MotivoBaja, PeriodicidadPago, TipoContrato } from "../../../lib/database.types";
+import type {
+  DepartamentoPersonal,
+  DocumentoEmpleado,
+  Empleado,
+  HistorialSueldo,
+  MotivoBaja,
+  PeriodicidadPago,
+  SaldoVacaciones,
+  TipoContrato,
+} from "../../../lib/database.types";
 import type { PersonalTierLimits } from "./limits";
+import { aniversarioActual, ensureSaldoVacaciones } from "./vacaciones";
 import { parseCsv } from "../treasury/parseCsv";
 import Modal from "../../../admin/components/Modal";
 import FieldInput from "../../../admin/components/FieldInput";
@@ -21,6 +31,8 @@ export default function ExpedienteTab({
   empleados,
   departamentos,
   historialSueldo,
+  documentos,
+  saldosVacaciones,
   limits,
   reload,
 }: {
@@ -28,6 +40,8 @@ export default function ExpedienteTab({
   empleados: Empleado[];
   departamentos: DepartamentoPersonal[];
   historialSueldo: HistorialSueldo[];
+  documentos: DocumentoEmpleado[];
+  saldosVacaciones: SaldoVacaciones[];
   limits: PersonalTierLimits;
   reload: () => void;
 }) {
@@ -37,24 +51,46 @@ export default function ExpedienteTab({
   const [detalle, setDetalle] = useState<Empleado | null>(null);
   const [baja, setBaja] = useState<Empleado | null>(null);
 
+  const empleadosActivos = empleados.filter((e) => e.estado === "activo").length;
+  const limiteAlcanzado = empleadosActivos >= limits.maxEmpleados;
+
   return (
     <div>
       <div className="mb-3 flex items-center justify-between">
-        <h3 className="font-mono text-[0.68rem] font-bold uppercase tracking-[0.1em] text-muted">Empleados</h3>
+        <h3 className="font-mono text-[0.68rem] font-bold uppercase tracking-[0.1em] text-muted">
+          Empleados
+          <span className="ml-2 font-normal normal-case text-muted">
+            ({empleadosActivos}/{limits.maxEmpleados} activos)
+          </span>
+        </h3>
         <div className="flex gap-3">
           {limits.departamentosYHistorialSueldo && (
             <button onClick={() => setShowDepartamentos(true)} className="font-mono text-[0.66rem] uppercase text-teal hover:underline">
               Departamentos
             </button>
           )}
-          <button onClick={() => setShowImport(true)} className="font-mono text-[0.66rem] uppercase text-teal hover:underline">
+          <button
+            onClick={() => setShowImport(true)}
+            disabled={limiteAlcanzado}
+            className="font-mono text-[0.66rem] uppercase text-teal hover:underline disabled:cursor-not-allowed disabled:text-muted disabled:no-underline"
+          >
             + Importar plantilla
           </button>
-          <button onClick={() => setShowNew(true)} className="font-mono text-[0.66rem] uppercase text-teal hover:underline">
+          <button
+            onClick={() => setShowNew(true)}
+            disabled={limiteAlcanzado}
+            className="font-mono text-[0.66rem] uppercase text-teal hover:underline disabled:cursor-not-allowed disabled:text-muted disabled:no-underline"
+          >
             + Nuevo empleado
           </button>
         </div>
       </div>
+      {limiteAlcanzado && (
+        <p className="mb-3 font-mono text-[0.62rem] text-orange">
+          Llegaste al límite de {limits.maxEmpleados} empleados activos de tu nivel — da de baja a alguien o sube de
+          nivel para agregar más.
+        </p>
+      )}
 
       <div className="divide-y divide-ink/10 border border-ink/10 bg-white">
         {empleados.length === 0 && <p className="p-4 font-mono text-xs text-muted">Sin empleados todavía.</p>}
@@ -87,17 +123,38 @@ export default function ExpedienteTab({
       </div>
 
       {showNew && (
-        <NewEmpleadoModal companyId={companyId} departamentos={departamentos} limits={limits} onClose={() => setShowNew(false)} onCreated={reload} />
+        <NewEmpleadoModal
+          companyId={companyId}
+          departamentos={departamentos}
+          limits={limits}
+          onClose={() => setShowNew(false)}
+          onCreated={reload}
+        />
       )}
-      {showImport && <ImportEmpleadosModal companyId={companyId} onClose={() => setShowImport(false)} onImported={reload} />}
+      {showImport && (
+        <ImportEmpleadosModal
+          companyId={companyId}
+          empleadosActivos={empleadosActivos}
+          maxEmpleados={limits.maxEmpleados}
+          onClose={() => setShowImport(false)}
+          onImported={reload}
+        />
+      )}
       {showDepartamentos && (
         <DepartamentosModal companyId={companyId} departamentos={departamentos} onClose={() => setShowDepartamentos(false)} onSaved={reload} />
       )}
       {baja && <BajaModal empleado={baja} onClose={() => setBaja(null)} onSaved={reload} />}
       {detalle && (
         <DetalleEmpleadoModal
+          companyId={companyId}
           empleado={detalle}
           historialSueldo={historialSueldo.filter((h) => h.empleado_id === detalle.id)}
+          documentos={documentos.filter((d) => d.empleado_id === detalle.id)}
+          saldoVacaciones={
+            saldosVacaciones.find(
+              (s) => s.empleado_id === detalle.id && s.aniversario === aniversarioActual(detalle.fecha_ingreso),
+            ) ?? null
+          }
           limits={limits}
           onClose={() => setDetalle(null)}
           onSaved={reload}
@@ -227,7 +284,19 @@ function NewEmpleadoModal({
   );
 }
 
-function ImportEmpleadosModal({ companyId, onClose, onImported }: { companyId: string; onClose: () => void; onImported: () => void }) {
+function ImportEmpleadosModal({
+  companyId,
+  empleadosActivos,
+  maxEmpleados,
+  onClose,
+  onImported,
+}: {
+  companyId: string;
+  empleadosActivos: number;
+  maxEmpleados: number;
+  onClose: () => void;
+  onImported: () => void;
+}) {
   const [rows, setRows] = useState<string[][]>([]);
   const [saving, setSaving] = useState(false);
 
@@ -238,22 +307,22 @@ function ImportEmpleadosModal({ companyId, onClose, onImported }: { companyId: s
     setRows(parseCsv(text));
   }
 
-  const dataRows = rows.slice(1);
+  const dataRows = rows.slice(1).filter((r) => r[0]?.trim());
+  const excede = empleadosActivos + dataRows.length > maxEmpleados;
 
   async function confirm() {
+    if (excede) return;
     setSaving(true);
     await supabase.from("hr_employees").insert(
-      dataRows
-        .filter((r) => r[0]?.trim())
-        .map((r) => ({
-          company_id: companyId,
-          nombre_completo: r[0],
-          rfc: r[1] || null,
-          curp: r[2] || null,
-          nss: r[3] || null,
-          sueldo_diario: Number(r[4]) || 0,
-          periodicidad_pago: (r[5] as PeriodicidadPago) || "quincenal",
-        })),
+      dataRows.map((r) => ({
+        company_id: companyId,
+        nombre_completo: r[0],
+        rfc: r[1] || null,
+        curp: r[2] || null,
+        nss: r[3] || null,
+        sueldo_diario: Number(r[4]) || 0,
+        periodicidad_pago: (r[5] as PeriodicidadPago) || "quincenal",
+      })),
     );
     setSaving(false);
     onImported();
@@ -267,8 +336,14 @@ function ImportEmpleadosModal({ companyId, onClose, onImported }: { companyId: s
           Columnas: nombre completo, RFC, CURP, NSS, sueldo diario, periodicidad (con encabezados en la primera fila).
         </p>
         <input type="file" accept=".csv" onChange={onFile} className="w-full border border-ink/15 bg-sand-2 px-3 py-2 text-sm text-ink" />
+        {excede && (
+          <p className="font-mono text-[0.62rem] text-orange">
+            {empleadosActivos + dataRows.length} superaría el límite de {maxEmpleados} empleados activos de tu nivel —
+            reduce el archivo o sube de nivel.
+          </p>
+        )}
         {dataRows.length > 0 && (
-          <button onClick={confirm} disabled={saving} className="btn btn-primary w-full">
+          <button onClick={confirm} disabled={saving || excede} className="btn btn-primary w-full">
             {saving ? "Importando…" : `Confirmar importación (${dataRows.length} empleados)`}
           </button>
         )}
@@ -362,20 +437,33 @@ function BajaModal({ empleado, onClose, onSaved }: { empleado: Empleado; onClose
 }
 
 function DetalleEmpleadoModal({
+  companyId,
   empleado,
   historialSueldo,
+  documentos,
+  saldoVacaciones,
   limits,
   onClose,
   onSaved,
 }: {
+  companyId: string;
   empleado: Empleado;
   historialSueldo: HistorialSueldo[];
+  documentos: DocumentoEmpleado[];
+  saldoVacaciones: SaldoVacaciones | null;
   limits: PersonalTierLimits;
   onClose: () => void;
   onSaved: () => void;
 }) {
   const [nuevoSueldo, setNuevoSueldo] = useState(String(empleado.sueldo_diario));
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    ensureSaldoVacaciones(empleado.id, empleado.fecha_ingreso).then((saldo) => {
+      if (saldo) onSaved();
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [empleado.id]);
 
   async function cambiarSueldo(e: FormEvent) {
     e.preventDefault();
@@ -388,12 +476,17 @@ function DetalleEmpleadoModal({
     onSaved();
   }
 
+  const disponibles = saldoVacaciones ? saldoVacaciones.dias_derecho - saldoVacaciones.dias_gozados : 0;
+
   return (
     <Modal title={empleado.nombre_completo} onClose={onClose}>
       <div className="space-y-1 font-mono text-xs text-muted">
         <p>RFC: {empleado.rfc || "—"} · CURP: {empleado.curp || "—"} · NSS: {empleado.nss || "—"}</p>
         <p>Ingreso: {empleado.fecha_ingreso} · Contrato: {empleado.tipo_contrato}</p>
         <p>Sueldo diario actual: {money(empleado.sueldo_diario)}</p>
+        <p>
+          Vacaciones: {saldoVacaciones ? `${disponibles} de ${saldoVacaciones.dias_derecho} días disponibles` : "sin derecho todavía (menos de 1 año de antigüedad)"}
+        </p>
       </div>
 
       {limits.departamentosYHistorialSueldo && (
@@ -421,6 +514,79 @@ function DetalleEmpleadoModal({
           </form>
         </>
       )}
+
+      <DocumentosEmpleado companyId={companyId} empleado={empleado} documentos={documentos} onSaved={onSaved} />
     </Modal>
+  );
+}
+
+function DocumentosEmpleado({
+  companyId,
+  empleado,
+  documentos,
+  onSaved,
+}: {
+  companyId: string;
+  empleado: Empleado;
+  documentos: DocumentoEmpleado[];
+  onSaved: () => void;
+}) {
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function subir(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setUploading(true);
+    setError(null);
+    const path = `${companyId}/${empleado.id}/${Date.now()}-${file.name}`;
+    const { error: uploadError } = await supabase.storage.from("hr-employee-documents").upload(path, file);
+    if (uploadError) {
+      setUploading(false);
+      setError("No se pudo subir el archivo.");
+      return;
+    }
+    await supabase.from("hr_employee_documents").insert({
+      empleado_id: empleado.id,
+      nombre: file.name,
+      tipo: file.type || null,
+      storage_path: path,
+    });
+    setUploading(false);
+    onSaved();
+  }
+
+  async function descargar(doc: DocumentoEmpleado) {
+    if (!doc.storage_path) return;
+    const { data } = await supabase.storage.from("hr-employee-documents").createSignedUrl(doc.storage_path, 60);
+    if (data?.signedUrl) window.open(data.signedUrl, "_blank");
+  }
+
+  return (
+    <div className="mt-4">
+      <h4 className="mb-2 font-mono text-[0.62rem] font-bold uppercase tracking-[0.1em] text-muted">Documentos</h4>
+      {error && <p className="mb-2 font-mono text-xs text-orange">{error}</p>}
+      <div className="mb-2 divide-y divide-ink/10 border border-ink/10 bg-white">
+        {documentos.length === 0 && <p className="p-2 font-mono text-xs text-muted">Sin documentos cargados.</p>}
+        {documentos.map((d) => (
+          <button
+            key={d.id}
+            onClick={() => descargar(d)}
+            disabled={!d.storage_path}
+            className="flex w-full items-center justify-between px-3 py-1.5 text-left font-mono text-xs text-ink hover:bg-sand-2 disabled:cursor-not-allowed"
+          >
+            <span>{d.nombre}</span>
+            <span className="text-muted">{d.storage_path ? "Descargar" : "sin archivo"}</span>
+          </button>
+        ))}
+      </div>
+      <input
+        type="file"
+        onChange={subir}
+        disabled={uploading}
+        className="w-full border border-ink/15 bg-sand-2 px-3 py-2 text-sm text-ink"
+      />
+    </div>
   );
 }

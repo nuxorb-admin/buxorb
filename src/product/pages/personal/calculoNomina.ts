@@ -3,10 +3,13 @@
 // actualizarlas por evento/año sin tocar código (igual intención que el MD:
 // "infraestructura interna Nuxorb... no editables por el cliente").
 //
-// IMPORTANTE: los valores sembrados en la migración 0013 son de referencia
-// (2024) y la fórmula de IMSS obrero está simplificada por rama — el propio
-// MD marca este módulo como "pendiente de validación fiscal" con el
-// contador aliado. No usar para dispersar nómina real sin esa validación.
+// IMPORTANTE: la UMA y el subsidio al empleo se actualizaron en la
+// migración 0041 (vigentes desde feb-2026); la tarifa ISR mensual (Art. 96
+// LISR) sigue con los valores de referencia sembrados en 0013 (2024) — no
+// se encontró una fuente confiable para actualizarla, ver comentario de
+// 0041. La fórmula de IMSS obrero sigue simplificada por rama. El propio MD
+// marca este módulo como "pendiente de validación fiscal" con el contador
+// aliado. No usar para dispersar nómina real sin esa validación.
 
 export interface TramoISR {
   limite_inferior: number;
@@ -42,6 +45,19 @@ export function calcularISRPeriodo(baseGravablePeriodo: number, diasPeriodo: num
   return round2(isrMensual * (diasPeriodo / DIAS_MES_PROMEDIO));
 }
 
+export interface SubsidioEmpleo {
+  monto_mensual: number;
+  limite_ingreso_mensual: number;
+}
+
+/** Subsidio al empleo (LISR, Decreto DOF 1-may-2024): crédito fijo mensual contra el ISR causado, prorrateado al periodo, aplicable solo si el ingreso gravable del periodo (llevado a base mensual) no excede el límite. El ISR a retener nunca queda negativo por el subsidio. */
+export function calcularSubsidioEmpleo(baseGravablePeriodo: number, diasPeriodo: number, subsidio: SubsidioEmpleo | null): number {
+  if (!subsidio || baseGravablePeriodo <= 0 || diasPeriodo <= 0) return 0;
+  const baseMensual = baseGravablePeriodo * (DIAS_MES_PROMEDIO / diasPeriodo);
+  if (baseMensual > subsidio.limite_ingreso_mensual) return 0;
+  return round2(subsidio.monto_mensual * (diasPeriodo / DIAS_MES_PROMEDIO));
+}
+
 /** Cuotas obrero IMSS por rama, sobre el SBC del periodo (aproximación — no sustituye la determinación oficial del IDSE). */
 export function calcularIMSSObrero(
   sueldoDiario: number,
@@ -57,6 +73,44 @@ export function calcularIMSSObrero(
   const invalidezVida = sbcPeriodo * (formula.invalidez_vida_pct / 100);
   const cesantiaVejez = sbcPeriodo * (formula.cesantia_vejez_pct / 100);
   return round2(enfermedadMaternidad + prestacionesDinero + gastosMedicos + invalidezVida + cesantiaVejez);
+}
+
+function inicioSemana(fechaStr: string): string {
+  const d = new Date(`${fechaStr}T00:00:00`);
+  const dia = d.getDay(); // 0 (dom) – 6 (sáb)
+  const diffALunes = dia === 0 ? -6 : 1 - dia;
+  d.setDate(d.getDate() + diffALunes);
+  return d.toISOString().slice(0, 10);
+}
+
+export interface HoraExtraIncidencia {
+  fecha: string;
+  horas: number;
+}
+
+/** Horas extra dobles/triples por semana natural (LFT Art. 66-68: primeras 9 hrs de la semana a doble, el resto a triple). Agrupa por lunes-domingo dentro del periodo — aproximación, no sustituye el conteo oficial si el periodo no calza semana por semana (ej. quincenal). */
+export function calcularHorasExtra(
+  sueldoDiario: number,
+  incidencias: HoraExtraIncidencia[],
+): { horasDobles: number; horasTriples: number; montoDobles: number; montoTriples: number } {
+  const porSemana = new Map<string, number>();
+  for (const i of incidencias) {
+    const key = inicioSemana(i.fecha);
+    porSemana.set(key, (porSemana.get(key) ?? 0) + i.horas);
+  }
+  let horasDobles = 0;
+  let horasTriples = 0;
+  for (const horas of porSemana.values()) {
+    horasDobles += Math.min(horas, 9);
+    horasTriples += Math.max(0, horas - 9);
+  }
+  const tarifaHora = sueldoDiario / 8;
+  return {
+    horasDobles,
+    horasTriples,
+    montoDobles: round2(horasDobles * tarifaHora * 2),
+    montoTriples: round2(horasTriples * tarifaHora * 3),
+  };
 }
 
 /** Días de vacaciones por antigüedad — LFT Art. 76 (reforma "Vacaciones Dignas" 2023). */

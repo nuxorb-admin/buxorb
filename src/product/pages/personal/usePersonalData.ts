@@ -4,9 +4,11 @@ import type {
   CompanyModuleTier,
   ConceptoNomina,
   DepartamentoPersonal,
+  DocumentoEmpleado,
   Empleado,
   Finiquito,
   HistorialSueldo,
+  HrSettings,
   Incidencia,
   PeriodoNomina,
   ReciboDetalle,
@@ -14,7 +16,7 @@ import type {
   SaldoVacaciones,
 } from "../../../lib/database.types";
 import { limitsForTier, type PersonalTierLimits } from "./limits";
-import type { FormulaImssObrero, TramoISR } from "./calculoNomina";
+import type { FormulaImssObrero, SubsidioEmpleo, TramoISR } from "./calculoNomina";
 
 export interface ReciboFull extends ReciboNomina {
   recibo_detalle: ReciboDetalle[];
@@ -36,6 +38,7 @@ export function usePersonalData(companyId: string) {
   const [empleados, setEmpleados] = useState<Empleado[]>([]);
   const [departamentos, setDepartamentos] = useState<DepartamentoPersonal[]>([]);
   const [historialSueldo, setHistorialSueldo] = useState<HistorialSueldo[]>([]);
+  const [documentos, setDocumentos] = useState<DocumentoEmpleado[]>([]);
   const [incidencias, setIncidencias] = useState<Incidencia[]>([]);
   const [saldosVacaciones, setSaldosVacaciones] = useState<SaldoVacaciones[]>([]);
   const [conceptos, setConceptos] = useState<ConceptoNomina[]>([]);
@@ -45,6 +48,8 @@ export function usePersonalData(companyId: string) {
   const [tramosISR, setTramosISR] = useState<TramoISR[]>([]);
   const [umaDiaria, setUmaDiaria] = useState(0);
   const [formulaImss, setFormulaImss] = useState<FormulaImssObrero | null>(null);
+  const [subsidioEmpleo, setSubsidioEmpleo] = useState<SubsidioEmpleo | null>(null);
+  const [settings, setSettings] = useState<HrSettings>({ company_id: companyId, retardos_por_falta: 0 });
 
   async function load() {
     setLoading(true);
@@ -57,6 +62,13 @@ export function usePersonalData(companyId: string) {
       .maybeSingle();
     setTier(moduleRow?.tier ?? null);
 
+    let { data: settingsRow } = await supabase.from("hr_settings").select("*").eq("company_id", companyId).maybeSingle();
+    if (!settingsRow) {
+      const { data: created } = await supabase.from("hr_settings").insert({ company_id: companyId }).select().single();
+      settingsRow = created ?? settingsRow;
+    }
+    setSettings(settingsRow ?? { company_id: companyId, retardos_por_falta: 0 });
+
     const [
       { data: empleadoRows },
       { data: departamentoRows },
@@ -67,6 +79,7 @@ export function usePersonalData(companyId: string) {
       { data: isrRow },
       { data: umaRow },
       { data: imssRow },
+      { data: subsidioRow },
     ] = await Promise.all([
       supabase.from("hr_employees").select("*").eq("company_id", companyId).order("nombre_completo"),
       supabase.from("departments").select("*").eq("company_id", companyId).order("nombre"),
@@ -81,6 +94,7 @@ export function usePersonalData(companyId: string) {
       supabase.from("hr_tax_tables").select("contenido").eq("tipo", "isr_mensual").order("vigencia_desde", { ascending: false }).limit(1).maybeSingle(),
       supabase.from("hr_tax_tables").select("contenido").eq("tipo", "uma").order("vigencia_desde", { ascending: false }).limit(1).maybeSingle(),
       supabase.from("hr_tax_tables").select("contenido").eq("tipo", "imss_obrero").order("vigencia_desde", { ascending: false }).limit(1).maybeSingle(),
+      supabase.from("hr_tax_tables").select("contenido").eq("tipo", "subsidio_empleo").order("vigencia_desde", { ascending: false }).limit(1).maybeSingle(),
     ]);
 
     setEmpleados(empleadoRows ?? []);
@@ -91,19 +105,23 @@ export function usePersonalData(companyId: string) {
     setTramosISR((isrRow?.contenido as TramoISR[] | undefined) ?? []);
     setUmaDiaria(((umaRow?.contenido as { diaria?: number } | undefined)?.diaria) ?? 108.57);
     setFormulaImss((imssRow?.contenido as FormulaImssObrero | undefined) ?? null);
+    setSubsidioEmpleo((subsidioRow?.contenido as SubsidioEmpleo | undefined) ?? null);
 
     const empleadoIds = (empleadoRows ?? []).map((e) => e.id);
     if (empleadoIds.length > 0) {
-      const [{ data: historialRows }, { data: saldoRows }, { data: finiquitoRows }] = await Promise.all([
+      const [{ data: historialRows }, { data: documentoRows }, { data: saldoRows }, { data: finiquitoRows }] = await Promise.all([
         supabase.from("hr_salary_history").select("*").in("empleado_id", empleadoIds).order("fecha_efectiva", { ascending: false }),
+        supabase.from("hr_employee_documents").select("*").in("empleado_id", empleadoIds).order("created_at", { ascending: false }),
         supabase.from("hr_vacation_balances").select("*").in("empleado_id", empleadoIds),
         supabase.from("hr_severances").select("*").in("empleado_id", empleadoIds).order("fecha", { ascending: false }),
       ]);
       setHistorialSueldo(historialRows ?? []);
+      setDocumentos(documentoRows ?? []);
       setSaldosVacaciones(saldoRows ?? []);
       setFiniquitos(finiquitoRows ?? []);
     } else {
       setHistorialSueldo([]);
+      setDocumentos([]);
       setSaldosVacaciones([]);
       setFiniquitos([]);
     }
@@ -133,6 +151,7 @@ export function usePersonalData(companyId: string) {
     empleados,
     departamentos,
     historialSueldo,
+    documentos,
     incidencias,
     saldosVacaciones,
     conceptos,
@@ -142,6 +161,8 @@ export function usePersonalData(companyId: string) {
     tramosISR,
     umaDiaria,
     formulaImss,
+    subsidioEmpleo,
+    settings,
     reload: load,
   };
 }

@@ -8,6 +8,7 @@ import type {
   SalesProductRecipeItem,
   TipoCosteo,
 } from "../../../lib/database.types";
+import type { VentasTierLimits } from "./limits";
 import Modal from "../../../admin/components/Modal";
 import Badge from "../../../admin/components/Badge";
 
@@ -79,6 +80,7 @@ export default function CatalogoTab({
   kitItems,
   insumosCompra,
   unidadesCatalogo,
+  limits,
   reload,
 }: {
   companyId: string;
@@ -87,6 +89,7 @@ export default function CatalogoTab({
   kitItems: SalesProductKitItem[];
   insumosCompra: ProcurementProduct[];
   unidadesCatalogo: ProcurementUnit[];
+  limits: VentasTierLimits;
   reload: () => void;
 }) {
   const [showNew, setShowNew] = useState(false);
@@ -109,14 +112,17 @@ export default function CatalogoTab({
       <div className="divide-y divide-ink/10 border border-ink/10 bg-white">
         {productos.length === 0 && <p className="p-4 font-mono text-xs text-muted">Sin productos/servicios todavía.</p>}
         {productos.map((p) => {
-          const costo = costoCalculado(p, recetaItems, kitItems, insumosCompra, unidadesCatalogo, productos);
+          const costo = limits.catalogoCosteo
+            ? costoCalculado(p, recetaItems, kitItems, insumosCompra, unidadesCatalogo, productos)
+            : null;
           return (
             <div key={p.id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
               <div>
                 <p className="text-sm font-semibold text-ink">{p.nombre}</p>
                 <p className="font-mono text-[0.66rem] text-muted">
-                  {money(p.precio_unitario)}/{p.unidad} · IVA {p.tasa_iva === "exento" ? "exento" : `${p.tasa_iva}%`} ·{" "}
-                  {TIPO_LABEL[p.tipo_costeo]} · costo {costo === null ? "sin definir" : `${money(costo)} (informativo)`}
+                  {money(p.precio_unitario)}/{p.unidad} · IVA {p.tasa_iva === "exento" ? "exento" : `${p.tasa_iva}%`}
+                  {limits.catalogoCosteo &&
+                    ` · ${TIPO_LABEL[p.tipo_costeo]} · costo ${costo === null ? "sin definir" : `${money(costo)} (informativo)`}`}
                 </p>
               </div>
               <div className="flex items-center gap-3">
@@ -142,6 +148,7 @@ export default function CatalogoTab({
           kitItems={kitItems}
           insumosCompra={insumosCompra}
           unidadesCatalogo={unidadesCatalogo}
+          limits={limits}
           onClose={() => {
             setShowNew(false);
             setEditing(null);
@@ -172,6 +179,7 @@ function ProductoModal({
   kitItems,
   insumosCompra,
   unidadesCatalogo,
+  limits,
   onClose,
   onSaved,
 }: {
@@ -182,6 +190,7 @@ function ProductoModal({
   kitItems: SalesProductKitItem[];
   insumosCompra: ProcurementProduct[];
   unidadesCatalogo: ProcurementUnit[];
+  limits: VentasTierLimits;
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -224,8 +233,8 @@ function ProductoModal({
       unidad,
       precio_unitario: Number(precio) || 0,
       tasa_iva: tasaIva,
-      tipo_costeo: tipoCosteo,
-      producto_compra_id: tipoCosteo === "comercializado" ? productoCompraId || null : null,
+      tipo_costeo: limits.catalogoCosteo ? tipoCosteo : "comercializado",
+      producto_compra_id: limits.catalogoCosteo && tipoCosteo === "comercializado" ? productoCompraId || null : null,
     };
 
     const { data: saved, error: dbError } = producto
@@ -240,6 +249,13 @@ function ProductoModal({
 
     await supabase.from("sales_product_recipe_items").delete().eq("sales_product_id", saved.id);
     await supabase.from("sales_product_kit_items").delete().eq("sales_product_id", saved.id);
+
+    if (!limits.catalogoCosteo) {
+      setSaving(false);
+      onSaved();
+      onClose();
+      return;
+    }
 
     if (tipoCosteo === "receta" && recetaLineas.length > 0) {
       await supabase.from("sales_product_recipe_items").insert(
@@ -302,19 +318,21 @@ function ProductoModal({
           </select>
         </div>
 
-        <div>
-          <p className="mb-1 font-mono text-[0.6rem] font-bold uppercase tracking-[0.1em] text-muted">Costeo</p>
-          <div className="flex gap-3">
-            {(["comercializado", "receta", "kit"] as TipoCosteo[]).map((t) => (
-              <label key={t} className="flex items-center gap-1.5 font-mono text-xs text-ink">
-                <input type="radio" checked={tipoCosteo === t} onChange={() => setTipoCosteo(t)} />
-                {TIPO_LABEL[t]}
-              </label>
-            ))}
+        {limits.catalogoCosteo && (
+          <div>
+            <p className="mb-1 font-mono text-[0.6rem] font-bold uppercase tracking-[0.1em] text-muted">Costeo</p>
+            <div className="flex gap-3">
+              {(["comercializado", "receta", "kit"] as TipoCosteo[]).map((t) => (
+                <label key={t} className="flex items-center gap-1.5 font-mono text-xs text-ink">
+                  <input type="radio" checked={tipoCosteo === t} onChange={() => setTipoCosteo(t)} />
+                  {TIPO_LABEL[t]}
+                </label>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
 
-        {tipoCosteo === "comercializado" && (
+        {limits.catalogoCosteo && tipoCosteo === "comercializado" && (
           <div>
             <select
               value={productoCompraId}
@@ -334,7 +352,7 @@ function ProductoModal({
           </div>
         )}
 
-        {tipoCosteo === "receta" && (
+        {limits.catalogoCosteo && tipoCosteo === "receta" && (
           <div className="space-y-2">
             <p className="font-mono text-[0.6rem] text-muted">Porciones de insumos del catálogo de Compras que arman este producto.</p>
             {insumosCompra.length === 0 && <p className="font-mono text-[0.6rem] text-orange">No hay insumos activos en el catálogo de Compras todavía.</p>}
@@ -383,7 +401,7 @@ function ProductoModal({
           </div>
         )}
 
-        {tipoCosteo === "kit" && (
+        {limits.catalogoCosteo && tipoCosteo === "kit" && (
           <div className="space-y-2">
             <p className="font-mono text-[0.6rem] text-muted">Otros productos/servicios de este catálogo que arman este kit.</p>
             {componentesDisponibles.length === 0 && <p className="font-mono text-[0.6rem] text-orange">No hay productos disponibles para armar un kit (un kit no puede contener otro kit).</p>}

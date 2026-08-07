@@ -18,13 +18,17 @@ export default function Personal() {
     empleados,
     departamentos,
     historialSueldo,
+    documentos,
     incidencias,
+    saldosVacaciones,
     conceptos,
     periodos,
     finiquitos,
     tramosISR,
     umaDiaria,
     formulaImss,
+    subsidioEmpleo,
+    settings,
     reload,
   } = usePersonalData(companyId);
   const [tab, setTab] = useState<Tab>("expediente");
@@ -75,12 +79,23 @@ export default function Personal() {
             empleados={empleados}
             departamentos={departamentos}
             historialSueldo={historialSueldo}
+            documentos={documentos}
+            saldosVacaciones={saldosVacaciones}
             limits={limits}
             reload={reload}
           />
         )}
         {tab === "incidencias" && (
-          <IncidenciasTab empleados={empleados} incidencias={incidencias} limits={limits} userId={userId} reload={reload} />
+          <IncidenciasTab
+            companyId={companyId}
+            empleados={empleados}
+            incidencias={incidencias}
+            saldosVacaciones={saldosVacaciones}
+            settings={settings}
+            limits={limits}
+            userId={userId}
+            reload={reload}
+          />
         )}
         {tab === "nomina" && (
           <NominaTab
@@ -90,10 +105,12 @@ export default function Personal() {
             conceptos={conceptos}
             periodos={periodos}
             finiquitos={finiquitos}
+            settings={settings}
             limits={limits}
             tramosISR={tramosISR}
             umaDiaria={umaDiaria}
             formulaImss={formulaImss}
+            subsidioEmpleo={subsidioEmpleo}
             reload={reload}
           />
         )}

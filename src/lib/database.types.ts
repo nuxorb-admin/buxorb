@@ -538,6 +538,7 @@ export interface DocumentoEmpleado {
   empleado_id: string;
   nombre: string;
   tipo: string | null;
+  storage_path: string | null;
   created_at: string;
 }
 
@@ -570,6 +571,11 @@ export interface SaldoVacaciones {
   dias_derecho: number;
   dias_gozados: number;
   created_at: string;
+}
+
+export interface HrSettings {
+  company_id: string;
+  retardos_por_falta: number;
 }
 
 export interface ConceptoNomina {
@@ -837,6 +843,7 @@ export interface Cobro {
   tipo: CobroTipo;
   referencia: string | null;
   origen: CobroOrigen;
+  treasury_movement_id: string | null;
   created_at: string;
 }
 

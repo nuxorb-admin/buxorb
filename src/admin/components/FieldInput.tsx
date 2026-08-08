@@ -2,6 +2,7 @@ export default function FieldInput({
   label,
   value,
   onChange,
+  onBlur,
   type = "text",
   required = false,
   placeholder,
@@ -9,6 +10,7 @@ export default function FieldInput({
   label: string;
   value: string;
   onChange: (v: string) => void;
+  onBlur?: () => void;
   type?: string;
   required?: boolean;
   placeholder?: string;
@@ -24,6 +26,7 @@ export default function FieldInput({
         value={value}
         placeholder={placeholder}
         onChange={(e) => onChange(e.target.value)}
+        onBlur={onBlur}
         className="w-full border border-ink/15 bg-sand-2 px-3 py-2 font-sans text-sm text-ink transition focus:border-teal focus:outline-none"
       />
     </div>

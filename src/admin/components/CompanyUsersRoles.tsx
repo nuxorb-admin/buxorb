@@ -417,6 +417,10 @@ function NewUserModal({
           label="Nombre"
           value={form.full_name}
           onChange={(v) => setForm({ ...form, full_name: v })}
+          onBlur={() => {
+            const slug = slugify(form.full_name);
+            if (slug) setForm((f) => ({ ...f, email: `${slug}@nuxorb.com` }));
+          }}
           required
         />
         <FieldInput

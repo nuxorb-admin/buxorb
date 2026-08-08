@@ -79,6 +79,7 @@ export interface Profile {
   full_name: string | null;
   role: ProfileRole;
   kind: ProfileKind;
+  needs_setup: boolean;
   created_at: string;
 }
 

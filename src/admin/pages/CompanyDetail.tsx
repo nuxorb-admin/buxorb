@@ -319,6 +319,7 @@ export default function CompanyDetail() {
         </h2>
         <CompanyUsersRoles
           companyId={company.id}
+          companyName={company.name}
           activeModules={moduleSubs.filter((m) => m.active).map((m) => m.module)}
           moduleSeats={Object.fromEntries(moduleSubs.map((m) => [m.module, m.seats]))}
           maxUsers={company.max_users}

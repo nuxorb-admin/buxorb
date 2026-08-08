@@ -10,6 +10,7 @@ import Ventas from "./pages/Ventas";
 import UsersRoles from "./pages/UsersRoles";
 import { TenantAuthProvider, useTenantAuth } from "./TenantAuthProvider";
 import TenantLogin from "./TenantLogin";
+import CompleteFirstLogin from "./CompleteFirstLogin";
 
 interface TenantInfo {
   id: string;
@@ -73,6 +74,25 @@ function TenantPortalGate({ tenant }: { tenant: TenantInfo }) {
   const [allowedModules, setAllowedModules] = useState<CompanyModuleName[]>([]);
   const [moduleSeats, setModuleSeats] = useState<Partial<Record<CompanyModuleName, number>>>({});
   const [modulesLoaded, setModulesLoaded] = useState(false);
+  const [needsSetup, setNeedsSetup] = useState<boolean | undefined>(undefined);
+
+  // Independiente de la membresía: un usuario recién creado (create-company-user)
+  // tiene needs_setup=true hasta que captura su correo real + su propia
+  // contraseña (ver complete-first-login) — se checa apenas hay sesión, antes
+  // de mostrar cualquier cosa del portal.
+  useEffect(() => {
+    if (!session) {
+      setNeedsSetup(undefined);
+      return;
+    }
+    supabase
+      .schema("nuxorb")
+      .from("profiles")
+      .select("needs_setup")
+      .eq("id", session.user.id)
+      .single()
+      .then(({ data }) => setNeedsSetup(!!data?.needs_setup));
+  }, [session]);
 
   useEffect(() => {
     if (!session) {
@@ -123,6 +143,8 @@ function TenantPortalGate({ tenant }: { tenant: TenantInfo }) {
 
   if (loading) return <FullscreenMessage>Cargando…</FullscreenMessage>;
   if (!session) return <TenantLogin companyName={tenant.name} />;
+  if (needsSetup === undefined) return <FullscreenMessage>Cargando…</FullscreenMessage>;
+  if (needsSetup) return <CompleteFirstLogin currentEmail={session.user.email ?? ""} />;
   if (membership === undefined || (membership && !modulesLoaded)) {
     return <FullscreenMessage>Cargando…</FullscreenMessage>;
   }
@@ -182,7 +204,13 @@ function TenantPortalGate({ tenant }: { tenant: TenantInfo }) {
           <Route
             path="usuarios"
             element={
-              <UsersRoles companyId={tenant.id} activeModules={activeModules} moduleSeats={moduleSeats} maxUsers={tenant.max_users} />
+              <UsersRoles
+                companyId={tenant.id}
+                companyName={tenant.name}
+                activeModules={activeModules}
+                moduleSeats={moduleSeats}
+                maxUsers={tenant.max_users}
+              />
             }
           />
         )}

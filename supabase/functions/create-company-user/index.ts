@@ -25,7 +25,7 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ error: "No autorizado" }), { status: 401, headers: corsHeaders });
     }
 
-    const { company_id, email, full_name, role_id, is_owner } = await req.json();
+    const { company_id, email, full_name, role_id, is_owner, password } = await req.json();
     if (!company_id || !email) {
       return new Response(JSON.stringify({ error: "Faltan datos" }), { status: 400, headers: corsHeaders });
     }
@@ -77,11 +77,13 @@ Deno.serve(async (req) => {
       );
     }
 
-    const tempPassword = randomPassword();
+    // Si el admin capturó una contraseña a mano se usa esa; si no, se
+    // genera una temporal (mismo comportamiento que antes).
+    const finalPassword = typeof password === "string" && password.length > 0 ? password : randomPassword();
 
     const { data: created, error: createError } = await admin.auth.admin.createUser({
       email,
-      password: tempPassword,
+      password: finalPassword,
       email_confirm: true,
       user_metadata: { full_name },
     });
@@ -96,7 +98,8 @@ Deno.serve(async (req) => {
     const newUserId = created.user.id;
 
     // El trigger on_auth_user_created ya creó su profile con kind='team' por default — se corrige a 'client'.
-    await admin.schema("nuxorb").from("profiles").update({ kind: "client", full_name }).eq("id", newUserId);
+    // needs_setup=true: primer login debe capturar correo real + contraseña propia (ver complete-first-login).
+    await admin.schema("nuxorb").from("profiles").update({ kind: "client", full_name, needs_setup: true }).eq("id", newUserId);
 
     const { error: linkError } = await admin.from("company_users").insert({
       company_id,
@@ -109,7 +112,7 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ error: linkError.message }), { status: 400, headers: corsHeaders });
     }
 
-    return new Response(JSON.stringify({ email, tempPassword }), {
+    return new Response(JSON.stringify({ email, tempPassword: finalPassword }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

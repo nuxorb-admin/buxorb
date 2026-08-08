@@ -3,11 +3,13 @@ import type { CompanyModuleName } from "../../lib/database.types";
 
 export default function UsersRoles({
   companyId,
+  companyName,
   activeModules,
   moduleSeats,
   maxUsers,
 }: {
   companyId: string;
+  companyName: string;
   activeModules: CompanyModuleName[];
   moduleSeats?: Partial<Record<CompanyModuleName, number>>;
   maxUsers: number;
@@ -21,6 +23,7 @@ export default function UsersRoles({
       <div className="mt-6">
         <CompanyUsersRoles
           companyId={companyId}
+          companyName={companyName}
           activeModules={activeModules}
           moduleSeats={moduleSeats}
           maxUsers={maxUsers}

@@ -7,6 +7,7 @@ import type {
   CompanyUser,
   Profile,
 } from "../../lib/database.types";
+import { slugify } from "../../lib/slugify";
 import Modal from "./Modal";
 import FieldInput from "./FieldInput";
 import Badge from "./Badge";
@@ -24,12 +25,14 @@ interface UserRow extends CompanyUser {
 
 export default function CompanyUsersRoles({
   companyId,
+  companyName,
   activeModules,
   moduleSeats,
   maxUsers,
   canManage,
 }: {
   companyId: string;
+  companyName: string;
   activeModules: CompanyModuleName[];
   /** Tope de usuarios por módulo (de company_modules.seats). Un módulo sin entrada aquí no tiene tope. */
   moduleSeats?: Partial<Record<CompanyModuleName, number>>;
@@ -37,6 +40,8 @@ export default function CompanyUsersRoles({
   /** true si quien ve esto puede crear/editar roles y usuarios (equipo, o el owner de esta empresa) */
   canManage: boolean;
 }) {
+  // Default sugerido del correo al crear un usuario — editable, no forzoso.
+  const defaultEmail = `${slugify(companyName)}_${new Date().getFullYear()}@nuxorb.com`;
   const [roles, setRoles] = useState<CompanyRole[]>([]);
   const [roleModules, setRoleModules] = useState<Record<string, CompanyModuleName[]>>({});
   const [users, setUsers] = useState<UserRow[]>([]);
@@ -141,7 +146,10 @@ export default function CompanyUsersRoles({
     return data.id;
   }
 
-  async function createUser(form: { email: string; full_name: string; role_id: string }, isOwner: boolean) {
+  async function createUser(
+    form: { email: string; full_name: string; role_id: string; password: string },
+    isOwner: boolean,
+  ) {
     setError(null);
 
     if (!isOwner && form.role_id) {
@@ -163,7 +171,14 @@ export default function CompanyUsersRoles({
     }
 
     const { data, error: fnError } = await supabase.functions.invoke("create-company-user", {
-      body: { company_id: companyId, email: form.email, full_name: form.full_name, role_id: roleId, is_owner: isOwner },
+      body: {
+        company_id: companyId,
+        email: form.email,
+        full_name: form.full_name,
+        role_id: roleId,
+        is_owner: isOwner,
+        password: form.password || undefined,
+      },
     });
     if (fnError || data?.error) {
       setError(data?.error ?? fnError?.message ?? "No se pudo crear el usuario");
@@ -254,7 +269,7 @@ export default function CompanyUsersRoles({
       {canManage && (
         <div className="mt-4 flex gap-3">
           {!hasOwner && (
-            <AdminUserButton onCreate={(form) => createUser(form, true)} />
+            <AdminUserButton defaultEmail={defaultEmail} onCreate={(form) => createUser(form, true)} />
           )}
           {hasOwner && users.length < maxUsers && (
             <button onClick={() => setShowNewUser(true)} className="btn btn-outline">
@@ -275,6 +290,7 @@ export default function CompanyUsersRoles({
       {showNewUser && (
         <NewUserModal
           roles={roles}
+          defaultEmail={defaultEmail}
           onClose={() => setShowNewUser(false)}
           onCreate={async (form) => {
             await createUser(form, false);
@@ -307,9 +323,11 @@ export default function CompanyUsersRoles({
 }
 
 function AdminUserButton({
+  defaultEmail,
   onCreate,
 }: {
-  onCreate: (form: { email: string; full_name: string; role_id: string }) => Promise<void>;
+  defaultEmail: string;
+  onCreate: (form: { email: string; full_name: string; role_id: string; password: string }) => Promise<void>;
 }) {
   const [show, setShow] = useState(false);
   return (
@@ -321,6 +339,7 @@ function AdminUserButton({
         <NewUserModal
           title="Crear usuario admin"
           roles={[]}
+          defaultEmail={defaultEmail}
           hideRoleSelect
           onClose={() => setShow(false)}
           onCreate={async (form) => {
@@ -369,17 +388,19 @@ function NewRoleModal({
 function NewUserModal({
   title = "Agregar usuario",
   roles,
+  defaultEmail,
   hideRoleSelect = false,
   onClose,
   onCreate,
 }: {
   title?: string;
   roles: CompanyRole[];
+  defaultEmail: string;
   hideRoleSelect?: boolean;
   onClose: () => void;
-  onCreate: (form: { email: string; full_name: string; role_id: string }) => Promise<void>;
+  onCreate: (form: { email: string; full_name: string; role_id: string; password: string }) => Promise<void>;
 }) {
-  const [form, setForm] = useState({ email: "", full_name: "", role_id: roles[0]?.id ?? "" });
+  const [form, setForm] = useState({ email: defaultEmail, full_name: "", role_id: roles[0]?.id ?? "", password: "" });
   const [saving, setSaving] = useState(false);
 
   async function submit(e: FormEvent) {
@@ -404,6 +425,13 @@ function NewUserModal({
           value={form.email}
           onChange={(v) => setForm({ ...form, email: v })}
           required
+        />
+        <FieldInput
+          label="Contraseña (opcional)"
+          type="text"
+          value={form.password}
+          onChange={(v) => setForm({ ...form, password: v })}
+          placeholder="Vacío = se genera una automática"
         />
         {!hideRoleSelect && (
           <div>

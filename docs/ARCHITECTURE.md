@@ -15,8 +15,22 @@ subdominio:
 |---|---|---|---|
 | Landing de marketing | `nuxorb.com` | Público / prospectos | `src/site/`, `src/components/` |
 | CRM interno | `nuxorb.com/admin` | El equipo (login con Supabase Auth) | `src/admin/` |
-| Demo genérico del SaaS | `nuxorb.com/demo-saas` | Prospectos sin empresa registrada (contraseña compartida) | `src/demo-saas/`, `src/product/` |
+| Demo del SaaS | `nuxorb.com/demo-saas` | Prospectos interesados (login compartido de la empresa "Empresa Demo") | `src/product/TenantPortal.tsx`, `src/product/` |
 | Portal por cliente | `<subdominio>.app.nuxorb.com` | Empresas ya dadas de alta en el CRM | `src/product/TenantPortal.tsx`, `src/product/` |
+
+`/demo-saas` **no** es una reimplementación aparte — es `TenantPortal`
+apuntado con un slug fijo (`"demo"`) en vez de resolverlo por hostname (ver
+`src/App.tsx`), contra una empresa real llamada "Empresa Demo" dada de alta
+en `/admin/companies` con los 4 módulos activos en Professional. El
+prospecto ve exactamente el mismo producto, con el mismo login y el mismo
+RLS, que cualquier cliente real — no una versión reducida ni datos de
+ejemplo hardcodeados en el código.
+
+**Nota — esto es distinto de `nuxorb.com/demos`** (`public/demos/`): esa es
+una pieza completamente aparte, sin backend, servida como su propio bundle
+estático vía `vercel.json` — un catálogo de conceptos de industria genéricos
+("NUXORB Experience"), no relacionado con el producto real. No se toca en
+este cambio.
 
 **Contexto de negocio**: Nuxorb pasó de posicionarse como "agencia de software a
 medida" a vender **un solo producto SaaS modular** para PyMEs mexicanas, con 4
@@ -81,25 +95,26 @@ Personal, Ventas y CxC.
 | Gestión de Personal | `src/product/pages/Personal.tsx` + `src/product/pages/personal/` | **Funcional, nivel producción** — Essential/Professional reales, filtrado por `company_id`. Ver `docs/gestion-personal-modulo-v1.md` |
 | Ventas y CxC | `src/product/pages/Ventas.tsx` + `src/product/pages/ventas/` | **Funcional, nivel producción** — Essential/Professional reales, filtrado por `company_id`. Ver `docs/ventas-cxc-modulo-V1.md` |
 
-Cada módulo tiene dos puntos de entrada que renderizan páginas con distinto
-nivel de realismo, solo cambia el `scopeId`/esquema de datos:
+Un solo punto de entrada real para los 4 módulos: `src/product/TenantPortal.tsx`.
+Busca la empresa por `subdomain`, pasa por `TenantAuthProvider`/`TenantLogin`
+(login real, con roles `company_roles`/`company_role_modules` que deciden qué
+módulos ve cada usuario — ver sección de usuarios abajo), y muestra los
+módulos activos (`company_modules`) con `scopeId = company.id`.
 
-- **Demo genérico** (`/demo-saas` — `src/demo-saas/`) — gate de contraseña
-  compartida (`VITE_DEMO_SAAS_PASSPHRASE`), aislado por `session_id` (uuid en
-  `localStorage`, `src/demo-saas/useDemoSession.ts`). Para prospectos que
-  todavía no son un registro en el CRM. Tesorería aquí usa el componente viejo
-  y simple `src/product/pages/TesoreriaDemo.tsx` (contra `demo_treasury_entries`,
-  sin login) — **no** el de producción.
-- **Portal real** (`<subdomain>.app.nuxorb.com` — `src/product/TenantPortal.tsx`)
-  — busca la empresa por `subdomain`, pasa por `TenantAuthProvider`/
-  `TenantLogin` (login real, con roles `company_roles`/`company_role_modules`
-  que deciden qué módulos ve cada usuario — ver sección de usuarios abajo), y
-  muestra los módulos activos (`company_modules`) con `scopeId = company.id`
-  (datos propios, persistentes, no compartidos con el demo genérico).
+`TenantPortal` se monta de dos formas, ambas contra datos reales — la única
+diferencia es de dónde sale el `slug`:
 
-`ProductLayout.tsx` (sidebar con varios módulos + `<Outlet
-context={{scopeId}}/>`) es el shell tanto del demo genérico como del portal
-real.
+- **Portal por cliente** (`<subdomain>.app.nuxorb.com`) — `App.tsx` detecta el
+  subdominio del hostname (`getTenantSlug()`) y monta `<TenantPortal
+  slug={tenant}/>`.
+- **Demo** (`nuxorb.com/demo-saas/*`) — mismo componente, slug fijo `"demo"`
+  (`<Route path="/demo-saas/*" element={<TenantPortal slug="demo" />} />`),
+  apuntando a la empresa "Empresa Demo" del CRM.
+
+`ProductLayout.tsx` (sidebar con los módulos activos + `<Outlet
+context={{scopeId}}/>`) es el shell de `TenantPortal`, así que también es
+compartido entre el demo y el portal real — es literalmente el mismo árbol
+de componentes.
 
 ### Categoría interna (CRM/ERP/Otro) — solo metadata de catálogo
 
@@ -149,7 +164,6 @@ número — nunca se edita uno ya aplicado.
 | `company_role_modules` | Qué módulos puede ver cada rol (many-to-many rol↔módulo) | Igual que `company_roles` — al marcar/crear se valida contra `company_modules.seats` (ver `CompanyUsersRoles.tsx`, no es un límite de RLS) |
 | `company_users` | Usuarios de una empresa: `user_id` (auth.users) + `role_id` + `is_owner`. El primer usuario de cada empresa (el que se le entrega al cliente) es `is_owner = true` y ve todos los módulos activos sin importar su rol | Igual que `company_roles` |
 | `treasury_accounts` / `treasury_categories` / `treasury_movements` / `treasury_statement_imports` | Esquema de producción de Tesorería, por `company_id` real (no `scope_id`) | Equipo: todo. Miembros de esa empresa: todo lo de su empresa |
-| `demo_treasury_entries` | Movimientos de Tesorería del **demo genérico** (`/demo-saas`), filtrados por `scope_id` (session id) | **Abierta a `anon` y `authenticated`** — ver advertencia de seguridad abajo |
 | `demo_crm_deals` / `demo_erp_inventory_movements` | Sin uso — quedaron de un prototipo anterior de "CRM/ERP como líneas de producto aparte", descartado (ver contexto arriba) | Sin código que las lea/escriba |
 
 ### Equipo interno vs. cuentas de clientes — `is_team_member()`
@@ -189,14 +203,12 @@ ANTHROPIC_API_KEY=...`, no se inyecta solo como el service role key).
 
 ## ⚠️ Seguridad / limitaciones conocidas
 
-- **`demo_treasury_entries` no tiene aislamiento real por tenant a nivel de base
-  de datos.** La policy es `using (true)` para cualquiera, autenticado o no —
-  necesario para que el demo funcione sin pedir login a cada visitante. El
-  aislamiento entre empresas es solo un filtro `WHERE scope_id = ...` en el
-  cliente, no una regla de RLS que verifique identidad. Es aceptable mientras
-  esa tabla solo tenga datos de ejemplo/prueba (como ahora) — **no meter ahí
-  información financiera real de un cliente pagando** sin antes reescribir la
-  policy con una verificación de identidad real.
+- **La empresa "Empresa Demo" comparte un solo login entre todos los
+  prospectos** que reciben la contraseña — no está aislada por sesión/visitante
+  como el viejo demo genérico. Cualquiera con ese login ve y puede modificar
+  los mismos datos que vio el último prospecto (mismo RLS que un cliente real,
+  sin excepción de seguridad — el riesgo aquí es de higiene de datos, no de
+  aislamiento). No hay todavía un mecanismo de "restablecer datos de la demo".
 - **Los 4 módulos (Tesorería, Compras, Personal, Ventas) están en producción**
   — cada `docs/*-modulo-v1.md` documenta con ✅/⏳ qué se construyó de cada
   subproceso y qué queda en "Pendiente para V2" (no roto, decidido dejar
@@ -213,7 +225,6 @@ cliente — no poner ahí nada que deba quedar secreto de verdad):
 | Variable | Para qué |
 |---|---|
 | `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` | Cliente de Supabase (`src/lib/supabase.ts`) |
-| `VITE_DEMO_SAAS_PASSPHRASE` | Contraseña compartida del gate en `/demo-saas` |
 | `VITE_TENANT_BASE_DOMAIN` | Dominio base para armar el link "Ver portal →" en el CRM (default `nuxorb.com` si no se define) |
 
 ## Setup local
@@ -255,17 +266,15 @@ src/
 │   ├── components/CompanyUsersRoles.tsx  # roles + usuarios de una empresa (compartido con el portal)
 │   └── pages/                 # Dashboard, Leads, Companies, CompanyDetail,
 │                               #   Tasks, Team, Login
-├── demo-saas/                 # gate de contraseña compartida + sesión de demo genérico
-├── product/                   # los 4 módulos del SaaS, compartidos por el demo y el portal real
+├── product/                   # los 4 módulos del SaaS, un solo punto de entrada real
 │   ├── ProductLayout.tsx       # shell con sidebar, moduleNav de los 4 módulos
-│   ├── TenantPortal.tsx          # resuelve la empresa por subdomain + login + arma scopeId
+│   ├── TenantPortal.tsx          # resuelve la empresa por subdomain (o slug fijo "demo") + login + arma scopeId
 │   ├── TenantAuthProvider.tsx · TenantLogin.tsx   # login real del portal (kind='client')
 │   └── pages/
 │       ├── Tesoreria.tsx (producción, real) · treasury/ (tabs + lógica)
 │       ├── Compras.tsx (producción, real) · compras/ (tabs + lógica)
 │       ├── Personal.tsx (producción, real) · personal/ (tabs + lógica)
 │       ├── Ventas.tsx (producción, real) · ventas/ (tabs + lógica)
-│       ├── TesoreriaDemo.tsx · ComprasDemo.tsx · PersonalDemo.tsx · VentasDemo.tsx (el simple, solo para /demo-saas)
 │       └── UsersRoles.tsx
 └── lib/                       # supabase.ts, database.types.ts, slugify.ts, moduleCategories.ts
 

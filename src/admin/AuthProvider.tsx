@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "../lib/supabase";
 import type { Profile } from "../lib/database.types";
@@ -49,19 +49,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     loadProfile(session.user.id);
   }, [session]);
 
-  async function signOut() {
+  // Memoizados: RequireAuth.tsx depende de `signOut` en un useEffect — si
+  // esta función fuera una identidad nueva en cada render (como antes),
+  // ese efecto se vuelve a disparar en cada render y, si el signOut falla
+  // (ej. 403 por sesión ya inválida), entra en loop infinito de llamadas.
+  const signOut = useCallback(async () => {
     await supabase.auth.signOut();
-  }
+  }, []);
 
-  async function refreshProfile() {
+  const refreshProfile = useCallback(async () => {
     if (session) await loadProfile(session.user.id);
-  }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session]);
 
-  return (
-    <AuthContext.Provider value={{ session, profile, loading, profileLoading, signOut, refreshProfile }}>
-      {children}
-    </AuthContext.Provider>
+  const value = useMemo(
+    () => ({ session, profile, loading, profileLoading, signOut, refreshProfile }),
+    [session, profile, loading, profileLoading, signOut, refreshProfile],
   );
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth() {

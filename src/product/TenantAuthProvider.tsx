@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "../lib/supabase";
 
@@ -27,13 +27,16 @@ export function TenantAuthProvider({ children }: { children: ReactNode }) {
     return () => sub.subscription.unsubscribe();
   }, []);
 
-  async function signOut() {
+  // Memoizados por la misma razón que AuthProvider.tsx (src/admin/): si
+  // algún consumidor llega a depender de `signOut` en un useEffect, una
+  // identidad nueva en cada render puede volver a dispararlo en loop.
+  const signOut = useCallback(async () => {
     await supabase.auth.signOut();
-  }
+  }, []);
 
-  return (
-    <TenantAuthContext.Provider value={{ session, loading, signOut }}>{children}</TenantAuthContext.Provider>
-  );
+  const value = useMemo(() => ({ session, loading, signOut }), [session, loading, signOut]);
+
+  return <TenantAuthContext.Provider value={value}>{children}</TenantAuthContext.Provider>;
 }
 
 export function useTenantAuth() {

@@ -12,6 +12,7 @@ import type {
   CompanyModuleTier,
   Contact,
   Lead,
+  WhatsappConnection,
 } from "../../lib/database.types";
 import {
   ADDON_CATEGORY,
@@ -85,6 +86,7 @@ export default function CompanyDetail() {
   const [addonSubs, setAddonSubs] = useState<CompanyAddon[]>([]);
   const [agentTemplates, setAgentTemplates] = useState<AiAgentTypeTemplate[]>([]);
   const [companyAgents, setCompanyAgents] = useState<AiAgent[]>([]);
+  const [whatsappConnections, setWhatsappConnections] = useState<WhatsappConnection[]>([]);
   const [loading, setLoading] = useState(true);
   const [showNewContact, setShowNewContact] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState<InternalCategory | "todos">("todos");
@@ -100,6 +102,7 @@ export default function CompanyDetail() {
       { data: addonData },
       { data: templatesData },
       { data: agentsData },
+      { data: connectionsData },
     ] = await Promise.all([
       supabase.schema("nuxorb").from("companies").select("*").eq("id", id).single(),
       supabase.schema("nuxorb").from("contacts").select("*").eq("company_id", id).order("name"),
@@ -108,6 +111,7 @@ export default function CompanyDetail() {
       supabase.schema("nuxorb").from("company_addons").select("*").eq("company_id", id),
       supabase.schema("nuxorb").from("ai_agent_type_templates").select("*").order("name"),
       supabase.from("ai_agents").select("*").eq("company_id", id).order("created_at"),
+      supabase.from("whatsapp_connections").select("*").eq("company_id", id).order("created_at"),
     ]);
     setCompany(companyData);
     setContacts(contactsData ?? []);
@@ -116,6 +120,7 @@ export default function CompanyDetail() {
     setAddonSubs(addonData ?? []);
     setAgentTemplates(templatesData ?? []);
     setCompanyAgents(agentsData ?? []);
+    setWhatsappConnections(connectionsData ?? []);
     setLoading(false);
   }
 
@@ -342,12 +347,20 @@ export default function CompanyDetail() {
         </div>
 
         {addonSubs.some((s) => s.addon === "agentes_ia") && (
-          <AgentesSection
-            templates={agentTemplates}
-            agents={companyAgents}
-            onToggle={toggleAgentType}
-            onChanged={load}
-          />
+          <>
+            <AgentesSection
+              templates={agentTemplates}
+              agents={companyAgents}
+              onToggle={toggleAgentType}
+              onChanged={load}
+            />
+            <WhatsAppConnectionsSection
+              companyId={company.id}
+              agents={companyAgents}
+              connections={whatsappConnections}
+              onChanged={load}
+            />
+          </>
         )}
 
         <h2 className="mb-3 mt-8 font-mono text-xs font-bold uppercase tracking-[0.12em] text-muted">
@@ -521,6 +534,141 @@ function EditAgentPromptModal({
         </div>
         <button type="submit" disabled={saving} className="btn btn-primary w-full">
           {saving ? "Guardando…" : "Guardar cambios"}
+        </button>
+      </form>
+    </Modal>
+  );
+}
+
+function WhatsAppConnectionsSection({
+  companyId,
+  agents,
+  connections,
+  onChanged,
+}: {
+  companyId: string;
+  agents: AiAgent[];
+  connections: WhatsappConnection[];
+  onChanged: () => void;
+}) {
+  const [showNew, setShowNew] = useState(false);
+
+  return (
+    <div className="mt-8">
+      <div className="mb-1 flex items-center justify-between">
+        <h2 className="font-mono text-xs font-bold uppercase tracking-[0.12em] text-muted">Conexiones de WhatsApp</h2>
+        <button
+          onClick={() => setShowNew(true)}
+          className="font-mono text-[0.66rem] uppercase tracking-[0.1em] text-teal hover:underline"
+        >
+          + Nueva conexión
+        </button>
+      </div>
+      <p className="mb-3 font-mono text-[0.62rem] text-muted">
+        El número ya debe estar dado de alta en la cuenta de YCloud de Nuxorb. Aquí solo se vincula ese número con
+        esta empresa y su agente.
+      </p>
+      {connections.length === 0 ? (
+        <p className="font-mono text-[0.68rem] text-muted">Sin conexiones todavía.</p>
+      ) : (
+        <div className="divide-y divide-ink/10 border border-ink/10 bg-white">
+          {connections.map((c) => {
+            const agent = agents.find((a) => a.id === c.agent_id);
+            return (
+              <div key={c.id} className="flex items-center justify-between gap-3 px-4 py-3">
+                <div>
+                  <span className="text-sm text-ink">{c.display_name}</span>
+                  <p className="mt-0.5 font-mono text-[0.6rem] text-muted">
+                    {c.whatsapp_number ?? "—"} · {agent ? `Agente: ${agent.name}` : "Sin agente asignado"}
+                  </p>
+                </div>
+                <span
+                  className={`font-mono text-[0.6rem] font-bold uppercase tracking-[0.1em] ${
+                    c.status === "conectado" ? "text-teal" : c.status === "error" ? "text-orange" : "text-muted"
+                  }`}
+                >
+                  {c.status}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+      {showNew && (
+        <NewWhatsAppConnectionModal companyId={companyId} agents={agents} onClose={() => setShowNew(false)} onCreated={onChanged} />
+      )}
+    </div>
+  );
+}
+
+function NewWhatsAppConnectionModal({
+  companyId,
+  agents,
+  onClose,
+  onCreated,
+}: {
+  companyId: string;
+  agents: AiAgent[];
+  onClose: () => void;
+  onCreated: () => void;
+}) {
+  const [displayName, setDisplayName] = useState("");
+  const [whatsappNumber, setWhatsappNumber] = useState("");
+  const [agentId, setAgentId] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    if (!displayName.trim() || !whatsappNumber.trim()) return;
+    setSaving(true);
+    const { error: insertError } = await supabase.from("whatsapp_connections").insert({
+      company_id: companyId,
+      display_name: displayName.trim(),
+      whatsapp_number: whatsappNumber.trim(),
+      agent_id: agentId || null,
+      status: "conectado",
+    });
+    setSaving(false);
+    if (insertError) {
+      setError(insertError.message);
+      return;
+    }
+    onCreated();
+    onClose();
+  }
+
+  return (
+    <Modal title="Nueva conexión de WhatsApp" onClose={onClose}>
+      <form onSubmit={submit} className="space-y-3">
+        {error && <div className="border border-orange/40 bg-orange/10 px-3 py-2 font-mono text-[0.68rem] text-orange">{error}</div>}
+        <FieldInput label="Nombre" value={displayName} onChange={setDisplayName} required placeholder="Ej. Línea principal" />
+        <FieldInput
+          label="Número de WhatsApp"
+          value={whatsappNumber}
+          onChange={setWhatsappNumber}
+          required
+          placeholder="Ej. +525528943531 (como está en YCloud)"
+        />
+        <div>
+          <label className="mb-1 block font-mono text-[0.62rem] font-bold uppercase tracking-[0.12em] text-muted">
+            Agente asignado
+          </label>
+          <select
+            value={agentId}
+            onChange={(e) => setAgentId(e.target.value)}
+            className="w-full border border-ink/15 bg-sand-2 px-3 py-2 text-sm text-ink focus:border-teal focus:outline-none"
+          >
+            <option value="">Sin agente (solo bandeja)</option>
+            {agents.map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <button type="submit" disabled={saving} className="btn btn-primary w-full">
+          {saving ? "Creando…" : "Crear conexión"}
         </button>
       </form>
     </Modal>

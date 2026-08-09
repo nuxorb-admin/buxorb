@@ -3,6 +3,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const N8N_CALLBACK_SECRET = Deno.env.get("N8N_CALLBACK_SECRET");
+const YCLOUD_API_KEY = Deno.env.get("YCLOUD_API_KEY")!;
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -82,45 +83,45 @@ Deno.serve(async (req) => {
 
     const { data: connection } = await admin
       .from("whatsapp_connections")
-      .select("id, phone_number_id")
+      .select("id, whatsapp_number")
       .eq("id", conversation.connection_id)
       .single();
-    const { data: credentials } = await admin
-      .from("whatsapp_credentials")
-      .select("access_token")
-      .eq("connection_id", conversation.connection_id)
-      .single();
 
-    if (!connection?.phone_number_id || !credentials?.access_token || !toPhone) {
+    if (!connection?.whatsapp_number || !toPhone) {
       return new Response(JSON.stringify({ error: "Conexión de WhatsApp incompleta" }), { status: 400, headers: corsHeaders });
     }
 
-    const metaRes = await fetch(`https://graph.facebook.com/v19.0/${connection.phone_number_id}/messages`, {
+    // Todos los clientes usan la misma cuenta de YCloud de Nuxorb — un solo
+    // API key para todos, el número de origen (from) es lo que distingue
+    // de qué empresa se manda el mensaje.
+    const ycloudRes = await fetch("https://api.ycloud.com/v2/whatsapp/messages/sendDirectly", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${credentials.access_token}`,
+        "X-API-Key": YCLOUD_API_KEY,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        messaging_product: "whatsapp",
+        from: connection.whatsapp_number,
         to: toPhone,
         type: "text",
         text: { body: text },
       }),
     });
-    const metaData = await metaRes.json();
-    if (!metaRes.ok) {
-      return new Response(JSON.stringify({ error: metaData?.error?.message ?? "Error al enviar el mensaje" }), {
-        status: 400,
-        headers: corsHeaders,
-      });
+    const ycloudData = await ycloudRes.json();
+    // sendDirectly regresa HTTP 200 incluso cuando WhatsApp rechazó el
+    // mensaje — el resultado real viene en el campo status/errorMessage.
+    if (!ycloudRes.ok || ycloudData?.status === "failed") {
+      return new Response(
+        JSON.stringify({ error: ycloudData?.errorMessage ?? ycloudData?.whatsappApiError?.message ?? "Error al enviar el mensaje" }),
+        { status: 400, headers: corsHeaders },
+      );
     }
 
     await admin.from("whatsapp_messages").insert({
       conversation_id,
       direction: "out",
       text,
-      external_id: metaData?.messages?.[0]?.id ?? null,
+      external_id: ycloudData?.wamid ?? ycloudData?.id ?? null,
     });
     await admin.from("whatsapp_conversations").update({ last_message_at: new Date().toISOString() }).eq("id", conversation_id);
 

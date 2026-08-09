@@ -877,7 +877,7 @@ export interface WhatsappConnection {
   company_id: string;
   agent_id: string | null;
   display_name: string;
-  phone_number_id: string | null;
+  whatsapp_number: string | null;
   status: WhatsappConnectionStatus;
   created_at: string;
 }

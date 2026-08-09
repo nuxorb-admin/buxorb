@@ -8,6 +8,7 @@ import Compras from "./pages/Compras";
 import Personal from "./pages/Personal";
 import Ventas from "./pages/Ventas";
 import UsersRoles from "./pages/UsersRoles";
+import Agentes from "./pages/Agentes";
 import { TenantAuthProvider, useTenantAuth } from "./TenantAuthProvider";
 import TenantLogin from "./TenantLogin";
 import CompleteFirstLogin from "./CompleteFirstLogin";
@@ -75,6 +76,7 @@ function TenantPortalGate({ tenant }: { tenant: TenantInfo }) {
   const [moduleSeats, setModuleSeats] = useState<Partial<Record<CompanyModuleName, number>>>({});
   const [modulesLoaded, setModulesLoaded] = useState(false);
   const [needsSetup, setNeedsSetup] = useState<boolean | undefined>(undefined);
+  const [agentesActivo, setAgentesActivo] = useState(false);
 
   // Independiente de la membresía: un usuario recién creado (create-company-user)
   // tiene needs_setup=true hasta que captura su correo real + su propia
@@ -126,6 +128,16 @@ function TenantPortalGate({ tenant }: { tenant: TenantInfo }) {
         : { data: [] as { module: CompanyModuleName }[] };
       const roleModules = (roleModuleData ?? []).map((m) => m.module as CompanyModuleName);
 
+      const { data: addonRow } = await supabase
+        .schema("nuxorb")
+        .from("company_addons")
+        .select("addon")
+        .eq("company_id", tenant.id)
+        .eq("addon", "agentes_ia")
+        .eq("active", true)
+        .maybeSingle();
+      setAgentesActivo(!!addonRow);
+
       // Se calculan primero los módulos y hasta el final se marca membership +
       // modulesLoaded juntos, para que nunca haya un render intermedio con
       // membership ya resuelto pero navModules todavía vacío (eso mandaba a
@@ -167,7 +179,10 @@ function TenantPortalGate({ tenant }: { tenant: TenantInfo }) {
 
   const navModules = membership.isOwner ? activeModules : allowedModules;
   const firstActive = MODULE_NAV.find((m) => navModules.includes(m.module));
-  const extraNav = membership.isOwner ? [{ to: "usuarios", label: "Usuarios y roles" }] : [];
+  const extraNav = [
+    ...(agentesActivo ? [{ to: "agentes", label: "Agentes IA" }] : []),
+    ...(membership.isOwner ? [{ to: "usuarios", label: "Usuarios y roles" }] : []),
+  ];
 
   return (
     <Routes>
@@ -189,6 +204,8 @@ function TenantPortalGate({ tenant }: { tenant: TenantInfo }) {
           element={
             firstActive ? (
               <Navigate to={firstActive.to} replace />
+            ) : agentesActivo ? (
+              <Navigate to="agentes" replace />
             ) : membership.isOwner ? (
               <Navigate to="usuarios" replace />
             ) : (
@@ -200,6 +217,7 @@ function TenantPortalGate({ tenant }: { tenant: TenantInfo }) {
         <Route path="compras" element={<Compras />} />
         <Route path="personal" element={<Personal />} />
         <Route path="ventas" element={<Ventas />} />
+        {agentesActivo && <Route path="agentes" element={<Agentes companyId={tenant.id} />} />}
         {membership.isOwner && (
           <Route
             path="usuarios"

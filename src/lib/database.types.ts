@@ -18,7 +18,8 @@ export type CompanyAddonName =
   | "lectura_tickets_ampliada"
   | "inventario"
   | "timbrado_cfdi"
-  | "chatbot_cobranza";
+  | "chatbot_cobranza"
+  | "agentes_ia";
 export type ProductLine = "saas";
 export type TreasuryEntryType = "ingreso" | "egreso";
 export type ProfileKind = "team" | "client";
@@ -845,6 +846,65 @@ export interface Cobro {
   referencia: string | null;
   origen: CobroOrigen;
   treasury_movement_id: string | null;
+  created_at: string;
+}
+
+export type WhatsappConnectionStatus = "conectando" | "conectado" | "error";
+export type WhatsappConversationMode = "bot" | "humano";
+export type WhatsappMessageDirection = "in" | "out";
+
+export interface AiAgentTypeTemplate {
+  id: string;
+  key: string;
+  name: string;
+  description: string | null;
+  default_prompt: string;
+  created_at: string;
+}
+
+export interface AiAgent {
+  id: string;
+  company_id: string;
+  type_key: string | null;
+  name: string;
+  system_prompt: string;
+  active: boolean;
+  created_at: string;
+}
+
+export interface WhatsappConnection {
+  id: string;
+  company_id: string;
+  agent_id: string | null;
+  display_name: string;
+  phone_number_id: string | null;
+  status: WhatsappConnectionStatus;
+  created_at: string;
+}
+
+export interface WhatsappContact {
+  id: string;
+  company_id: string;
+  phone: string;
+  name: string | null;
+  created_at: string;
+}
+
+export interface WhatsappConversation {
+  id: string;
+  connection_id: string;
+  contact_id: string;
+  mode: WhatsappConversationMode;
+  last_message_at: string | null;
+  created_at: string;
+}
+
+export interface WhatsappMessage {
+  id: string;
+  conversation_id: string;
+  direction: WhatsappMessageDirection;
+  text: string | null;
+  external_id: string | null;
   created_at: string;
 }
 

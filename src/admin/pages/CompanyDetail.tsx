@@ -47,6 +47,7 @@ const ADDON_LABELS: Record<CompanyAddonName, string> = {
   inventario: "Inventario",
   timbrado_cfdi: "Timbrado CFDI",
   chatbot_cobranza: "Chatbot de cobranza",
+  agentes_ia: "Agentes IA",
 };
 
 const ADDON_ORDER = Object.keys(ADDON_LABELS) as CompanyAddonName[];

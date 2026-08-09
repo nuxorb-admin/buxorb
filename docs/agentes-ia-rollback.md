@@ -1,0 +1,76 @@
+# Rollback — Agentes IA (producto adicional)
+
+Cómo deshacer por completo el producto adicional "Agentes IA" (catálogo de
+tipos de agente + canal WhatsApp), tanto en Supabase como en el código, si
+se decide no seguir con él.
+
+## 1. Supabase — datos y esquema
+
+Correr a mano en el SQL Editor de Supabase (o `psql`), **no** se aplica
+solo:
+
+```
+supabase/migrations/rollback/0044_agentes_ia_rollback.sql
+```
+
+Ese script quita cualquier empresa con el addon activo, angosta de vuelta
+el `check` de `company_addons.addon`, y borra las 7 tablas nuevas
+(`whatsapp_messages`, `whatsapp_conversations`, `whatsapp_contacts`,
+`whatsapp_credentials`, `whatsapp_connections`, `public.ai_agents`,
+`nuxorb.ai_agent_type_templates`).
+
+## 2. Supabase — Edge Functions
+
+Si ya se desplegaron, borrarlas desde el dashboard (Edge Functions) o:
+
+```bash
+npx supabase functions delete whatsapp-webhook
+npx supabase functions delete send-whatsapp-message
+npx supabase functions delete save-whatsapp-credentials
+```
+
+Y quitar los secretos que ya no se usan (si no los comparte otra función):
+
+```bash
+npx supabase secrets unset WHATSAPP_VERIFY_TOKEN
+npx supabase secrets unset N8N_WEBHOOK_URL
+npx supabase secrets unset N8N_CALLBACK_SECRET
+```
+
+## 3. Código — la forma más simple
+
+Como es prácticamente todo archivos nuevos, lo más simple es
+`git revert` del commit que introdujo "Agentes IA". Si se prefiere borrar
+a mano (o el revert tiene conflictos), esta es la lista exacta:
+
+**Archivos nuevos — borrar por completo:**
+
+- `supabase/migrations/0044_agentes_ia.sql`
+- `supabase/migrations/rollback/0044_agentes_ia_rollback.sql`
+- `supabase/functions/whatsapp-webhook/index.ts` (y su carpeta)
+- `supabase/functions/send-whatsapp-message/index.ts` (y su carpeta)
+- `supabase/functions/save-whatsapp-credentials/index.ts` (y su carpeta)
+- `src/product/pages/Agentes.tsx`
+- `src/product/pages/agentes/useAgentesData.ts`
+- `src/product/pages/agentes/TiposAgenteTab.tsx`
+- `src/product/pages/agentes/ConexionWhatsAppTab.tsx`
+- `src/product/pages/agentes/ConversacionesTab.tsx`
+- `docs/agentes-ia-rollback.md` (este archivo)
+
+**Archivos existentes — revertir solo las líneas de Agentes IA:**
+
+- `src/lib/database.types.ts` — quitar `"agentes_ia"` de `CompanyAddonName`,
+  los tipos `WhatsappConnectionStatus`/`WhatsappConversationMode`/
+  `WhatsappMessageDirection`, y las interfaces `AiAgentTypeTemplate`,
+  `AiAgent`, `WhatsappConnection`, `WhatsappContact`, `WhatsappConversation`,
+  `WhatsappMessage`.
+- `src/lib/moduleCategories.ts` — quitar `agentes_ia: "otro"` de
+  `ADDON_CATEGORY`.
+- `src/admin/pages/CompanyDetail.tsx` — quitar `agentes_ia: "Agentes IA"` de
+  `ADDON_LABELS`.
+- `src/product/TenantPortal.tsx` — quitar el estado `agentesActivo`, su
+  consulta a `company_addons`, la entrada condicional en `extraNav`, la
+  ruta `agentes` y el `import Agentes from "./pages/Agentes"`.
+
+Después de aplicar todo lo anterior, correr `npm run build` para confirmar
+que no queda ninguna referencia suelta.

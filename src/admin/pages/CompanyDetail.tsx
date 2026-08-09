@@ -457,7 +457,7 @@ function AgentesSection({
       <h2 className="mb-1 font-mono text-xs font-bold uppercase tracking-[0.12em] text-muted">Agentes IA</h2>
       <p className="mb-3 font-mono text-[0.62rem] text-muted">
         Activa los tipos de agente que el cliente compró y ajusta el prompt de cada uno a su negocio. El cliente solo
-        ve sus agentes activos y conecta el canal (WhatsApp, etc.) — no elige tipos ni edita el prompt.
+        ve sus agentes activos y su canal conectado — no elige tipos, no edita el prompt, ni configura la conexión.
       </p>
       <div className="divide-y divide-ink/10 border border-ink/10 bg-white">
         {templates.map((t) => {
@@ -552,6 +552,7 @@ function WhatsAppConnectionsSection({
   onChanged: () => void;
 }) {
   const [showNew, setShowNew] = useState(false);
+  const [editing, setEditing] = useState<WhatsappConnection | null>(null);
 
   return (
     <div className="mt-8">
@@ -582,13 +583,21 @@ function WhatsAppConnectionsSection({
                     {c.whatsapp_number ?? "—"} · {agent ? `Agente: ${agent.name}` : "Sin agente asignado"}
                   </p>
                 </div>
-                <span
-                  className={`font-mono text-[0.6rem] font-bold uppercase tracking-[0.1em] ${
-                    c.status === "conectado" ? "text-teal" : c.status === "error" ? "text-orange" : "text-muted"
-                  }`}
-                >
-                  {c.status}
-                </span>
+                <div className="flex shrink-0 items-center gap-3">
+                  <span
+                    className={`font-mono text-[0.6rem] font-bold uppercase tracking-[0.1em] ${
+                      c.status === "conectado" ? "text-teal" : c.status === "error" ? "text-orange" : "text-muted"
+                    }`}
+                  >
+                    {c.status}
+                  </span>
+                  <button
+                    onClick={() => setEditing(c)}
+                    className="font-mono text-[0.62rem] uppercase text-teal hover:underline"
+                  >
+                    Editar
+                  </button>
+                </div>
               </div>
             );
           })}
@@ -596,6 +605,9 @@ function WhatsAppConnectionsSection({
       )}
       {showNew && (
         <NewWhatsAppConnectionModal companyId={companyId} agents={agents} onClose={() => setShowNew(false)} onCreated={onChanged} />
+      )}
+      {editing && (
+        <EditWhatsAppConnectionModal connection={editing} agents={agents} onClose={() => setEditing(null)} onSaved={onChanged} />
       )}
     </div>
   );
@@ -669,6 +681,85 @@ function NewWhatsAppConnectionModal({
         </div>
         <button type="submit" disabled={saving} className="btn btn-primary w-full">
           {saving ? "Creando…" : "Crear conexión"}
+        </button>
+      </form>
+    </Modal>
+  );
+}
+
+function EditWhatsAppConnectionModal({
+  connection,
+  agents,
+  onClose,
+  onSaved,
+}: {
+  connection: WhatsappConnection;
+  agents: AiAgent[];
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [displayName, setDisplayName] = useState(connection.display_name);
+  const [whatsappNumber, setWhatsappNumber] = useState(connection.whatsapp_number ?? "");
+  const [agentId, setAgentId] = useState(connection.agent_id ?? "");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    if (!displayName.trim() || !whatsappNumber.trim()) return;
+    setSaving(true);
+    const { error: updateError } = await supabase
+      .from("whatsapp_connections")
+      .update({
+        display_name: displayName.trim(),
+        whatsapp_number: whatsappNumber.trim(),
+        agent_id: agentId || null,
+      })
+      .eq("id", connection.id);
+    setSaving(false);
+    if (updateError) {
+      setError(
+        updateError.message.includes("duplicate key")
+          ? "Ese número ya está usado en otra conexión."
+          : updateError.message,
+      );
+      return;
+    }
+    onSaved();
+    onClose();
+  }
+
+  return (
+    <Modal title={`Editar conexión — ${connection.display_name}`} onClose={onClose}>
+      <form onSubmit={submit} className="space-y-3">
+        {error && <div className="border border-orange/40 bg-orange/10 px-3 py-2 font-mono text-[0.68rem] text-orange">{error}</div>}
+        <FieldInput label="Nombre" value={displayName} onChange={setDisplayName} required />
+        <FieldInput
+          label="Número de WhatsApp"
+          value={whatsappNumber}
+          onChange={setWhatsappNumber}
+          required
+          placeholder="Ej. +525528943531 (como está en YCloud)"
+        />
+        <div>
+          <label className="mb-1 block font-mono text-[0.62rem] font-bold uppercase tracking-[0.12em] text-muted">
+            Agente asignado
+          </label>
+          <select
+            value={agentId}
+            onChange={(e) => setAgentId(e.target.value)}
+            className="w-full border border-ink/15 bg-sand-2 px-3 py-2 text-sm text-ink focus:border-teal focus:outline-none"
+          >
+            <option value="">Sin agente (solo bandeja)</option>
+            {agents.map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <button type="submit" disabled={saving} className="btn btn-primary w-full">
+          {saving ? "Guardando…" : "Guardar cambios"}
         </button>
       </form>
     </Modal>

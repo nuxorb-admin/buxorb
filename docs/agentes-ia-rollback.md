@@ -55,6 +55,7 @@ borrar a mano (o el revert tiene conflictos), esta es la lista exacta:
 - `supabase/migrations/0045_company_addons_member_read.sql`
 - `supabase/migrations/0046_ai_agents_read_only_for_members.sql`
 - `supabase/migrations/0047_ycloud_migration.sql`
+- `supabase/migrations/0048_whatsapp_number_unique.sql`
 - `supabase/migrations/rollback/0044_agentes_ia_rollback.sql`
 - `supabase/functions/whatsapp-webhook/index.ts` (y su carpeta)
 - `supabase/functions/send-whatsapp-message/index.ts` (y su carpeta)

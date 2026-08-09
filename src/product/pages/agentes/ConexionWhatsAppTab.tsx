@@ -99,6 +99,8 @@ function NewConnectionModal({
   const [displayName, setDisplayName] = useState("");
   const [phoneNumberId, setPhoneNumberId] = useState("");
   const [agentId, setAgentId] = useState("");
+  const [accessToken, setAccessToken] = useState("");
+  const [wabaId, setWabaId] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -106,17 +108,39 @@ function NewConnectionModal({
     e.preventDefault();
     if (!displayName.trim()) return;
     setSaving(true);
-    const { error: insertError } = await supabase.from("whatsapp_connections").insert({
-      company_id: companyId,
-      display_name: displayName.trim(),
-      phone_number_id: phoneNumberId.trim() || null,
-      agent_id: agentId || null,
-    });
-    setSaving(false);
-    if (insertError) {
-      setError(insertError.message);
+    setError(null);
+
+    const { data: newConnection, error: insertError } = await supabase
+      .from("whatsapp_connections")
+      .insert({
+        company_id: companyId,
+        display_name: displayName.trim(),
+        phone_number_id: phoneNumberId.trim() || null,
+        agent_id: agentId || null,
+      })
+      .select()
+      .single();
+    if (insertError || !newConnection) {
+      setSaving(false);
+      setError(insertError?.message ?? "No se pudo crear la conexión");
       return;
     }
+
+    if (accessToken.trim()) {
+      const { data, error: fnError } = await supabase.functions.invoke("save-whatsapp-credentials", {
+        body: { connection_id: newConnection.id, access_token: accessToken.trim(), waba_id: wabaId.trim() || null },
+      });
+      if (fnError || data?.error) {
+        setSaving(false);
+        setError(
+          `La conexión se creó, pero no se pudo guardar el token: ${data?.error ?? fnError?.message ?? "error desconocido"}. Puedes intentarlo de nuevo desde "Guardar credenciales" en la lista.`,
+        );
+        onCreated();
+        return;
+      }
+    }
+
+    setSaving(false);
     onCreated();
     onClose();
   }
@@ -149,6 +173,12 @@ function NewConnectionModal({
             ))}
           </select>
         </div>
+        <p className="font-mono text-[0.6rem] text-muted">
+          El token de acceso permanente se genera en Meta Business Manager, en la app de WhatsApp Business. Si no lo
+          tienes a la mano todavía, puedes crear la conexión sin él y agregarlo después.
+        </p>
+        <FieldInput label="Access token (opcional)" value={accessToken} onChange={setAccessToken} type="password" />
+        <FieldInput label="WABA ID (opcional)" value={wabaId} onChange={setWabaId} />
         <button type="submit" disabled={saving} className="btn btn-primary w-full">
           {saving ? "Creando…" : "Crear conexión"}
         </button>

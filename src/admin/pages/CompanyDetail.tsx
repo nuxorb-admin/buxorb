@@ -2,6 +2,8 @@ import { useEffect, useState, type FormEvent } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { supabase } from "../../lib/supabase";
 import type {
+  AiAgent,
+  AiAgentTypeTemplate,
   Company,
   CompanyAddon,
   CompanyAddonName,
@@ -81,6 +83,8 @@ export default function CompanyDetail() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [moduleSubs, setModuleSubs] = useState<CompanyModule[]>([]);
   const [addonSubs, setAddonSubs] = useState<CompanyAddon[]>([]);
+  const [agentTemplates, setAgentTemplates] = useState<AiAgentTypeTemplate[]>([]);
+  const [companyAgents, setCompanyAgents] = useState<AiAgent[]>([]);
   const [loading, setLoading] = useState(true);
   const [showNewContact, setShowNewContact] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState<InternalCategory | "todos">("todos");
@@ -94,18 +98,24 @@ export default function CompanyDetail() {
       { data: leadsData },
       { data: moduleData },
       { data: addonData },
+      { data: templatesData },
+      { data: agentsData },
     ] = await Promise.all([
       supabase.schema("nuxorb").from("companies").select("*").eq("id", id).single(),
       supabase.schema("nuxorb").from("contacts").select("*").eq("company_id", id).order("name"),
       supabase.schema("nuxorb").from("leads").select("*").eq("company_id", id).order("created_at", { ascending: false }),
       supabase.schema("nuxorb").from("company_modules").select("*").eq("company_id", id),
       supabase.schema("nuxorb").from("company_addons").select("*").eq("company_id", id),
+      supabase.schema("nuxorb").from("ai_agent_type_templates").select("*").order("name"),
+      supabase.from("ai_agents").select("*").eq("company_id", id).order("created_at"),
     ]);
     setCompany(companyData);
     setContacts(contactsData ?? []);
     setLeads(leadsData ?? []);
     setModuleSubs(moduleData ?? []);
     setAddonSubs(addonData ?? []);
+    setAgentTemplates(templatesData ?? []);
+    setCompanyAgents(agentsData ?? []);
     setLoading(false);
   }
 
@@ -145,6 +155,22 @@ export default function CompanyDetail() {
         .upsert({ company_id: company.id, addon, active: true }, { onConflict: "company_id,addon" });
     } else {
       await supabase.schema("nuxorb").from("company_addons").delete().eq("company_id", company.id).eq("addon", addon);
+    }
+    load();
+  }
+
+  async function toggleAgentType(template: AiAgentTypeTemplate, active: boolean) {
+    if (!company) return;
+    const existing = companyAgents.find((a) => a.type_key === template.key);
+    if (existing) {
+      await supabase.from("ai_agents").update({ active }).eq("id", existing.id);
+    } else if (active) {
+      await supabase.from("ai_agents").insert({
+        company_id: company.id,
+        type_key: template.key,
+        name: template.name,
+        system_prompt: template.default_prompt,
+      });
     }
     load();
   }
@@ -315,6 +341,15 @@ export default function CompanyDetail() {
           })}
         </div>
 
+        {addonSubs.some((s) => s.addon === "agentes_ia") && (
+          <AgentesSection
+            templates={agentTemplates}
+            agents={companyAgents}
+            onToggle={toggleAgentType}
+            onChanged={load}
+          />
+        )}
+
         <h2 className="mb-3 mt-8 font-mono text-xs font-bold uppercase tracking-[0.12em] text-muted">
           Usuarios y roles
         </h2>
@@ -388,6 +423,107 @@ export default function CompanyDetail() {
         <NewContactModal companyId={company.id} onClose={() => setShowNewContact(false)} onCreated={load} />
       )}
     </div>
+  );
+}
+
+function AgentesSection({
+  templates,
+  agents,
+  onToggle,
+  onChanged,
+}: {
+  templates: AiAgentTypeTemplate[];
+  agents: AiAgent[];
+  onToggle: (template: AiAgentTypeTemplate, active: boolean) => void;
+  onChanged: () => void;
+}) {
+  const [editing, setEditing] = useState<AiAgent | null>(null);
+
+  return (
+    <div className="mt-8">
+      <h2 className="mb-1 font-mono text-xs font-bold uppercase tracking-[0.12em] text-muted">Agentes IA</h2>
+      <p className="mb-3 font-mono text-[0.62rem] text-muted">
+        Activa los tipos de agente que el cliente compró y ajusta el prompt de cada uno a su negocio. El cliente solo
+        ve sus agentes activos y conecta el canal (WhatsApp, etc.) — no elige tipos ni edita el prompt.
+      </p>
+      <div className="divide-y divide-ink/10 border border-ink/10 bg-white">
+        {templates.map((t) => {
+          const agent = agents.find((a) => a.type_key === t.key);
+          const active = !!agent?.active;
+          return (
+            <div key={t.id} className="flex items-center justify-between gap-3 px-4 py-3">
+              <label className="flex items-center gap-2 text-sm text-ink">
+                <input type="checkbox" checked={active} onChange={(e) => onToggle(t, e.target.checked)} />
+                <span>
+                  {agent?.name || t.name}
+                  <span className="ml-2 font-mono text-[0.6rem] text-muted">{t.description}</span>
+                </span>
+              </label>
+              {agent && active && (
+                <button
+                  onClick={() => setEditing(agent)}
+                  className="shrink-0 font-mono text-[0.62rem] uppercase text-teal hover:underline"
+                >
+                  Editar prompt
+                </button>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {editing && <EditAgentPromptModal agent={editing} onClose={() => setEditing(null)} onSaved={onChanged} />}
+    </div>
+  );
+}
+
+function EditAgentPromptModal({
+  agent,
+  onClose,
+  onSaved,
+}: {
+  agent: AiAgent;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [name, setName] = useState(agent.name);
+  const [prompt, setPrompt] = useState(agent.system_prompt);
+  const [saving, setSaving] = useState(false);
+
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    if (!name.trim() || !prompt.trim()) return;
+    setSaving(true);
+    await supabase.from("ai_agents").update({ name: name.trim(), system_prompt: prompt.trim() }).eq("id", agent.id);
+    setSaving(false);
+    onSaved();
+    onClose();
+  }
+
+  return (
+    <Modal title={`Editar agente — ${agent.name}`} onClose={onClose}>
+      <form onSubmit={submit} className="space-y-3">
+        <FieldInput label="Nombre" value={name} onChange={setName} required />
+        <div>
+          <label className="mb-1 block font-mono text-[0.62rem] font-bold uppercase tracking-[0.12em] text-muted">
+            Instrucciones (prompt)
+          </label>
+          <textarea
+            value={prompt}
+            onChange={(e) => setPrompt(e.target.value)}
+            required
+            rows={8}
+            className="w-full border border-ink/15 bg-sand-2 px-3 py-2 font-sans text-sm text-ink transition focus:border-teal focus:outline-none"
+          />
+          <p className="mt-1 font-mono text-[0.6rem] text-muted">
+            Ajusta esto al negocio del cliente (horarios, tono, qué puede y no puede prometer, etc.).
+          </p>
+        </div>
+        <button type="submit" disabled={saving} className="btn btn-primary w-full">
+          {saving ? "Guardando…" : "Guardar cambios"}
+        </button>
+      </form>
+    </Modal>
   );
 }
 

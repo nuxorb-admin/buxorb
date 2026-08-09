@@ -17,7 +17,9 @@ Ese script quita cualquier empresa con el addon activo, angosta de vuelta
 el `check` de `company_addons.addon`, y borra las 7 tablas nuevas
 (`whatsapp_messages`, `whatsapp_conversations`, `whatsapp_contacts`,
 `whatsapp_credentials`, `whatsapp_connections`, `public.ai_agents`,
-`nuxorb.ai_agent_type_templates`).
+`nuxorb.ai_agent_type_templates`). Al borrar esas tablas también se van
+las policies que agregaron 0045 y 0046, así que esas dos migraciones no
+necesitan un rollback aparte — solo aplican mientras las tablas existan.
 
 ## 2. Supabase — Edge Functions
 
@@ -46,13 +48,15 @@ a mano (o el revert tiene conflictos), esta es la lista exacta:
 **Archivos nuevos — borrar por completo:**
 
 - `supabase/migrations/0044_agentes_ia.sql`
+- `supabase/migrations/0045_company_addons_member_read.sql`
+- `supabase/migrations/0046_ai_agents_read_only_for_members.sql`
 - `supabase/migrations/rollback/0044_agentes_ia_rollback.sql`
 - `supabase/functions/whatsapp-webhook/index.ts` (y su carpeta)
 - `supabase/functions/send-whatsapp-message/index.ts` (y su carpeta)
 - `supabase/functions/save-whatsapp-credentials/index.ts` (y su carpeta)
 - `src/product/pages/Agentes.tsx`
 - `src/product/pages/agentes/useAgentesData.ts`
-- `src/product/pages/agentes/TiposAgenteTab.tsx`
+- `src/product/pages/agentes/MisAgentesTab.tsx`
 - `src/product/pages/agentes/ConexionWhatsAppTab.tsx`
 - `src/product/pages/agentes/ConversacionesTab.tsx`
 - `docs/agentes-ia-rollback.md` (este archivo)
@@ -67,7 +71,9 @@ a mano (o el revert tiene conflictos), esta es la lista exacta:
 - `src/lib/moduleCategories.ts` — quitar `agentes_ia: "otro"` de
   `ADDON_CATEGORY`.
 - `src/admin/pages/CompanyDetail.tsx` — quitar `agentes_ia: "Agentes IA"` de
-  `ADDON_LABELS`.
+  `ADDON_LABELS`, el estado `agentTemplates`/`companyAgents` y su carga, la
+  función `toggleAgentType`, el bloque `<AgentesSection .../>` y los
+  componentes `AgentesSection`/`EditAgentPromptModal` al final del archivo.
 - `src/product/TenantPortal.tsx` — quitar el estado `agentesActivo`, su
   consulta a `company_addons`, la entrada condicional en `extraNav`, la
   ruta `agentes` y el `import Agentes from "./pages/Agentes"`.

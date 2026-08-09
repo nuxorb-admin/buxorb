@@ -1,21 +1,21 @@
 import { useState } from "react";
 import { useAgentesData } from "./agentes/useAgentesData";
-import TiposAgenteTab from "./agentes/TiposAgenteTab";
+import MisAgentesTab from "./agentes/MisAgentesTab";
 import ConexionWhatsAppTab from "./agentes/ConexionWhatsAppTab";
 import ConversacionesTab from "./agentes/ConversacionesTab";
 
-type Tab = "tipos" | "conexion" | "conversaciones";
+type Tab = "agentes" | "conexion" | "conversaciones";
 
 export default function Agentes({ companyId }: { companyId: string }) {
   const { loading, templates, agents, connections, conversations, reload } = useAgentesData(companyId);
-  const [tab, setTab] = useState<Tab>("tipos");
+  const [tab, setTab] = useState<Tab>("agentes");
 
   if (loading) {
     return <p className="font-mono text-xs text-muted">Cargando…</p>;
   }
 
   const tabs: { id: Tab; label: string }[] = [
-    { id: "tipos", label: "Tipos de agente" },
+    { id: "agentes", label: "Mis agentes" },
     { id: "conexion", label: "Conexión WhatsApp" },
     { id: "conversaciones", label: "Conversaciones" },
   ];
@@ -40,9 +40,7 @@ export default function Agentes({ companyId }: { companyId: string }) {
       </div>
 
       <div className="mt-6">
-        {tab === "tipos" && (
-          <TiposAgenteTab companyId={companyId} templates={templates} agents={agents} reload={reload} />
-        )}
+        {tab === "agentes" && <MisAgentesTab templates={templates} agents={agents} />}
         {tab === "conexion" && (
           <ConexionWhatsAppTab companyId={companyId} agents={agents} connections={connections} reload={reload} />
         )}

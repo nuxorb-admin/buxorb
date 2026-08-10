@@ -49,7 +49,8 @@ async function getPrivateKey(): Promise<CryptoKey> {
   // así se evita por completo el problema de que \n literales se
   // corrompan al pasar por la shell o el parser de --env-file. Se genera
   // con: [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($pem))
-  const raw = atob(Deno.env.get("GOOGLE_WALLET_SERVICE_ACCOUNT_PRIVATE_KEY_B64")!);
+  const rawB64 = Deno.env.get("GOOGLE_WALLET_SERVICE_ACCOUNT_PRIVATE_KEY_B64")!.replace(/\s+/g, "");
+  const raw = atob(rawB64);
   cachedKey = await crypto.subtle.importKey("pkcs8", pemToDer(raw), { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }, false, [
     "sign",
   ]);

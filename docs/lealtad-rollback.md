@@ -30,7 +30,7 @@ Y quitar los secretos que ya no se usan:
 ```bash
 npx supabase secrets unset GOOGLE_WALLET_ISSUER_ID
 npx supabase secrets unset GOOGLE_WALLET_SERVICE_ACCOUNT_EMAIL
-npx supabase secrets unset GOOGLE_WALLET_SERVICE_ACCOUNT_PRIVATE_KEY
+npx supabase secrets unset GOOGLE_WALLET_SERVICE_ACCOUNT_PRIVATE_KEY_B64
 ```
 
 ## 3. Código

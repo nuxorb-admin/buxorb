@@ -127,6 +127,10 @@ function FormularioPrograma({
     e.preventDefault();
     const stamps = Number(stampsRequired);
     if (!name.trim() || !rewardText.trim() || !stamps || stamps < 1) return;
+    if (!logoPath) {
+      setError("Google Wallet exige un logo — sube una imagen antes de guardar.");
+      return;
+    }
     setSaving(true);
     setError(null);
     const { data, error: fnError } = await supabase.functions.invoke("loyalty-save-program", {
@@ -187,7 +191,9 @@ function FormularioPrograma({
         </div>
 
         <div>
-          <label className="mb-1 block font-mono text-[0.62rem] font-bold uppercase tracking-[0.12em] text-muted">Logo</label>
+          <label className="mb-1 block font-mono text-[0.62rem] font-bold uppercase tracking-[0.12em] text-muted">
+            Logo (obligatorio para Google Wallet)
+          </label>
           {logoUrl && <img src={logoUrl} alt="Logo" className="mb-2 h-16 w-16 border border-ink/10 object-contain" />}
           <input type="file" accept="image/*" onChange={subirLogo} disabled={uploading} className="w-full border border-ink/15 bg-sand-2 px-3 py-2 text-sm text-ink" />
         </div>

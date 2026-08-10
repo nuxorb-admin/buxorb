@@ -29,4 +29,5 @@ export const ADDON_CATEGORY: Record<CompanyAddonName, InternalCategory> = {
   timbrado_cfdi: "otro",
   chatbot_cobranza: "crm",
   agentes_ia: "otro",
+  lealtad: "crm",
 };

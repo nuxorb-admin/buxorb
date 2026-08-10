@@ -9,6 +9,7 @@ import Personal from "./pages/Personal";
 import Ventas from "./pages/Ventas";
 import UsersRoles from "./pages/UsersRoles";
 import Agentes from "./pages/Agentes";
+import Lealtad from "./pages/Lealtad";
 import { TenantAuthProvider, useTenantAuth } from "./TenantAuthProvider";
 import TenantLogin from "./TenantLogin";
 import CompleteFirstLogin from "./CompleteFirstLogin";
@@ -77,6 +78,7 @@ function TenantPortalGate({ tenant }: { tenant: TenantInfo }) {
   const [modulesLoaded, setModulesLoaded] = useState(false);
   const [needsSetup, setNeedsSetup] = useState<boolean | undefined>(undefined);
   const [agentesActivo, setAgentesActivo] = useState(false);
+  const [lealtadActivo, setLealtadActivo] = useState(false);
 
   // Independiente de la membresía: un usuario recién creado (create-company-user)
   // tiene needs_setup=true hasta que captura su correo real + su propia
@@ -138,6 +140,16 @@ function TenantPortalGate({ tenant }: { tenant: TenantInfo }) {
         .maybeSingle();
       setAgentesActivo(!!addonRow);
 
+      const { data: lealtadRow } = await supabase
+        .schema("nuxorb")
+        .from("company_addons")
+        .select("addon")
+        .eq("company_id", tenant.id)
+        .eq("addon", "lealtad")
+        .eq("active", true)
+        .maybeSingle();
+      setLealtadActivo(!!lealtadRow);
+
       // Se calculan primero los módulos y hasta el final se marca membership +
       // modulesLoaded juntos, para que nunca haya un render intermedio con
       // membership ya resuelto pero navModules todavía vacío (eso mandaba a
@@ -181,6 +193,7 @@ function TenantPortalGate({ tenant }: { tenant: TenantInfo }) {
   const firstActive = MODULE_NAV.find((m) => navModules.includes(m.module));
   const extraNav = [
     ...(agentesActivo ? [{ to: "agentes", label: "Agentes IA" }] : []),
+    ...(lealtadActivo ? [{ to: "lealtad", label: "Lealtad" }] : []),
     ...(membership.isOwner ? [{ to: "usuarios", label: "Usuarios y roles" }] : []),
   ];
 
@@ -206,6 +219,8 @@ function TenantPortalGate({ tenant }: { tenant: TenantInfo }) {
               <Navigate to={firstActive.to} replace />
             ) : agentesActivo ? (
               <Navigate to="agentes" replace />
+            ) : lealtadActivo ? (
+              <Navigate to="lealtad" replace />
             ) : membership.isOwner ? (
               <Navigate to="usuarios" replace />
             ) : (
@@ -218,6 +233,7 @@ function TenantPortalGate({ tenant }: { tenant: TenantInfo }) {
         <Route path="personal" element={<Personal />} />
         <Route path="ventas" element={<Ventas />} />
         {agentesActivo && <Route path="agentes" element={<Agentes companyId={tenant.id} />} />}
+        {lealtadActivo && <Route path="lealtad" element={<Lealtad companyId={tenant.id} companyName={tenant.name} />} />}
         {membership.isOwner && (
           <Route
             path="usuarios"

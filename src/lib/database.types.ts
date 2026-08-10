@@ -19,7 +19,8 @@ export type CompanyAddonName =
   | "inventario"
   | "timbrado_cfdi"
   | "chatbot_cobranza"
-  | "agentes_ia";
+  | "agentes_ia"
+  | "lealtad";
 export type ProductLine = "saas";
 export type TreasuryEntryType = "ingreso" | "egreso";
 export type ProfileKind = "team" | "client";
@@ -906,6 +907,34 @@ export interface WhatsappMessage {
   text: string | null;
   external_id: string | null;
   created_at: string;
+}
+
+export type LoyaltyTemplateKey = "clasica" | "moderna" | "minimal";
+
+export interface LoyaltyProgram {
+  id: string;
+  company_id: string;
+  name: string;
+  template_key: LoyaltyTemplateKey;
+  logo_path: string | null;
+  stamps_required: number;
+  reward_text: string;
+  google_class_id: string | null;
+  active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface LoyaltyMember {
+  id: string;
+  program_id: string;
+  name: string;
+  email: string | null;
+  phone: string;
+  stamps: number;
+  google_object_id: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface Database {

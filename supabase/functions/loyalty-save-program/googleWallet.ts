@@ -45,7 +45,11 @@ function pemToDer(pem: string): ArrayBuffer {
 let cachedKey: CryptoKey | null = null;
 async function getPrivateKey(): Promise<CryptoKey> {
   if (cachedKey) return cachedKey;
-  const raw = Deno.env.get("GOOGLE_WALLET_SERVICE_ACCOUNT_PRIVATE_KEY")!;
+  // El secreto es el PEM completo codificado en base64 (no el PEM crudo) —
+  // así se evita por completo el problema de que \n literales se
+  // corrompan al pasar por la shell o el parser de --env-file. Se genera
+  // con: [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($pem))
+  const raw = atob(Deno.env.get("GOOGLE_WALLET_SERVICE_ACCOUNT_PRIVATE_KEY_B64")!);
   cachedKey = await crypto.subtle.importKey("pkcs8", pemToDer(raw), { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }, false, [
     "sign",
   ]);

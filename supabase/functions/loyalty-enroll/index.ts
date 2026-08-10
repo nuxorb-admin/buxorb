@@ -61,7 +61,7 @@ Deno.serve(async (req) => {
       await admin.from("loyalty_members").update({ google_object_id: objectId }).eq("id", member.id);
     }
 
-    const saveUrl = buildSaveLink(objectId);
+    const saveUrl = await buildSaveLink(objectId);
 
     return new Response(JSON.stringify({ ok: true, save_url: saveUrl }), {
       status: 200,

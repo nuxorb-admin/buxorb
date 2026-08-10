@@ -67,10 +67,11 @@ del commit que introdujo "Lealtad". Si se prefiere borrar a mano:
   `ADDON_LABELS`.
 - `src/product/TenantPortal.tsx` — quitar el estado `lealtadActivo`, su
   consulta a `company_addons`, la entrada condicional en `extraNav`, la
-  rama del index redirect, la ruta `lealtad` y el
-  `import Lealtad from "./pages/Lealtad"`.
-- `src/App.tsx` — quitar la ruta `/lealtad/:programId` y el
-  `import LoyaltyEnroll from "./public/LoyaltyEnroll"`.
+  rama del index redirect, la ruta `lealtad` (y el prop `subdomain` que le
+  pasa), el `import Lealtad from "./pages/Lealtad"`, la constante
+  `ENROLL_PATH`, el bloque `if (enrollMatch)` que renderiza
+  `LoyaltyEnroll` sin auth, y el
+  `import LoyaltyEnroll from "../public/LoyaltyEnroll"`.
 - `package.json` — quitar `qrcode` y `@types/qrcode` si no se usan en
   ningún otro lado (correr `npm uninstall qrcode @types/qrcode`).
 

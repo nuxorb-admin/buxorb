@@ -10,6 +10,7 @@ import Ventas from "./pages/Ventas";
 import UsersRoles from "./pages/UsersRoles";
 import Agentes from "./pages/Agentes";
 import Lealtad from "./pages/Lealtad";
+import LoyaltyEnroll from "../public/LoyaltyEnroll";
 import { TenantAuthProvider, useTenantAuth } from "./TenantAuthProvider";
 import TenantLogin from "./TenantLogin";
 import CompleteFirstLogin from "./CompleteFirstLogin";
@@ -40,10 +41,19 @@ const MODULE_NAV: ModuleNavItem[] = [
   { to: "ventas", label: "Ventas y CxC", module: "ventas_cxc" },
 ];
 
+// Registro público de tarjetas de lealtad (sin login) — vive en el mismo
+// subdominio del tenant (empresa.app.nuxorb.com/lealtad/<id>) para que la
+// URL que ve el cliente final sea la del negocio, no un dominio genérico.
+// Se resuelve ANTES que cualquier cosa de auth/tenant, porque
+// loyalty-enroll ya valida el program_id por su cuenta.
+const ENROLL_PATH = /^\/lealtad\/([^/]+)\/?$/;
+
 export default function TenantPortal({ slug }: { slug: string }) {
   const [tenant, setTenant] = useState<TenantInfo | null | undefined>(undefined);
+  const enrollMatch = window.location.pathname.match(ENROLL_PATH);
 
   useEffect(() => {
+    if (enrollMatch) return;
     async function load() {
       const { data } = await supabase
         .schema("nuxorb").from("companies")
@@ -53,7 +63,12 @@ export default function TenantPortal({ slug }: { slug: string }) {
       setTenant(data ?? null);
     }
     load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slug]);
+
+  if (enrollMatch) {
+    return <LoyaltyEnroll programId={enrollMatch[1]} />;
+  }
 
   if (tenant === undefined) {
     return <FullscreenMessage>Cargando…</FullscreenMessage>;
@@ -64,12 +79,12 @@ export default function TenantPortal({ slug }: { slug: string }) {
 
   return (
     <TenantAuthProvider>
-      <TenantPortalGate tenant={tenant} />
+      <TenantPortalGate tenant={tenant} subdomain={slug} />
     </TenantAuthProvider>
   );
 }
 
-function TenantPortalGate({ tenant }: { tenant: TenantInfo }) {
+function TenantPortalGate({ tenant, subdomain }: { tenant: TenantInfo; subdomain: string }) {
   const { session, loading, signOut } = useTenantAuth();
   const [membership, setMembership] = useState<Membership | null | undefined>(undefined);
   const [activeModules, setActiveModules] = useState<CompanyModuleName[]>([]);
@@ -233,7 +248,9 @@ function TenantPortalGate({ tenant }: { tenant: TenantInfo }) {
         <Route path="personal" element={<Personal />} />
         <Route path="ventas" element={<Ventas />} />
         {agentesActivo && <Route path="agentes" element={<Agentes companyId={tenant.id} />} />}
-        {lealtadActivo && <Route path="lealtad" element={<Lealtad companyId={tenant.id} companyName={tenant.name} />} />}
+        {lealtadActivo && (
+          <Route path="lealtad" element={<Lealtad companyId={tenant.id} companyName={tenant.name} subdomain={subdomain} />} />
+        )}
         {membership.isOwner && (
           <Route
             path="usuarios"

@@ -1,10 +1,8 @@
 import { useState, type FormEvent } from "react";
-import { useParams } from "react-router-dom";
 import { supabase } from "../lib/supabase";
 import Logo from "../components/Logo";
 
-export default function LoyaltyEnroll() {
-  const { programId } = useParams<{ programId: string }>();
+export default function LoyaltyEnroll({ programId }: { programId: string }) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");

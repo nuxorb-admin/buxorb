@@ -3,17 +3,14 @@ import QRCode from "qrcode";
 import { supabase } from "../../../lib/supabase";
 import type { LoyaltyProgram, LoyaltyTemplateKey } from "../../../lib/database.types";
 
-// VITE_TENANT_BASE_DOMAIN es el dominio de los subdominios de cada
-// tenant (ej. "app.nuxorb.com" -> "empresa.app.nuxorb.com") — la página
-// pública de lealtad vive en el dominio raíz (nuxorb.com), donde también
-// están el sitio de marketing y el admin, así que se le quita el "app."
-// si lo trae.
+// La página pública de registro vive en el subdominio del propio tenant
+// (empresa.app.nuxorb.com/lealtad/<id>) para que la URL que ve el cliente
+// final sea la del negocio, no un dominio genérico de Nuxorb.
 const TENANT_BASE_DOMAIN = import.meta.env.VITE_TENANT_BASE_DOMAIN || "nuxorb.com";
-const ROOT_DOMAIN = TENANT_BASE_DOMAIN.replace(/^app\./, "");
 
-function enrollUrl(programId: string) {
-  if (import.meta.env.DEV) return `${window.location.origin}/lealtad/${programId}`;
-  return `https://${ROOT_DOMAIN}/lealtad/${programId}`;
+function enrollUrl(subdomain: string, programId: string) {
+  if (import.meta.env.DEV) return `${window.location.origin}/lealtad/${programId}?tenant=${subdomain}`;
+  return `https://${subdomain}.${TENANT_BASE_DOMAIN}/lealtad/${programId}`;
 }
 
 const TEMPLATES: { key: LoyaltyTemplateKey; label: string; preview: string }[] = [
@@ -25,18 +22,20 @@ const TEMPLATES: { key: LoyaltyTemplateKey; label: string; preview: string }[] =
 export default function ConfigurarTarjetaTab({
   companyId,
   companyName,
+  subdomain,
   program,
   reload,
 }: {
   companyId: string;
   companyName: string;
+  subdomain: string;
   program: LoyaltyProgram | null;
   reload: () => void;
 }) {
   const [editing, setEditing] = useState(!program);
 
   if (!editing && program) {
-    return <ResumenPrograma program={program} onEdit={() => setEditing(true)} />;
+    return <ResumenPrograma subdomain={subdomain} program={program} onEdit={() => setEditing(true)} />;
   }
 
   return (
@@ -52,9 +51,17 @@ export default function ConfigurarTarjetaTab({
   );
 }
 
-function ResumenPrograma({ program, onEdit }: { program: LoyaltyProgram; onEdit: () => void }) {
+function ResumenPrograma({
+  subdomain,
+  program,
+  onEdit,
+}: {
+  subdomain: string;
+  program: LoyaltyProgram;
+  onEdit: () => void;
+}) {
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
-  const url = enrollUrl(program.id);
+  const url = enrollUrl(subdomain, program.id);
 
   useEffect(() => {
     let cancelled = false;

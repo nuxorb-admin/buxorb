@@ -5,7 +5,15 @@ import MiembrosTab from "./lealtad/MiembrosTab";
 
 type Tab = "configurar" | "miembros";
 
-export default function Lealtad({ companyId, companyName }: { companyId: string; companyName: string }) {
+export default function Lealtad({
+  companyId,
+  companyName,
+  subdomain,
+}: {
+  companyId: string;
+  companyName: string;
+  subdomain: string;
+}) {
   const { loading, program, members, reload } = useLealtadData(companyId);
   const [tab, setTab] = useState<Tab>("configurar");
 
@@ -39,7 +47,13 @@ export default function Lealtad({ companyId, companyName }: { companyId: string;
 
       <div className="mt-6">
         {tab === "configurar" && (
-          <ConfigurarTarjetaTab companyId={companyId} companyName={companyName} program={program} reload={reload} />
+          <ConfigurarTarjetaTab
+            companyId={companyId}
+            companyName={companyName}
+            subdomain={subdomain}
+            program={program}
+            reload={reload}
+          />
         )}
         {tab === "miembros" &&
           (program ? (

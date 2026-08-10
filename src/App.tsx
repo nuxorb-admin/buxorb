@@ -12,7 +12,6 @@ import CompanyDetail from "./admin/pages/CompanyDetail";
 import Tasks from "./admin/pages/Tasks";
 import Team from "./admin/pages/Team";
 import TenantPortal from "./product/TenantPortal";
-import LoyaltyEnroll from "./public/LoyaltyEnroll";
 
 function getTenantSlug(): string | null {
   if (import.meta.env.DEV) {
@@ -36,7 +35,6 @@ export default function App() {
       <Routes>
         <Route path="/" element={<MarketingSite />} />
         <Route path="/demo-saas/*" element={<TenantPortal slug="demo" />} />
-        <Route path="/lealtad/:programId" element={<LoyaltyEnroll />} />
         <Route path="/admin/login" element={<Login />} />
         <Route
           path="/admin"

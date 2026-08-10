@@ -11,9 +11,23 @@ import jwt from "npm:jsonwebtoken@9";
 
 const ISSUER_ID = Deno.env.get("GOOGLE_WALLET_ISSUER_ID")!;
 const SERVICE_ACCOUNT_EMAIL = Deno.env.get("GOOGLE_WALLET_SERVICE_ACCOUNT_EMAIL")!;
-// El private key viene de Supabase con \n literales en vez de saltos de
-// línea reales (así es como se guardan las variables de entorno multilínea).
-const SERVICE_ACCOUNT_PRIVATE_KEY = Deno.env.get("GOOGLE_WALLET_SERVICE_ACCOUNT_PRIVATE_KEY")!.replace(/\\n/g, "\n");
+
+// El secreto de Supabase puede llegar con \n literales, con saltos de
+// línea reales, o con el cuerpo base64 pegado en una sola línea sin el
+// wrapping de 64 caracteres que espera un PEM estricto — en vez de confiar
+// en que el copy/paste manual haya quedado perfecto, se reconstruye un PEM
+// válido desde cero a partir de lo que sea que venga en la variable.
+function normalizePrivateKey(raw: string): string {
+  const base64Body = raw
+    .replace(/\\n/g, "\n")
+    .replace(/-----BEGIN PRIVATE KEY-----/g, "")
+    .replace(/-----END PRIVATE KEY-----/g, "")
+    .replace(/\s+/g, "");
+  const wrapped = base64Body.match(/.{1,64}/g)?.join("\n") ?? base64Body;
+  return `-----BEGIN PRIVATE KEY-----\n${wrapped}\n-----END PRIVATE KEY-----\n`;
+}
+
+const SERVICE_ACCOUNT_PRIVATE_KEY = normalizePrivateKey(Deno.env.get("GOOGLE_WALLET_SERVICE_ACCOUNT_PRIVATE_KEY")!);
 
 const WALLET_API_BASE = "https://walletobjects.googleapis.com/walletobjects/v1";
 

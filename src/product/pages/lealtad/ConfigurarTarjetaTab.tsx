@@ -3,11 +3,17 @@ import QRCode from "qrcode";
 import { supabase } from "../../../lib/supabase";
 import type { LoyaltyProgram, LoyaltyTemplateKey } from "../../../lib/database.types";
 
+// VITE_TENANT_BASE_DOMAIN es el dominio de los subdominios de cada
+// tenant (ej. "app.nuxorb.com" -> "empresa.app.nuxorb.com") — la página
+// pública de lealtad vive en el dominio raíz (nuxorb.com), donde también
+// están el sitio de marketing y el admin, así que se le quita el "app."
+// si lo trae.
 const TENANT_BASE_DOMAIN = import.meta.env.VITE_TENANT_BASE_DOMAIN || "nuxorb.com";
+const ROOT_DOMAIN = TENANT_BASE_DOMAIN.replace(/^app\./, "");
 
 function enrollUrl(programId: string) {
   if (import.meta.env.DEV) return `${window.location.origin}/lealtad/${programId}`;
-  return `https://${TENANT_BASE_DOMAIN}/lealtad/${programId}`;
+  return `https://${ROOT_DOMAIN}/lealtad/${programId}`;
 }
 
 const TEMPLATES: { key: LoyaltyTemplateKey; label: string; preview: string }[] = [

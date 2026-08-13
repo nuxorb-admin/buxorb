@@ -1,13 +1,20 @@
 import type { ReactNode } from "react";
 
+const SIZE_CLASS = {
+  md: "max-w-lg",
+  lg: "max-w-3xl",
+};
+
 export default function Modal({
   title,
   onClose,
   children,
+  size = "md",
 }: {
   title: string;
   onClose: () => void;
   children: ReactNode;
+  size?: keyof typeof SIZE_CLASS;
 }) {
   return (
     <div
@@ -15,7 +22,7 @@ export default function Modal({
       onClick={onClose}
     >
       <div
-        className="w-full max-w-lg border border-ink/10 bg-white p-6"
+        className={`w-full ${SIZE_CLASS[size]} border border-ink/10 bg-white p-6`}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-4 flex items-center justify-between">

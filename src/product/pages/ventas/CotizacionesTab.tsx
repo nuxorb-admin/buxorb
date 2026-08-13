@@ -387,11 +387,19 @@ function NewCotizacionModal({
   function agregarDesdeCatalogo(id: string) {
     const producto = productosServicios.find((p) => p.id === id);
     if (!producto) return;
-    setPartidas([...partidas, { descripcion: producto.nombre, cantidad: "1", precio_unitario: String(producto.precio_unitario), descuento_pct: "0" }]);
+    const nueva = { descripcion: producto.nombre, cantidad: "1", precio_unitario: String(producto.precio_unitario), descuento_pct: "0" };
+    const vacioIdx = partidas.findIndex((p) => !p.descripcion.trim());
+    if (vacioIdx !== -1) {
+      const next = [...partidas];
+      next[vacioIdx] = nueva;
+      setPartidas(next);
+    } else {
+      setPartidas([...partidas, nueva]);
+    }
   }
 
   return (
-    <Modal title="Nueva cotización" onClose={onClose}>
+    <Modal title="Nueva cotización" onClose={onClose} size="lg">
       <form onSubmit={submit} className="space-y-3">
         <div className="flex gap-2">
           <label className="flex items-center gap-1 font-mono text-xs">
@@ -459,9 +467,9 @@ function NewCotizacionModal({
 
         <div className="space-y-1.5">
           <div className="grid grid-cols-12 gap-2 px-0.5">
-            <span className="col-span-4 font-mono text-[0.6rem] uppercase tracking-[0.06em] text-muted">Descripción</span>
+            <span className="col-span-3 font-mono text-[0.6rem] uppercase tracking-[0.06em] text-muted">Descripción</span>
             <span className="col-span-2 font-mono text-[0.6rem] uppercase tracking-[0.06em] text-muted">Cantidad</span>
-            <span className="col-span-2 font-mono text-[0.6rem] uppercase tracking-[0.06em] text-muted">Precio unit.</span>
+            <span className="col-span-3 font-mono text-[0.6rem] uppercase tracking-[0.06em] text-muted">Precio unit.</span>
             <span className="col-span-2 font-mono text-[0.6rem] uppercase tracking-[0.06em] text-muted">Desc. %</span>
           </div>
           {partidas.map((p, i) => (
@@ -474,7 +482,7 @@ function NewCotizacionModal({
                   setPartidas(next);
                 }}
                 placeholder="Ej. Servicio de instalación"
-                className="col-span-4 min-w-0 border border-ink/15 bg-sand-2 px-2 py-1.5 text-sm text-ink focus:border-teal focus:outline-none"
+                className="col-span-3 min-w-0 border border-ink/15 bg-sand-2 px-2 py-1.5 text-sm text-ink focus:border-teal focus:outline-none"
               />
               <input
                 type="number"
@@ -499,7 +507,7 @@ function NewCotizacionModal({
                   setPartidas(next);
                 }}
                 title="Precio unitario"
-                className="col-span-2 min-w-0 border border-ink/15 bg-sand-2 px-2 py-1.5 text-sm text-ink focus:border-teal focus:outline-none"
+                className="col-span-3 min-w-0 border border-ink/15 bg-sand-2 px-2 py-1.5 text-sm text-ink focus:border-teal focus:outline-none"
               />
               <input
                 type="number"
@@ -512,7 +520,7 @@ function NewCotizacionModal({
                   setPartidas(next);
                 }}
                 title="Descuento %"
-                className="col-span-1 min-w-0 border border-ink/15 bg-sand-2 px-2 py-1.5 text-sm text-ink focus:border-teal focus:outline-none"
+                className="col-span-2 min-w-0 border border-ink/15 bg-sand-2 px-2 py-1.5 text-sm text-ink focus:border-teal focus:outline-none"
               />
               <button
                 type="button"
@@ -574,7 +582,15 @@ function NewPedidoModal({
   function agregarDesdeCatalogo(id: string) {
     const producto = productosServicios.find((p) => p.id === id);
     if (!producto) return;
-    setPartidas([...partidas, { descripcion: producto.nombre, cantidad: "1", precio_unitario: String(producto.precio_unitario), descuento_pct: "0" }]);
+    const nueva = { descripcion: producto.nombre, cantidad: "1", precio_unitario: String(producto.precio_unitario), descuento_pct: "0" };
+    const vacioIdx = partidas.findIndex((p) => !p.descripcion.trim());
+    if (vacioIdx !== -1) {
+      const next = [...partidas];
+      next[vacioIdx] = nueva;
+      setPartidas(next);
+    } else {
+      setPartidas([...partidas, nueva]);
+    }
   }
 
   async function submit(e: FormEvent) {
@@ -620,7 +636,7 @@ function NewPedidoModal({
   }
 
   return (
-    <Modal title="Nuevo pedido" onClose={onClose}>
+    <Modal title="Nuevo pedido" onClose={onClose} size="lg">
       <form onSubmit={submit} className="space-y-3">
         <select
           value={clienteId}
@@ -659,9 +675,9 @@ function NewPedidoModal({
         )}
         <div className="space-y-1.5">
           <div className="grid grid-cols-12 gap-2 px-0.5">
-            <span className="col-span-4 font-mono text-[0.6rem] uppercase tracking-[0.06em] text-muted">Descripción</span>
+            <span className="col-span-3 font-mono text-[0.6rem] uppercase tracking-[0.06em] text-muted">Descripción</span>
             <span className="col-span-2 font-mono text-[0.6rem] uppercase tracking-[0.06em] text-muted">Cantidad</span>
-            <span className="col-span-2 font-mono text-[0.6rem] uppercase tracking-[0.06em] text-muted">Precio unit.</span>
+            <span className="col-span-3 font-mono text-[0.6rem] uppercase tracking-[0.06em] text-muted">Precio unit.</span>
             <span className="col-span-2 font-mono text-[0.6rem] uppercase tracking-[0.06em] text-muted">Desc. %</span>
           </div>
           {partidas.map((p, i) => (
@@ -674,7 +690,7 @@ function NewPedidoModal({
                   setPartidas(next);
                 }}
                 placeholder="Ej. Servicio de instalación"
-                className="col-span-4 min-w-0 border border-ink/15 bg-sand-2 px-2 py-1.5 text-sm text-ink focus:border-teal focus:outline-none"
+                className="col-span-3 min-w-0 border border-ink/15 bg-sand-2 px-2 py-1.5 text-sm text-ink focus:border-teal focus:outline-none"
               />
               <input
                 type="number"
@@ -699,7 +715,7 @@ function NewPedidoModal({
                   setPartidas(next);
                 }}
                 title="Precio unitario"
-                className="col-span-2 min-w-0 border border-ink/15 bg-sand-2 px-2 py-1.5 text-sm text-ink focus:border-teal focus:outline-none"
+                className="col-span-3 min-w-0 border border-ink/15 bg-sand-2 px-2 py-1.5 text-sm text-ink focus:border-teal focus:outline-none"
               />
               <input
                 type="number"
@@ -712,7 +728,7 @@ function NewPedidoModal({
                   setPartidas(next);
                 }}
                 title="Descuento %"
-                className="col-span-1 min-w-0 border border-ink/15 bg-sand-2 px-2 py-1.5 text-sm text-ink focus:border-teal focus:outline-none"
+                className="col-span-2 min-w-0 border border-ink/15 bg-sand-2 px-2 py-1.5 text-sm text-ink focus:border-teal focus:outline-none"
               />
               <button
                 type="button"

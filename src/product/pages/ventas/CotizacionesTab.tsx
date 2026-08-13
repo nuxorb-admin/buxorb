@@ -458,14 +458,14 @@ function NewCotizacionModal({
         )}
 
         <div className="space-y-1.5">
-          <div className="grid grid-cols-8 gap-2 px-0.5">
-            <span className="col-span-3 font-mono text-[0.6rem] uppercase tracking-[0.06em] text-muted">Descripción</span>
-            <span className="font-mono text-[0.6rem] uppercase tracking-[0.06em] text-muted">Cantidad</span>
-            <span className="font-mono text-[0.6rem] uppercase tracking-[0.06em] text-muted">Precio unit.</span>
-            <span className="font-mono text-[0.6rem] uppercase tracking-[0.06em] text-muted">Desc. %</span>
+          <div className="grid grid-cols-12 gap-2 px-0.5">
+            <span className="col-span-4 font-mono text-[0.6rem] uppercase tracking-[0.06em] text-muted">Descripción</span>
+            <span className="col-span-2 font-mono text-[0.6rem] uppercase tracking-[0.06em] text-muted">Cantidad</span>
+            <span className="col-span-2 font-mono text-[0.6rem] uppercase tracking-[0.06em] text-muted">Precio unit.</span>
+            <span className="col-span-2 font-mono text-[0.6rem] uppercase tracking-[0.06em] text-muted">Desc. %</span>
           </div>
           {partidas.map((p, i) => (
-            <div key={i} className="grid grid-cols-8 gap-2">
+            <div key={i} className="grid grid-cols-12 gap-2">
               <input
                 value={p.descripcion}
                 onChange={(e) => {
@@ -474,7 +474,7 @@ function NewCotizacionModal({
                   setPartidas(next);
                 }}
                 placeholder="Ej. Servicio de instalación"
-                className="col-span-3 border border-ink/15 bg-sand-2 px-2 py-1.5 text-sm text-ink focus:border-teal focus:outline-none"
+                className="col-span-4 min-w-0 border border-ink/15 bg-sand-2 px-2 py-1.5 text-sm text-ink focus:border-teal focus:outline-none"
               />
               <input
                 type="number"
@@ -486,7 +486,7 @@ function NewCotizacionModal({
                   setPartidas(next);
                 }}
                 title="Cantidad"
-                className="border border-ink/15 bg-sand-2 px-2 py-1.5 text-sm text-ink focus:border-teal focus:outline-none"
+                className="col-span-2 min-w-0 border border-ink/15 bg-sand-2 px-2 py-1.5 text-sm text-ink focus:border-teal focus:outline-none"
               />
               <input
                 type="number"
@@ -499,7 +499,7 @@ function NewCotizacionModal({
                   setPartidas(next);
                 }}
                 title="Precio unitario"
-                className="border border-ink/15 bg-sand-2 px-2 py-1.5 text-sm text-ink focus:border-teal focus:outline-none"
+                className="col-span-2 min-w-0 border border-ink/15 bg-sand-2 px-2 py-1.5 text-sm text-ink focus:border-teal focus:outline-none"
               />
               <input
                 type="number"
@@ -512,13 +512,13 @@ function NewCotizacionModal({
                   setPartidas(next);
                 }}
                 title="Descuento %"
-                className="border border-ink/15 bg-sand-2 px-2 py-1.5 text-sm text-ink focus:border-teal focus:outline-none"
+                className="col-span-1 min-w-0 border border-ink/15 bg-sand-2 px-2 py-1.5 text-sm text-ink focus:border-teal focus:outline-none"
               />
               <button
                 type="button"
                 onClick={() => setPartidas(partidas.filter((_, idx) => idx !== i))}
                 title="Quitar partida"
-                className="font-mono text-[0.62rem] text-muted hover:text-orange"
+                className="col-span-1 font-mono text-[0.62rem] text-muted hover:text-orange"
               >
                 ✕
               </button>
@@ -658,14 +658,14 @@ function NewPedidoModal({
           </select>
         )}
         <div className="space-y-1.5">
-          <div className="grid grid-cols-8 gap-2 px-0.5">
-            <span className="col-span-3 font-mono text-[0.6rem] uppercase tracking-[0.06em] text-muted">Descripción</span>
-            <span className="font-mono text-[0.6rem] uppercase tracking-[0.06em] text-muted">Cantidad</span>
-            <span className="font-mono text-[0.6rem] uppercase tracking-[0.06em] text-muted">Precio unit.</span>
-            <span className="font-mono text-[0.6rem] uppercase tracking-[0.06em] text-muted">Desc. %</span>
+          <div className="grid grid-cols-12 gap-2 px-0.5">
+            <span className="col-span-4 font-mono text-[0.6rem] uppercase tracking-[0.06em] text-muted">Descripción</span>
+            <span className="col-span-2 font-mono text-[0.6rem] uppercase tracking-[0.06em] text-muted">Cantidad</span>
+            <span className="col-span-2 font-mono text-[0.6rem] uppercase tracking-[0.06em] text-muted">Precio unit.</span>
+            <span className="col-span-2 font-mono text-[0.6rem] uppercase tracking-[0.06em] text-muted">Desc. %</span>
           </div>
           {partidas.map((p, i) => (
-            <div key={i} className="grid grid-cols-8 gap-2">
+            <div key={i} className="grid grid-cols-12 gap-2">
               <input
                 value={p.descripcion}
                 onChange={(e) => {
@@ -674,7 +674,7 @@ function NewPedidoModal({
                   setPartidas(next);
                 }}
                 placeholder="Ej. Servicio de instalación"
-                className="col-span-3 border border-ink/15 bg-sand-2 px-2 py-1.5 text-sm text-ink focus:border-teal focus:outline-none"
+                className="col-span-4 min-w-0 border border-ink/15 bg-sand-2 px-2 py-1.5 text-sm text-ink focus:border-teal focus:outline-none"
               />
               <input
                 type="number"
@@ -686,7 +686,7 @@ function NewPedidoModal({
                   setPartidas(next);
                 }}
                 title="Cantidad"
-                className="border border-ink/15 bg-sand-2 px-2 py-1.5 text-sm text-ink focus:border-teal focus:outline-none"
+                className="col-span-2 min-w-0 border border-ink/15 bg-sand-2 px-2 py-1.5 text-sm text-ink focus:border-teal focus:outline-none"
               />
               <input
                 type="number"
@@ -699,7 +699,7 @@ function NewPedidoModal({
                   setPartidas(next);
                 }}
                 title="Precio unitario"
-                className="border border-ink/15 bg-sand-2 px-2 py-1.5 text-sm text-ink focus:border-teal focus:outline-none"
+                className="col-span-2 min-w-0 border border-ink/15 bg-sand-2 px-2 py-1.5 text-sm text-ink focus:border-teal focus:outline-none"
               />
               <input
                 type="number"
@@ -712,13 +712,13 @@ function NewPedidoModal({
                   setPartidas(next);
                 }}
                 title="Descuento %"
-                className="border border-ink/15 bg-sand-2 px-2 py-1.5 text-sm text-ink focus:border-teal focus:outline-none"
+                className="col-span-1 min-w-0 border border-ink/15 bg-sand-2 px-2 py-1.5 text-sm text-ink focus:border-teal focus:outline-none"
               />
               <button
                 type="button"
                 onClick={() => setPartidas(partidas.filter((_, idx) => idx !== i))}
                 title="Quitar partida"
-                className="font-mono text-[0.62rem] text-muted hover:text-orange"
+                className="col-span-1 font-mono text-[0.62rem] text-muted hover:text-orange"
               >
                 ✕
               </button>

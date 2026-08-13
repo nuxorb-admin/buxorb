@@ -457,7 +457,13 @@ function NewCotizacionModal({
           </select>
         )}
 
-        <div className="space-y-2">
+        <div className="space-y-1.5">
+          <div className="grid grid-cols-8 gap-2 px-0.5">
+            <span className="col-span-3 font-mono text-[0.6rem] uppercase tracking-[0.06em] text-muted">Descripción</span>
+            <span className="font-mono text-[0.6rem] uppercase tracking-[0.06em] text-muted">Cantidad</span>
+            <span className="font-mono text-[0.6rem] uppercase tracking-[0.06em] text-muted">Precio unit.</span>
+            <span className="font-mono text-[0.6rem] uppercase tracking-[0.06em] text-muted">Desc. %</span>
+          </div>
           {partidas.map((p, i) => (
             <div key={i} className="grid grid-cols-8 gap-2">
               <input
@@ -467,45 +473,51 @@ function NewCotizacionModal({
                   next[i] = { ...next[i], descripcion: e.target.value };
                   setPartidas(next);
                 }}
-                placeholder="Descripción"
+                placeholder="Ej. Servicio de instalación"
                 className="col-span-3 border border-ink/15 bg-sand-2 px-2 py-1.5 text-sm text-ink focus:border-teal focus:outline-none"
               />
               <input
                 type="number"
+                min="0"
                 value={p.cantidad}
                 onChange={(e) => {
                   const next = [...partidas];
                   next[i] = { ...next[i], cantidad: e.target.value };
                   setPartidas(next);
                 }}
-                placeholder="Cant."
+                title="Cantidad"
                 className="border border-ink/15 bg-sand-2 px-2 py-1.5 text-sm text-ink focus:border-teal focus:outline-none"
               />
               <input
                 type="number"
+                min="0"
+                step="0.01"
                 value={p.precio_unitario}
                 onChange={(e) => {
                   const next = [...partidas];
                   next[i] = { ...next[i], precio_unitario: e.target.value };
                   setPartidas(next);
                 }}
-                placeholder="Precio"
+                title="Precio unitario"
                 className="border border-ink/15 bg-sand-2 px-2 py-1.5 text-sm text-ink focus:border-teal focus:outline-none"
               />
               <input
                 type="number"
+                min="0"
+                max="100"
                 value={p.descuento_pct}
                 onChange={(e) => {
                   const next = [...partidas];
                   next[i] = { ...next[i], descuento_pct: e.target.value };
                   setPartidas(next);
                 }}
-                placeholder="Desc %"
+                title="Descuento %"
                 className="border border-ink/15 bg-sand-2 px-2 py-1.5 text-sm text-ink focus:border-teal focus:outline-none"
               />
               <button
                 type="button"
                 onClick={() => setPartidas(partidas.filter((_, idx) => idx !== i))}
+                title="Quitar partida"
                 className="font-mono text-[0.62rem] text-muted hover:text-orange"
               >
                 ✕
@@ -645,7 +657,13 @@ function NewPedidoModal({
             ))}
           </select>
         )}
-        <div className="space-y-2">
+        <div className="space-y-1.5">
+          <div className="grid grid-cols-8 gap-2 px-0.5">
+            <span className="col-span-3 font-mono text-[0.6rem] uppercase tracking-[0.06em] text-muted">Descripción</span>
+            <span className="font-mono text-[0.6rem] uppercase tracking-[0.06em] text-muted">Cantidad</span>
+            <span className="font-mono text-[0.6rem] uppercase tracking-[0.06em] text-muted">Precio unit.</span>
+            <span className="font-mono text-[0.6rem] uppercase tracking-[0.06em] text-muted">Desc. %</span>
+          </div>
           {partidas.map((p, i) => (
             <div key={i} className="grid grid-cols-8 gap-2">
               <input
@@ -655,45 +673,51 @@ function NewPedidoModal({
                   next[i] = { ...next[i], descripcion: e.target.value };
                   setPartidas(next);
                 }}
-                placeholder="Descripción"
+                placeholder="Ej. Servicio de instalación"
                 className="col-span-3 border border-ink/15 bg-sand-2 px-2 py-1.5 text-sm text-ink focus:border-teal focus:outline-none"
               />
               <input
                 type="number"
+                min="0"
                 value={p.cantidad}
                 onChange={(e) => {
                   const next = [...partidas];
                   next[i] = { ...next[i], cantidad: e.target.value };
                   setPartidas(next);
                 }}
-                placeholder="Cant."
+                title="Cantidad"
                 className="border border-ink/15 bg-sand-2 px-2 py-1.5 text-sm text-ink focus:border-teal focus:outline-none"
               />
               <input
                 type="number"
+                min="0"
+                step="0.01"
                 value={p.precio_unitario}
                 onChange={(e) => {
                   const next = [...partidas];
                   next[i] = { ...next[i], precio_unitario: e.target.value };
                   setPartidas(next);
                 }}
-                placeholder="Precio"
+                title="Precio unitario"
                 className="border border-ink/15 bg-sand-2 px-2 py-1.5 text-sm text-ink focus:border-teal focus:outline-none"
               />
               <input
                 type="number"
+                min="0"
+                max="100"
                 value={p.descuento_pct}
                 onChange={(e) => {
                   const next = [...partidas];
                   next[i] = { ...next[i], descuento_pct: e.target.value };
                   setPartidas(next);
                 }}
-                placeholder="Desc %"
+                title="Descuento %"
                 className="border border-ink/15 bg-sand-2 px-2 py-1.5 text-sm text-ink focus:border-teal focus:outline-none"
               />
               <button
                 type="button"
                 onClick={() => setPartidas(partidas.filter((_, idx) => idx !== i))}
+                title="Quitar partida"
                 className="font-mono text-[0.62rem] text-muted hover:text-orange"
               >
                 ✕

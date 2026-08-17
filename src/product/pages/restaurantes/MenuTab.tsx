@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useState, type ChangeEvent, type FormEvent } from "react";
 import { supabase } from "../../../lib/supabase";
 import type { ProductoServicio } from "../../../lib/database.types";
 import type { MenuItemWithOptions } from "./useRestaurantesData";
@@ -63,15 +63,25 @@ export default function MenuTab({
             const product = products.find((p) => p.id === item.sales_product_id);
             return (
               <div key={item.id} className="flex items-center justify-between gap-3 px-4 py-3">
-                <div>
-                  <span className={`text-sm ${item.disponible ? "text-ink" : "text-muted line-through"}`}>
-                    {product?.nombre ?? "Producto eliminado"}
-                  </span>
-                  <p className="mt-0.5 font-mono text-[0.6rem] text-muted">
-                    {item.categoria || "Sin categoría"} · ${product?.precio_unitario.toFixed(2) ?? "—"}
-                  </p>
+                <div className="flex items-center gap-3">
+                  {item.foto_url ? (
+                    <img src={item.foto_url} alt={product?.nombre ?? ""} className="h-12 w-12 flex-none object-cover" />
+                  ) : (
+                    <div className="flex h-12 w-12 flex-none items-center justify-center bg-sand-2 font-display text-lg uppercase text-ink/20">
+                      {(product?.nombre ?? "—").charAt(0)}
+                    </div>
+                  )}
+                  <div>
+                    <span className={`text-sm ${item.disponible ? "text-ink" : "text-muted line-through"}`}>
+                      {product?.nombre ?? "Producto eliminado"}
+                    </span>
+                    <p className="mt-0.5 font-mono text-[0.6rem] text-muted">
+                      {item.categoria || "Sin categoría"} · ${product?.precio_unitario.toFixed(2) ?? "—"}
+                    </p>
+                  </div>
                 </div>
                 <div className="flex shrink-0 items-center gap-3">
+                  <PhotoUploadButton companyId={companyId} menuItemId={item.id} hasPhoto={!!item.foto_url} onUploaded={reload} />
                   <button onClick={() => setConfiguringOptionsForId(item.id)} className="font-mono text-[0.62rem] uppercase text-teal hover:underline">
                     Opciones {item.option_groups.length > 0 ? `(${item.option_groups.length})` : ""}
                   </button>
@@ -306,5 +316,49 @@ function NewOptionForm({ groupId, onCreated }: { groupId: string; onCreated: () 
         + Agregar
       </button>
     </form>
+  );
+}
+
+function PhotoUploadButton({
+  companyId,
+  menuItemId,
+  hasPhoto,
+  onUploaded,
+}: {
+  companyId: string;
+  menuItemId: string;
+  hasPhoto: boolean;
+  onUploaded: () => void;
+}) {
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleFile(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setUploading(true);
+    setError(null);
+    const form = new FormData();
+    form.append("company_id", companyId);
+    form.append("menu_item_id", menuItemId);
+    form.append("file", file);
+    const { data, error: fnError } = await supabase.functions.invoke("upload-menu-item-photo", { body: form });
+    setUploading(false);
+    if (fnError || data?.error) {
+      setError(data?.error ?? fnError?.message ?? "No se pudo subir la foto");
+      return;
+    }
+    onUploaded();
+  }
+
+  return (
+    <div className="flex flex-col items-end gap-0.5">
+      <label className="cursor-pointer font-mono text-[0.62rem] uppercase text-teal hover:underline">
+        {uploading ? "Subiendo…" : hasPhoto ? "Cambiar foto" : "Subir foto"}
+        <input type="file" accept="image/*" onChange={handleFile} disabled={uploading} className="hidden" />
+      </label>
+      {error && <span className="max-w-[10rem] text-right font-mono text-[0.56rem] text-orange">{error}</span>}
+    </div>
   );
 }

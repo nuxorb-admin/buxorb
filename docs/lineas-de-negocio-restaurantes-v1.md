@@ -1,6 +1,6 @@
 # Línea de negocio: Restaurantes
 
-**Última actualización:** 17 de agosto de 2026 (v1.4 — opciones/modificadores de platillo y comentario al personalizar)
+**Última actualización:** 17 de agosto de 2026 (v1.5 — carpeta de Google Drive por empresa + subida de fotos de platillo)
 
 ## 1. Objetivo
 
@@ -209,6 +209,47 @@ pedido histórico conserva lo que se eligió en su momento. Cocina muestra
 las opciones elegidas junto al platillo (imprescindible: el cocinero
 necesita saber qué cerveza preparar, no solo que es un "Clamato").
 
+### 3f. Carpeta de Google Drive por empresa (fotos de platillos)
+
+Al activar Restaurantes para una empresa (`CompanyDetail.tsx`, sección
+"Líneas de negocio"), se llama a la Edge Function
+`create-restaurant-drive-folder`, que crea una subcarpeta con el nombre de
+la empresa dentro de un **Shared Drive** de Google Workspace llamado
+"Restaurantes" (Nuxorb es dueño de ese Shared Drive) y guarda su id en
+`ldn_restaurant_settings.drive_folder_id` (migración
+`0057_ldn_restaurant_settings_drive.sql`). Es idempotente — si la empresa
+ya tiene carpeta, no crea otra.
+
+Desde el tab **Menú**, el botón "Subir foto" de cada platillo llama a la
+Edge Function `upload-menu-item-photo`, que sube el archivo a esa carpeta,
+lo marca visible por link (`anyone: reader` — necesario para poder usarlo
+como `<img src>`, el navegador no manda credenciales al pedir la imagen) y
+guarda la URL resultante en `ldn_restaurant_menu_items.foto_url`.
+
+**Por qué un Shared Drive y no la cuenta de servicio directo:** desde 2020
+Google ya no da espacio de almacenamiento propio a las cuentas de
+servicio — no pueden crear archivos "sueltos" sin un Shared Drive o
+delegación de dominio detrás. Reusa la misma cuenta de servicio de Google
+Wallet (`GOOGLE_WALLET_SERVICE_ACCOUNT_EMAIL`/`_PRIVATE_KEY_B64`, ya
+configurada para Lealtad) pidiendo un JWT con scope de Drive en vez de
+Wallet — no hace falta una cuenta nueva.
+
+**Configuración manual pendiente (fuera de este repo, la hace el equipo
+Nuxorb):**
+1. Habilitar la API de Google Drive en el mismo proyecto de GCP donde ya
+   vive la cuenta de servicio de Wallet.
+2. Crear un Shared Drive llamado "Restaurantes" en Google Workspace
+   (drive.google.com → Unidades compartidas → Nueva).
+3. Agregar el correo de la cuenta de servicio
+   (`GOOGLE_WALLET_SERVICE_ACCOUNT_EMAIL`) como miembro del Shared Drive
+   con rol "Administrador de contenido" o superior.
+4. Copiar el id del Shared Drive (de su URL) y guardarlo como secreto de
+   Supabase: `GOOGLE_DRIVE_RESTAURANTES_SHARED_DRIVE_ID`.
+
+Sin este paso manual, `create-restaurant-drive-folder` falla (el error se
+muestra en el admin, no bloquea activar la línea de negocio) y "Subir
+foto" en Menú responde "esta empresa todavía no tiene carpeta de Drive".
+
 ## 4. Campos de datos (tal como existen hoy en Supabase)
 
 Ver `supabase/migrations/0051_lineas_de_negocio.sql` (tabla de activación
@@ -221,8 +262,10 @@ operativas: `ldn_restaurant_menu_items`, `ldn_restaurant_tables`,
 `ldn_restaurant_orders`, ver 3a), `0055_ldn_restaurant_tables_capacity_join.sql`
 (`capacidad` + `joined_to` en `ldn_restaurant_tables`, ver 3b) y
 `0056_ldn_restaurant_menu_item_options.sql` (grupos/opciones de platillo +
-`ldn_restaurant_order_item_options`, ver 3e) para el detalle campo por
-campo — son la fuente de verdad, no se duplica aquí.
+`ldn_restaurant_order_item_options`, ver 3e) y
+`0057_ldn_restaurant_settings_drive.sql` (`ldn_restaurant_settings.drive_folder_id`,
+ver 3f) para el detalle campo por campo — son la fuente de verdad, no se
+duplica aquí.
 
 **Convención de nombres:** todo este eje usa el prefijo `ldn_` (Líneas de
 negocio) + prefijo de la línea (`ldn_restaurant_*` aquí, a futuro
@@ -237,6 +280,11 @@ negocio) + prefijo de la línea (`ldn_restaurant_*` aquí, a futuro
   total, crea `ldn_restaurant_tickets` + `ldn_restaurant_ticket_payments`,
   marca la comanda `cerrada` y la mesa `libre`, y si Tesorería está activa
   crea el `treasury_movements` correspondiente.
+- **Edge Function `create-restaurant-drive-folder`** (solo equipo) —
+  crea la carpeta de Google Drive de la empresa al activar Restaurantes,
+  ver 3f.
+- **Edge Function `upload-menu-item-photo`** (equipo o miembro) — sube
+  una foto de platillo a esa carpeta y actualiza `foto_url`, ver 3f.
 
 ## 6. Consume / expone hacia otros módulos
 
@@ -275,3 +323,12 @@ negocio) + prefijo de la línea (`ldn_restaurant_*` aquí, a futuro
   solo en memoria del navegador (ver 3d); si se necesita que sobreviva a
   un refresh o cambio de pestaña, requiere guardarlo en Supabase con un
   estado que Cocina ignore hasta el envío explícito.
+- Fotos de platillo: el link `drive.google.com/uc?export=view&id=...`
+  usado en 3f es un truco ampliamente usado pero no es una API oficial de
+  Google para "servir imágenes embebidas" — Google podría cambiar su
+  comportamiento sin aviso. Si eso pasa, hay que migrar a copiar el
+  archivo a un bucket propio de Supabase Storage (o a `webContentLink` de
+  la respuesta de la API de Drive) en vez de depender de esa URL.
+- Borrado de fotos huérfanas en Drive si se quita una foto o se borra un
+  platillo del menú — v1 no borra el archivo en Drive, solo deja de usar
+  la URL.

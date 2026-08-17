@@ -106,6 +106,7 @@ export default function CompanyDetail() {
   const [companyAgents, setCompanyAgents] = useState<AiAgent[]>([]);
   const [whatsappConnections, setWhatsappConnections] = useState<WhatsappConnection[]>([]);
   const [businessLines, setBusinessLines] = useState<CompanyBusinessLine[]>([]);
+  const [driveError, setDriveError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [showNewContact, setShowNewContact] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState<InternalCategory | "todos">("todos");
@@ -170,12 +171,19 @@ export default function CompanyDetail() {
 
   async function setBusinessLineTier(businessLine: BusinessLineKey, tier: BusinessLineTier | "") {
     if (!company) return;
+    setDriveError(null);
     if (tier === "") {
       await supabase.schema("nuxorb").from("ldn_company_business_lines").delete().eq("company_id", company.id).eq("business_line", businessLine);
     } else {
       await supabase
         .schema("nuxorb").from("ldn_company_business_lines")
         .upsert({ company_id: company.id, business_line: businessLine, tier, active: true }, { onConflict: "company_id,business_line" });
+      if (businessLine === "restaurantes") {
+        const { data, error } = await supabase.functions.invoke("create-restaurant-drive-folder", { body: { company_id: company.id } });
+        if (error || data?.error) {
+          setDriveError(data?.error ?? error?.message ?? "No se pudo crear la carpeta de Drive para fotos de platillos");
+        }
+      }
     }
     load();
   }
@@ -404,6 +412,11 @@ export default function CompanyDetail() {
             );
           })}
         </div>
+        {driveError && (
+          <div className="mb-6 -mt-4 border border-orange/40 bg-orange/10 px-4 py-2 font-mono text-[0.66rem] text-orange">
+            {driveError}
+          </div>
+        )}
 
         <h3 className="mb-3 mt-6 font-mono text-[0.68rem] font-bold uppercase tracking-[0.1em] text-muted">
           Productos adicionales

@@ -5,9 +5,11 @@ import type {
   RestaurantCashSession,
   RestaurantPaymentMethod,
   RestaurantTable,
+  RestaurantTicket,
 } from "../../../lib/database.types";
 import type { OrderWithItems } from "./useRestaurantesData";
 import type { RestaurantTierLimits } from "./limits";
+import { orderSubtitle, orderTitle } from "./orderDisplay";
 import Modal from "../../../admin/components/Modal";
 
 const METHOD_LABELS: Record<RestaurantPaymentMethod, string> = {
@@ -15,6 +17,7 @@ const METHOD_LABELS: Record<RestaurantPaymentMethod, string> = {
   tarjeta: "Tarjeta",
   transferencia: "Transferencia",
   otro: "Otro",
+  rappi: "Rappi",
 };
 
 function orderTotal(order: OrderWithItems, products: ProductoServicio[]): number {
@@ -28,6 +31,7 @@ export default function CajaTab({
   companyId,
   cashSession,
   openOrders,
+  tickets,
   tables,
   products,
   limits,
@@ -36,6 +40,7 @@ export default function CajaTab({
   companyId: string;
   cashSession: RestaurantCashSession | null;
   openOrders: OrderWithItems[];
+  tickets: RestaurantTicket[];
   tables: RestaurantTable[];
   products: ProductoServicio[];
   limits: RestaurantTierLimits;
@@ -63,21 +68,22 @@ export default function CajaTab({
       </div>
 
       <h3 className="mb-3 font-mono text-[0.68rem] font-bold uppercase tracking-[0.1em] text-muted">
-        Mesas por cobrar ({openOrders.length})
+        Pedidos por cobrar ({openOrders.length})
       </h3>
       {openOrders.length === 0 ? (
-        <p className="font-mono text-[0.68rem] text-muted">Sin mesas abiertas.</p>
+        <p className="font-mono text-[0.68rem] text-muted">Sin pedidos abiertos.</p>
       ) : (
         <div className="divide-y divide-ink/10 border border-ink/10 bg-white">
           {openOrders.map((order) => {
-            const table = tables.find((t) => t.id === order.table_id);
             const total = orderTotal(order, products);
+            const subtitle = orderSubtitle(order);
             return (
               <div key={order.id} className="flex items-center justify-between gap-3 px-4 py-3">
                 <div>
-                  <span className="text-sm text-ink">{table?.nombre ?? "Mesa"}</span>
+                  <span className="text-sm text-ink">{orderTitle(order, tables)}</span>
                   <p className="mt-0.5 font-mono text-[0.6rem] text-muted">
                     {order.items.length} platillo(s) · ${total.toFixed(2)}
+                    {subtitle ? ` · ${subtitle}` : ""}
                   </p>
                 </div>
                 <button
@@ -96,7 +102,7 @@ export default function CajaTab({
       {chargingOrder && (
         <CobrarModal
           order={chargingOrder}
-          table={tables.find((t) => t.id === chargingOrder.table_id) ?? null}
+          tables={tables}
           cashSession={cashSession}
           products={products}
           limits={limits}
@@ -105,6 +111,9 @@ export default function CajaTab({
         />
       )}
       {showClose && <CerrarCajaModal companyId={companyId} cashSession={cashSession} onClose={() => setShowClose(false)} onClosed={reload} />}
+      {tickets.length > 0 && (
+        <p className="mt-8 font-mono text-[0.6rem] text-muted">Últimos {tickets.length} tickets registrados.</p>
+      )}
     </div>
   );
 }
@@ -155,7 +164,7 @@ function AbrirCajaForm({ companyId, onOpened }: { companyId: string; onOpened: (
 
 function CobrarModal({
   order,
-  table,
+  tables,
   cashSession,
   products,
   limits,
@@ -163,21 +172,23 @@ function CobrarModal({
   onCharged,
 }: {
   order: OrderWithItems;
-  table: RestaurantTable | null;
+  tables: RestaurantTable[];
   cashSession: RestaurantCashSession;
   products: ProductoServicio[];
   limits: RestaurantTierLimits;
   onClose: () => void;
   onCharged: () => void;
 }) {
+  const isRappi = order.canal === "rappi";
   const subtotal = orderTotal(order, products);
   const [propina, setPropina] = useState("0");
   const total = subtotal + (Number(propina) || 0);
   const [payments, setPayments] = useState<{ method: RestaurantPaymentMethod; amount: string }[]>([
-    { method: "efectivo", amount: total.toFixed(2) },
+    { method: isRappi ? "rappi" : "efectivo", amount: total.toFixed(2) },
   ]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const allowSplit = limits.splitBilling && !isRappi;
 
   function updatePayment(i: number, patch: Partial<{ method: RestaurantPaymentMethod; amount: string }>) {
     setPayments((prev) => prev.map((p, idx) => (idx === i ? { ...p, ...patch } : p)));
@@ -194,7 +205,7 @@ function CobrarModal({
     setSaving(true);
     setError(null);
     // Si no hay split, el único pago siempre se ajusta al total actual (por si cambió la propina).
-    const finalPayments = limits.splitBilling ? payments : [{ ...payments[0], amount: total.toFixed(2) }];
+    const finalPayments = allowSplit ? payments : [{ ...payments[0], amount: total.toFixed(2) }];
     const { data, error: fnError } = await supabase.functions.invoke("close-restaurant-ticket", {
       body: {
         order_id: order.id,
@@ -213,9 +224,14 @@ function CobrarModal({
   }
 
   return (
-    <Modal title={`Cobrar — ${table?.nombre ?? "Mesa"}`} onClose={onClose}>
+    <Modal title={`Cobrar — ${orderTitle(order, tables)}`} onClose={onClose}>
       <form onSubmit={submit} className="space-y-3">
         {error && <div className="border border-orange/40 bg-orange/10 px-3 py-2 font-mono text-[0.68rem] text-orange">{error}</div>}
+        {isRappi && (
+          <p className="font-mono text-[0.62rem] text-muted">
+            Pedido de Rappi — se registra pagado por la plataforma, no cuenta para el arqueo de efectivo.
+          </p>
+        )}
 
         <div className="border border-ink/10 bg-sand-2 p-3">
           {order.items.map((item) => {
@@ -245,14 +261,15 @@ function CobrarModal({
 
         <div className="space-y-2">
           <label className="block font-mono text-[0.62rem] font-bold uppercase tracking-[0.12em] text-muted">
-            {limits.splitBilling ? "Formas de pago" : "Forma de pago"}
+            {allowSplit ? "Formas de pago" : "Forma de pago"}
           </label>
           {payments.map((p, i) => (
             <div key={i} className="flex gap-2">
               <select
                 value={p.method}
+                disabled={isRappi}
                 onChange={(e) => updatePayment(i, { method: e.target.value as RestaurantPaymentMethod })}
-                className="flex-1 border border-ink/15 bg-sand-2 px-2 py-1.5 text-xs text-ink focus:border-teal focus:outline-none"
+                className="flex-1 border border-ink/15 bg-sand-2 px-2 py-1.5 text-xs text-ink focus:border-teal focus:outline-none disabled:opacity-60"
               >
                 {Object.entries(METHOD_LABELS).map(([value, label]) => (
                   <option key={value} value={value}>
@@ -260,7 +277,7 @@ function CobrarModal({
                   </option>
                 ))}
               </select>
-              {limits.splitBilling && (
+              {allowSplit && (
                 <input
                   type="number"
                   min={0}
@@ -272,7 +289,7 @@ function CobrarModal({
               )}
             </div>
           ))}
-          {limits.splitBilling && (
+          {allowSplit && (
             <>
               <button type="button" onClick={addPayment} className="font-mono text-[0.6rem] uppercase text-teal hover:underline">
                 + Dividir en otra forma de pago

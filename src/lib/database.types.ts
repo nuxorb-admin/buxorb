@@ -959,7 +959,8 @@ export type RestaurantTableStatus = "libre" | "ocupada" | "reservada" | "cuenta_
 export type RestaurantOrderStatus = "abierta" | "cerrada";
 export type RestaurantOrderItemStatus = "pendiente" | "en_preparacion" | "listo" | "entregado";
 export type RestaurantCashSessionStatus = "abierta" | "cerrada";
-export type RestaurantPaymentMethod = "efectivo" | "tarjeta" | "transferencia" | "otro";
+export type RestaurantPaymentMethod = "efectivo" | "tarjeta" | "transferencia" | "otro" | "rappi";
+export type RestaurantOrderChannel = "mesa" | "telefono_domicilio" | "recoger" | "rappi";
 export type RestaurantReservationStatus = "pendiente" | "confirmada" | "cancelada" | "completada";
 
 export interface RestaurantMenuItem {
@@ -985,8 +986,13 @@ export interface RestaurantTable {
 export interface RestaurantOrder {
   id: string;
   company_id: string;
-  table_id: string;
+  table_id: string | null;
   mesero_id: string | null;
+  canal: RestaurantOrderChannel;
+  cliente_nombre: string | null;
+  telefono: string | null;
+  direccion: string | null;
+  referencia: string | null;
   estado: RestaurantOrderStatus;
   opened_at: string;
   closed_at: string | null;

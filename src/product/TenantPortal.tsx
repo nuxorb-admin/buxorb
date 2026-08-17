@@ -2,7 +2,8 @@ import { useEffect, useState, type ReactNode } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { supabase } from "../lib/supabase";
 import type { BusinessLineTier, CompanyModuleName } from "../lib/database.types";
-import ProductLayout, { type ModuleNavItem } from "./ProductLayout";
+import ProductLayout, { type ExtraNavItem, type ModuleNavItem } from "./ProductLayout";
+import { limitsForTier } from "./pages/restaurantes/limits";
 import Tesoreria from "./pages/Tesoreria";
 import Compras from "./pages/Compras";
 import Personal from "./pages/Personal";
@@ -218,10 +219,25 @@ function TenantPortalGate({ tenant, subdomain }: { tenant: TenantInfo; subdomain
 
   const navModules = membership.isOwner ? activeModules : allowedModules;
   const firstActive = MODULE_NAV.find((m) => navModules.includes(m.module));
-  const extraNav = [
+  const restaurantesLimits = restaurantesTier ? limitsForTier(restaurantesTier) : null;
+  const extraNav: ExtraNavItem[] = [
     ...(agentesActivo ? [{ to: "agentes", label: "Agentes IA" }] : []),
     ...(lealtadActivo ? [{ to: "lealtad", label: "Lealtad" }] : []),
-    ...(restaurantesTier ? [{ to: "restaurantes", label: "Restaurantes" }] : []),
+    ...(restaurantesLimits
+      ? [
+          {
+            label: "Restaurantes",
+            children: [
+              { to: "restaurantes/comandas", label: "Comandas" },
+              { to: "restaurantes/mesas", label: "Mesas" },
+              ...(restaurantesLimits.kds ? [{ to: "restaurantes/cocina", label: "Cocina" }] : []),
+              { to: "restaurantes/caja", label: "Caja" },
+              { to: "restaurantes/menu", label: "Menú" },
+              ...(restaurantesLimits.reservaciones ? [{ to: "restaurantes/reservaciones", label: "Reservaciones" }] : []),
+            ],
+          },
+        ]
+      : []),
     ...(membership.isOwner ? [{ to: "usuarios", label: "Usuarios y roles" }] : []),
   ];
 
@@ -250,7 +266,7 @@ function TenantPortalGate({ tenant, subdomain }: { tenant: TenantInfo; subdomain
             ) : lealtadActivo ? (
               <Navigate to="lealtad" replace />
             ) : restaurantesTier ? (
-              <Navigate to="restaurantes" replace />
+              <Navigate to="restaurantes/comandas" replace />
             ) : membership.isOwner ? (
               <Navigate to="usuarios" replace />
             ) : (
@@ -267,7 +283,7 @@ function TenantPortalGate({ tenant, subdomain }: { tenant: TenantInfo; subdomain
           <Route path="lealtad" element={<Lealtad companyId={tenant.id} companyName={tenant.name} subdomain={subdomain} />} />
         )}
         {restaurantesTier && (
-          <Route path="restaurantes" element={<Restaurantes companyId={tenant.id} tier={restaurantesTier} />} />
+          <Route path="restaurantes/*" element={<Restaurantes companyId={tenant.id} tier={restaurantesTier} />} />
         )}
         {membership.isOwner && (
           <Route

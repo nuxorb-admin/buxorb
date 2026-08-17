@@ -1,4 +1,5 @@
-import { NavLink, Outlet } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { NavLink, Outlet, useLocation } from "react-router-dom";
 import Logo from "../components/Logo";
 import type { CompanyModuleName } from "../lib/database.types";
 
@@ -12,12 +13,66 @@ export interface ModuleNavItem {
   module: CompanyModuleName;
 }
 
+/** Link simple, o grupo colapsable con sub-links (ver Restaurantes en TenantPortal). */
+export type ExtraNavItem = { to: string; label: string } | { label: string; children: { to: string; label: string }[] };
+
+function isNavGroup(item: ExtraNavItem): item is { label: string; children: { to: string; label: string }[] } {
+  return "children" in item;
+}
+
 export const SAAS_MODULE_NAV: ModuleNavItem[] = [
   { to: "tesoreria", label: "Tesorería", module: "tesoreria" },
   { to: "compras", label: "Compras y Proveedores", module: "compras_proveedores" },
   { to: "personal", label: "Gestión de Personal", module: "gestion_personal" },
   { to: "ventas", label: "Ventas y CxC", module: "ventas_cxc" },
 ];
+
+const navLinkClass = ({ isActive }: { isActive: boolean }) =>
+  `whitespace-nowrap border-l-2 px-3 py-2.5 font-mono text-[0.72rem] font-bold uppercase tracking-[0.12em] transition-colors ${
+    isActive ? "border-orange bg-white/5 text-white" : "border-transparent text-white/50 hover:text-white"
+  }`;
+
+function NavGroup({ item }: { item: { label: string; children: { to: string; label: string }[] } }) {
+  const location = useLocation();
+  const isChildActive = item.children.some((c) => location.pathname.includes(`/${c.to.split("/")[0]}`));
+  const [open, setOpen] = useState(isChildActive);
+
+  useEffect(() => {
+    if (isChildActive) setOpen(true);
+  }, [isChildActive]);
+
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className={`flex w-full items-center justify-between whitespace-nowrap border-l-2 px-3 py-2.5 font-mono text-[0.72rem] font-bold uppercase tracking-[0.12em] transition-colors ${
+          isChildActive ? "border-orange bg-white/5 text-white" : "border-transparent text-white/50 hover:text-white"
+        }`}
+      >
+        <span>{item.label}</span>
+        <span className="text-[0.6rem]">{open ? "▾" : "▸"}</span>
+      </button>
+      {open && (
+        <div className="border-l border-white/10 pl-3">
+          {item.children.map((c) => (
+            <NavLink
+              key={c.to}
+              to={c.to}
+              className={({ isActive }) =>
+                `block whitespace-nowrap px-3 py-2 font-mono text-[0.66rem] uppercase tracking-[0.1em] transition-colors ${
+                  isActive ? "text-white" : "text-white/40 hover:text-white"
+                }`
+              }
+            >
+              {c.label}
+            </NavLink>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function ProductLayout({
   title,
@@ -34,8 +89,8 @@ export default function ProductLayout({
   moduleNav?: ModuleNavItem[];
   /** Si se omite, se muestran todos los de moduleNav (demo genérico). Si se da, solo los activos. */
   activeModules?: CompanyModuleName[];
-  /** Links adicionales al final del nav (ej. "Usuarios y roles" para el owner de un tenant). */
-  extraNav?: { to: string; label: string }[];
+  /** Links adicionales al final del nav (ej. "Usuarios y roles" para el owner de un tenant, o un grupo colapsable como Restaurantes). */
+  extraNav?: ExtraNavItem[];
   exitLabel?: string;
   onExit?: () => void;
 }) {
@@ -59,35 +114,19 @@ export default function ProductLayout({
               <p className="font-mono text-[0.68rem] text-white/40">Sin módulos activos.</p>
             )}
             {items.map((item) => (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                className={({ isActive }) =>
-                  `whitespace-nowrap border-l-2 px-3 py-2.5 font-mono text-[0.72rem] font-bold uppercase tracking-[0.12em] transition-colors ${
-                    isActive
-                      ? "border-orange bg-white/5 text-white"
-                      : "border-transparent text-white/50 hover:text-white"
-                  }`
-                }
-              >
+              <NavLink key={item.to} to={item.to} className={navLinkClass}>
                 {item.label}
               </NavLink>
             ))}
-            {extraNav.map((item) => (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                className={({ isActive }) =>
-                  `whitespace-nowrap border-l-2 px-3 py-2.5 font-mono text-[0.72rem] font-bold uppercase tracking-[0.12em] transition-colors ${
-                    isActive
-                      ? "border-orange bg-white/5 text-white"
-                      : "border-transparent text-white/50 hover:text-white"
-                  }`
-                }
-              >
-                {item.label}
-              </NavLink>
-            ))}
+            {extraNav.map((item) =>
+              isNavGroup(item) ? (
+                <NavGroup key={item.label} item={item} />
+              ) : (
+                <NavLink key={item.to} to={item.to} className={navLinkClass}>
+                  {item.label}
+                </NavLink>
+              ),
+            )}
           </nav>
         </div>
         {onExit && (

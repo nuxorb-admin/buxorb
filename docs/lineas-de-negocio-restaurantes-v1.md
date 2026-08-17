@@ -1,6 +1,6 @@
 # Línea de negocio: Restaurantes
 
-**Última actualización:** 17 de agosto de 2026
+**Última actualización:** 17 de agosto de 2026 (v1.1 — canales de pedido + nav en sidebar)
 
 ## 1. Objetivo
 
@@ -41,28 +41,35 @@ ticket se guarda igual sin reflejarse en otro lado. Mismo patrón que
 aproximación hasta que haya demanda de personalización real (mismo patrón
 que el resto de la plataforma).
 
-## 3. Los 6 módulos (tabs de una sola pantalla "Restaurantes")
+## 3. Los 6 módulos (grupo colapsable en el sidebar)
 
-Empaquetados como tabs dentro de un único item de nav (mismo patrón que
-Tesorería, que ya tiene 5 tabs en una pantalla), no 6 entradas de nav
-separadas.
+A diferencia de Tesorería (5 tabs dentro de una sola pantalla), Restaurantes
+se despliega como un **grupo colapsable en el sidebar** (`ProductLayout.tsx`,
+tipo `ExtraNavItem` con `children`): al hacer click en "Restaurantes" se
+expanden los 6 módulos como entradas de nav independientes
+(`/restaurantes/comandas`, `/restaurantes/mesas`, etc.), cada una su propia
+página — no hay una barra de tabs horizontal dentro de la pantalla.
+`Restaurantes.tsx` solo carga los datos compartidos (`useRestaurantesData`)
+y resuelve las rutas anidadas (`<Routes>` relativas bajo `restaurantes/*`),
+sin estado de tab propio.
 
-1. **Menú** (`MenuTab.tsx`) — capa de metadata de restaurante (categoría,
-   foto, orden, disponible) sobre el catálogo de Ventas
-   (`sales_products_services`). No duplica nombre/precio/IVA.
+1. **Comandas** (`ComandasTab.tsx`) — el mesero abre una mesa (crea
+   `ldn_restaurant_orders` con `canal='mesa'`) o da de alta un pedido por
+   otro canal (ver sección 3a), agrega platillos del menú disponible
+   (`ldn_restaurant_order_items`).
 2. **Mesas y salón** (`MesasTab.tsx`) — grid de mesas por estado
    (`libre`/`ocupada`/`reservada`/`cuenta_abierta`), agrupadas por `salon`
    si el nivel lo permite.
-3. **Comandas** (`ComandasTab.tsx`) — el mesero abre una mesa (crea
-   `ldn_restaurant_orders`), agrega platillos del menú disponible
-   (`ldn_restaurant_order_items`).
-4. **Cocina / KDS** (`CocinaTab.tsx`, Professional+) — lista de pedidos
+3. **Cocina / KDS** (`CocinaTab.tsx`, Professional+) — lista de pedidos
    pendientes por estado (`pendiente`→`en_preparacion`→`listo`→`entregado`),
-   agregados de todas las comandas abiertas.
-5. **Caja** (`CajaTab.tsx`) — apertura de turno con monto inicial
+   agregados de todas las comandas abiertas de cualquier canal.
+4. **Caja** (`CajaTab.tsx`) — apertura de turno con monto inicial
    (`ldn_restaurant_cash_sessions`), cobro de tickets (llama a la Edge
    Function `close-restaurant-ticket`), cierre de turno con arqueo
    (esperado vs. contado en efectivo).
+5. **Menú** (`MenuTab.tsx`) — capa de metadata de restaurante (categoría,
+   foto, orden, disponible) sobre el catálogo de Ventas
+   (`sales_products_services`). No duplica nombre/precio/IVA.
 6. **Reservaciones** (`ReservacionesTab.tsx`, Professional+) — alta de
    reservas (cliente, teléfono, personas, fecha/hora, mesa opcional) y
    cambio de estado (`pendiente`→`confirmada`/`cancelada`/`completada`).
@@ -70,15 +77,51 @@ separadas.
 Sin tiempo real (websockets/polling agresivo) en v1 — Cocina se actualiza
 al recargar, igual que el resto de la plataforma.
 
+### 3a. Canales de pedido (más allá de la mesa)
+
+Una comanda (`ldn_restaurant_orders`) ya no requiere mesa — tiene un campo
+`canal`: `mesa` | `telefono_domicilio` | `recoger` | `rappi`
+(migración `0053_ldn_restaurant_order_channels.sql`). `table_id` es
+`not null` solo cuando `canal = 'mesa'` (constraint
+`ldn_restaurant_orders_canal_table_check`); los otros tres canales capturan
+en su lugar `cliente_nombre`/`telefono`/`direccion` según aplique (ver
+tabla abajo) y un `referencia` libre opcional. `src/product/pages/restaurantes/orderDisplay.ts`
+centraliza cómo se muestra cada canal (título + subtítulo) en Comandas,
+Cocina y Caja, para no repetir esa lógica tres veces.
+
+| Canal | Se pide en Comandas | Datos capturados |
+|---|---|---|
+| Mesa | "+ Abrir mesa" | `table_id` (sin datos de cliente) |
+| Teléfono / domicilio | "+ Teléfono / domicilio" | `cliente_nombre`, `telefono`, `direccion` (los tres obligatorios) |
+| Recoger en sucursal | "+ Recoger en sucursal" | `cliente_nombre`, `telefono` (sin dirección) |
+| Rappi | "+ Rappi" | `referencia` opcional (folio del pedido en Rappi), nada más — el cliente ya vive en la app de Rappi |
+
+**Rappi v1 es captura manual**, no hay conexión con la API de Rappi:
+cuando llega un pedido por la tablet/app de Rappi, el staff lo da de alta
+a mano en Comandas. Conectar la API real de partners de Rappi (proceso de
+alta como socio + certificación técnica con Rappi, no un simple API key)
+queda para V2 — el campo `referencia` ya existe para no tener que rediseñar
+la tabla cuando eso pase.
+
+**Cobro de pedidos Rappi:** pasan por el mismo Cobrar de Caja que cualquier
+otro pedido, pero con la forma de pago fija `rappi` (agregada al check de
+`ldn_restaurant_ticket_payments`, no editable en el modal de cobro cuando
+`order.canal === 'rappi'`). Como `CerrarCajaModal` solo suma pagos con
+método `efectivo` para el arqueo, un pago `rappi` no lo altera — el efecto
+es "ya viene pagado por la plataforma" sin necesitar una rama de código ni
+un flujo de cierre distinto.
+
 ## 4. Campos de datos (tal como existen hoy en Supabase)
 
 Ver `supabase/migrations/0051_lineas_de_negocio.sql` (tabla de activación
-`nuxorb.ldn_company_business_lines`) y `0052_ldn_restaurant.sql` (8 tablas
+`nuxorb.ldn_company_business_lines`), `0052_ldn_restaurant.sql` (8 tablas
 operativas: `ldn_restaurant_menu_items`, `ldn_restaurant_tables`,
 `ldn_restaurant_orders`, `ldn_restaurant_order_items`,
 `ldn_restaurant_cash_sessions`, `ldn_restaurant_tickets`,
-`ldn_restaurant_ticket_payments`, `ldn_restaurant_reservations`) para el
-detalle campo por campo — son la fuente de verdad, no se duplica aquí.
+`ldn_restaurant_ticket_payments`, `ldn_restaurant_reservations`) y
+`0053_ldn_restaurant_order_channels.sql` (canales de pedido en
+`ldn_restaurant_orders`, ver 3a) para el detalle campo por campo — son la
+fuente de verdad, no se duplica aquí.
 
 **Convención de nombres:** todo este eje usa el prefijo `ldn_` (Líneas de
 negocio) + prefijo de la línea (`ldn_restaurant_*` aquí, a futuro
@@ -113,3 +156,9 @@ negocio) + prefijo de la línea (`ldn_restaurant_*` aquí, a futuro
   la primera cuenta de la empresa).
 - Calendario visual de Reservaciones (hoy es lista simple ordenada por
   fecha).
+- **Conexión real con la API de partners de Rappi** (recepción automática
+  de pedidos) — v1 es captura manual, ver 3a. Requiere alta formal como
+  socio de Rappi y certificación técnica, no solo trabajo de desarrollo.
+- Neteo de comisión de Rappi contra el ingreso registrado en Tesorería —
+  v1 registra el total del pedido tal cual, sin descontar la comisión de
+  la plataforma.

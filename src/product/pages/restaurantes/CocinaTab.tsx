@@ -1,6 +1,7 @@
 import { supabase } from "../../../lib/supabase";
 import type { ProductoServicio, RestaurantOrderItemStatus, RestaurantTable } from "../../../lib/database.types";
 import type { OrderWithItems } from "./useRestaurantesData";
+import { orderTitle } from "./orderDisplay";
 
 const NEXT_STATUS: Record<RestaurantOrderItemStatus, RestaurantOrderItemStatus | null> = {
   pendiente: "en_preparacion",
@@ -54,12 +55,11 @@ export default function CocinaTab({
       ) : (
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
           {pendingItems.map(({ item, order }) => {
-            const table = tables.find((t) => t.id === order.table_id);
             const product = products.find((p) => p.id === item.sales_product_id);
             const next = NEXT_STATUS[item.estado];
             return (
               <div key={item.id} className={`border px-3 py-3 ${STATUS_COLOR[item.estado]}`}>
-                <p className="font-mono text-[0.6rem] font-bold uppercase tracking-[0.06em]">{table?.nombre ?? "Mesa"}</p>
+                <p className="font-mono text-[0.6rem] font-bold uppercase tracking-[0.06em]">{orderTitle(order, tables)}</p>
                 <p className="mt-1 text-sm font-bold">
                   {item.cantidad}× {product?.nombre ?? "—"}
                 </p>

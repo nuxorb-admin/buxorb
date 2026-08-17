@@ -154,7 +154,9 @@ Deno.serve(async (req) => {
 
     await admin.from("ldn_restaurant_orders").update({ estado: "cerrada", closed_at: new Date().toISOString() }).eq("id", order_id);
     if (order.table_id) {
+      // Libera la mesa principal y cualquier mesa unida a ella para este grupo.
       await admin.from("ldn_restaurant_tables").update({ estado: "libre" }).eq("id", order.table_id);
+      await admin.from("ldn_restaurant_tables").update({ estado: "libre", joined_to: null }).eq("joined_to", order.table_id);
     }
 
     return new Response(JSON.stringify({ ok: true, ticket_id: ticket.id, total }), {

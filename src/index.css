@@ -146,3 +146,26 @@ body {
     transition: none;
   }
 }
+
+/* =========================================================
+   Ticket imprimible (Restaurantes → Caja). Formato angosto tipo
+   recibo (80mm) usando el diálogo de impresión nativo del navegador —
+   funciona con cualquier impresora de tickets instalada como impresora
+   normal del sistema, sin driver/SDK aparte.
+   ========================================================= */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .ticket-print-area,
+  .ticket-print-area * {
+    visibility: visible;
+  }
+  .ticket-print-area {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 80mm;
+    padding: 4mm;
+  }
+}

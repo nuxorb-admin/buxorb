@@ -988,6 +988,9 @@ export interface RestaurantTable {
   salon: string;
   nombre: string;
   estado: RestaurantTableStatus;
+  capacidad: number;
+  /** Si no es null, esta mesa está unida a la mesa principal con este id — ver 0055. */
+  joined_to: string | null;
   created_at: string;
 }
 

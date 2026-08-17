@@ -1,6 +1,6 @@
 # Línea de negocio: Restaurantes
 
-**Última actualización:** 17 de agosto de 2026 (v1.1 — canales de pedido + nav en sidebar)
+**Última actualización:** 17 de agosto de 2026 (v1.2 — picker visual de menú, mesas en lote + juntar mesas, Cocina agrupada por comanda, ticket imprimible)
 
 ## 1. Objetivo
 
@@ -55,21 +55,32 @@ sin estado de tab propio.
 
 1. **Comandas** (`ComandasTab.tsx`) — el mesero abre una mesa (crea
    `ldn_restaurant_orders` con `canal='mesa'`) o da de alta un pedido por
-   otro canal (ver sección 3a), agrega platillos del menú disponible
-   (`ldn_restaurant_order_items`).
+   otro canal (ver sección 3a). Agregar platillos usa `MenuPickerModal.tsx`
+   — selector visual estilo Rappi/Uber Eats: chips de categoría arriba,
+   grid de platillos abajo (foto si tiene, nombre, precio), tap para
+   agregar; si el platillo ya está en el pedido (todavía `pendiente`),
+   vuelve a tocar suma cantidad en vez de duplicar la fila. Ya en la
+   comanda, cada línea tiene +/− de cantidad y una nota editable en línea
+   — no hace falta un formulario aparte por platillo. Ver 3b para "juntar
+   mesas".
 2. **Mesas y salón** (`MesasTab.tsx`) — grid de mesas por estado
    (`libre`/`ocupada`/`reservada`/`cuenta_abierta`), agrupadas por `salon`
-   si el nivel lo permite.
-3. **Cocina / KDS** (`CocinaTab.tsx`, Professional+) — lista de pedidos
-   pendientes por estado (`pendiente`→`en_preparacion`→`listo`→`entregado`),
-   agregados de todas las comandas abiertas de cualquier canal.
+   si el nivel lo permite, con su `capacidad` (personas) visible. Alta en
+   lote (ej. "Mesa 1" a "Mesa 7" de un jalón, ver 3b) o una por una.
+3. **Cocina / KDS** (`CocinaTab.tsx`, Professional+) — un card por
+   **comanda** (no por platillo), con un badge del número de platillos que
+   faltan (no `entregado`) — clic en el card abre el pedido completo en un
+   modal, con el estado y el botón de avanzar
+   (`pendiente`→`en_preparacion`→`listo`→`entregado`) de cada platillo.
 4. **Caja** (`CajaTab.tsx`) — apertura de turno con monto inicial
-   (`ldn_restaurant_cash_sessions`), cobro de tickets (llama a la Edge
+   (`ldn_restaurant_cash_sessions`), botón **Ticket** para imprimir la
+   precuenta antes de cobrar (ver 3c), cobro de tickets (llama a la Edge
    Function `close-restaurant-ticket`), cierre de turno con arqueo
    (esperado vs. contado en efectivo).
 5. **Menú** (`MenuTab.tsx`) — capa de metadata de restaurante (categoría,
    foto, orden, disponible) sobre el catálogo de Ventas
-   (`sales_products_services`). No duplica nombre/precio/IVA.
+   (`sales_products_services`). No duplica nombre/precio/IVA. La
+   `categoria` es lo que agrupa el picker visual de Comandas.
 6. **Reservaciones** (`ReservacionesTab.tsx`, Professional+) — alta de
    reservas (cliente, teléfono, personas, fecha/hora, mesa opcional) y
    cambio de estado (`pendiente`→`confirmada`/`cancelada`/`completada`).
@@ -111,6 +122,44 @@ método `efectivo` para el arqueo, un pago `rappi` no lo altera — el efecto
 es "ya viene pagado por la plataforma" sin necesitar una rama de código ni
 un flujo de cierre distinto.
 
+### 3b. Mesas: alta en lote y "juntar mesas"
+
+`ldn_restaurant_tables` tiene `capacidad` (personas, informativo) y
+`joined_to` (migración `0055_ldn_restaurant_tables_capacity_join.sql`) —
+si no es null, apunta a la mesa "principal" del grupo. **Un grupo de mesas
+unidas comparte UNA sola comanda**: al abrir mesa con "Unir varias mesas"
+activado en Comandas, se crea `ldn_restaurant_orders` solo para la mesa
+principal (la primera elegida); el resto queda `estado='ocupada'` +
+`joined_to = <principal>`, sin orden propia. `orderDisplay.ts` arma el
+título como "Mesa 1 + Mesa 2" combinando la principal y sus unidas.
+`close-restaurant-ticket` libera la principal **y** cualquier mesa con
+`joined_to` apuntándole al cerrar el ticket — así el grupo completo vuelve
+a `libre` de una vez. No hay "separar mesas" en v1 (el grupo se disuelve
+al cerrar el ticket); tampoco hay UI para deshacer una unión antes de
+cobrar.
+
+El alta en lote (`MesasTab.tsx`, modal "Crear mesas") genera
+`{nombreBase} {n}` para `n` en un rango `desde..hasta` (tope 100 por
+lote) — ej. nombre base "Mesa", rango 1 a 7 → siete filas.
+
+### 3c. Ticket imprimible (precuenta) antes de cobrar
+
+Botón **Ticket** en la lista de "Pedidos por cobrar" de Caja, junto a
+**Cobrar**. Abre una vista con el desglose (platillos, subtotal, líneas en
+blanco para propina/total que el cliente llena a mano) y un botón
+**Imprimir** que llama a `window.print()` — sin tocar la base de datos, es
+solo la precuenta que el mesero entrega en la mesa antes de que el cliente
+decida cómo pagar. El cobro real (propina + forma de pago) sigue siendo un
+paso aparte con **Cobrar**, sin cambios.
+
+Impresión vía diálogo nativo del navegador, no protocolo ESC/POS: la
+mayoría de impresoras de tickets térmicas se instalan en Windows/Android
+como una impresora normal, así que basta con un CSS de impresión angosto
+(`.ticket-print-area` en `src/index.css`, formato 80mm) — no se requiere
+SDK ni driver especial del lado de Nuxorb. Si el negocio termina usando una
+impresora que solo habla ESC/POS por USB/Bluetooth directo, esa
+integración queda pendiente (ver §7).
+
 ## 4. Campos de datos (tal como existen hoy en Supabase)
 
 Ver `supabase/migrations/0051_lineas_de_negocio.sql` (tabla de activación
@@ -120,8 +169,9 @@ operativas: `ldn_restaurant_menu_items`, `ldn_restaurant_tables`,
 `ldn_restaurant_cash_sessions`, `ldn_restaurant_tickets`,
 `ldn_restaurant_ticket_payments`, `ldn_restaurant_reservations`) y
 `0053_ldn_restaurant_order_channels.sql` (canales de pedido en
-`ldn_restaurant_orders`, ver 3a) para el detalle campo por campo — son la
-fuente de verdad, no se duplica aquí.
+`ldn_restaurant_orders`, ver 3a) y `0055_ldn_restaurant_tables_capacity_join.sql`
+(`capacidad` + `joined_to` en `ldn_restaurant_tables`, ver 3b) para el
+detalle campo por campo — son la fuente de verdad, no se duplica aquí.
 
 **Convención de nombres:** todo este eje usa el prefijo `ldn_` (Líneas de
 negocio) + prefijo de la línea (`ldn_restaurant_*` aquí, a futuro
@@ -162,3 +212,11 @@ negocio) + prefijo de la línea (`ldn_restaurant_*` aquí, a futuro
 - Neteo de comisión de Rappi contra el ingreso registrado en Tesorería —
   v1 registra el total del pedido tal cual, sin descontar la comisión de
   la plataforma.
+- "Separar mesas" — deshacer una unión de mesas antes de cerrar el
+  ticket (hoy el grupo solo se disuelve al cobrar, ver 3b).
+- Impresión directa por protocolo ESC/POS (USB/Bluetooth) si el cliente
+  termina con una impresora que no se puede instalar como impresora
+  normal del sistema (ver 3c).
+- Sistema real de variantes/modificadores de producto (ej. un platillo
+  con opciones de tamaño elegibles al agregarlo) — v1 asume que cada
+  variante ya es su propio platillo dado de alta en Menú.

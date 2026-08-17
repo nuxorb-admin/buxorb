@@ -1,7 +1,9 @@
+import { useState } from "react";
 import { supabase } from "../../../lib/supabase";
 import type { ProductoServicio, RestaurantOrderItemStatus, RestaurantTable } from "../../../lib/database.types";
 import type { OrderWithItems } from "./useRestaurantesData";
 import { orderTitle } from "./orderDisplay";
+import Modal from "../../../admin/components/Modal";
 
 const NEXT_STATUS: Record<RestaurantOrderItemStatus, RestaurantOrderItemStatus | null> = {
   pendiente: "en_preparacion",
@@ -35,10 +37,14 @@ export default function CocinaTab({
   products: ProductoServicio[];
   reload: () => void;
 }) {
-  const pendingItems = openOrders
-    .flatMap((order) => order.items.map((item) => ({ item, order })))
-    .filter(({ item }) => item.estado !== "entregado")
-    .sort((a, b) => a.item.created_at.localeCompare(b.item.created_at));
+  const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
+
+  const pendingOrders = openOrders
+    .map((order) => ({ order, faltan: order.items.filter((i) => i.estado !== "entregado").length }))
+    .filter((x) => x.faltan > 0)
+    .sort((a, b) => a.order.opened_at.localeCompare(b.order.opened_at));
+
+  const expandedOrder = openOrders.find((o) => o.id === expandedOrderId) ?? null;
 
   async function avanzar(itemId: string, next: RestaurantOrderItemStatus) {
     await supabase.from("ldn_restaurant_order_items").update({ estado: next }).eq("id", itemId);
@@ -48,35 +54,65 @@ export default function CocinaTab({
   return (
     <div>
       <h3 className="mb-3 font-mono text-[0.68rem] font-bold uppercase tracking-[0.1em] text-muted">
-        Cocina — pedidos pendientes ({pendingItems.length})
+        Cocina — comandas pendientes ({pendingOrders.length})
       </h3>
-      {pendingItems.length === 0 ? (
-        <p className="font-mono text-[0.68rem] text-muted">Sin pedidos pendientes.</p>
+      {pendingOrders.length === 0 ? (
+        <p className="font-mono text-[0.68rem] text-muted">Sin comandas pendientes.</p>
       ) : (
-        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-          {pendingItems.map(({ item, order }) => {
-            const product = products.find((p) => p.id === item.sales_product_id);
-            const next = NEXT_STATUS[item.estado];
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {pendingOrders.map(({ order, faltan }) => {
+            const preview = order.items
+              .filter((i) => i.estado !== "entregado")
+              .slice(0, 3)
+              .map((i) => products.find((p) => p.id === i.sales_product_id)?.nombre ?? "—");
             return (
-              <div key={item.id} className={`border px-3 py-3 ${STATUS_COLOR[item.estado]}`}>
-                <p className="font-mono text-[0.6rem] font-bold uppercase tracking-[0.06em]">{orderTitle(order, tables)}</p>
-                <p className="mt-1 text-sm font-bold">
-                  {item.cantidad}× {product?.nombre ?? "—"}
+              <button
+                key={order.id}
+                onClick={() => setExpandedOrderId(order.id)}
+                className="relative border border-ink/10 bg-white p-4 text-left transition-colors hover:border-teal"
+              >
+                <span className="absolute right-3 top-3 flex h-6 min-w-6 items-center justify-center rounded-full bg-orange px-1.5 font-mono text-[0.66rem] font-bold text-white">
+                  {faltan}
+                </span>
+                <p className="pr-8 text-sm font-bold text-ink">{orderTitle(order, tables)}</p>
+                <p className="mt-1 font-mono text-[0.6rem] text-muted">
+                  {preview.join(", ")}
+                  {order.items.length > preview.length ? "…" : ""}
                 </p>
-                {item.notas && <p className="mt-0.5 font-mono text-[0.6rem]">{item.notas}</p>}
-                <p className="mt-2 font-mono text-[0.58rem] uppercase tracking-[0.06em]">{STATUS_LABEL[item.estado]}</p>
-                {next && (
-                  <button
-                    onClick={() => avanzar(item.id, next)}
-                    className="mt-2 w-full border border-current px-2 py-1 font-mono text-[0.6rem] uppercase tracking-[0.06em] hover:opacity-70"
-                  >
-                    Marcar {STATUS_LABEL[next].toLowerCase()}
-                  </button>
-                )}
-              </div>
+              </button>
             );
           })}
         </div>
+      )}
+
+      {expandedOrder && (
+        <Modal title={orderTitle(expandedOrder, tables)} onClose={() => setExpandedOrderId(null)}>
+          <div className="space-y-2">
+            {expandedOrder.items.map((item) => {
+              const product = products.find((p) => p.id === item.sales_product_id);
+              const next = NEXT_STATUS[item.estado];
+              return (
+                <div key={item.id} className={`flex items-center justify-between gap-3 border px-3 py-2 ${STATUS_COLOR[item.estado]}`}>
+                  <div>
+                    <p className="text-sm font-bold">
+                      {item.cantidad}× {product?.nombre ?? "—"}
+                    </p>
+                    {item.notas && <p className="font-mono text-[0.6rem]">{item.notas}</p>}
+                    <p className="mt-0.5 font-mono text-[0.58rem] uppercase tracking-[0.06em]">{STATUS_LABEL[item.estado]}</p>
+                  </div>
+                  {next && (
+                    <button
+                      onClick={() => avanzar(item.id, next)}
+                      className="shrink-0 border border-current px-2 py-1 font-mono text-[0.6rem] uppercase tracking-[0.06em] hover:opacity-70"
+                    >
+                      Marcar {STATUS_LABEL[next].toLowerCase()}
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </Modal>
       )}
     </div>
   );

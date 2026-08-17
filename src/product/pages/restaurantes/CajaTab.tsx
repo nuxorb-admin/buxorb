@@ -47,6 +47,7 @@ export default function CajaTab({
   reload: () => void;
 }) {
   const [chargingOrder, setChargingOrder] = useState<OrderWithItems | null>(null);
+  const [printingOrder, setPrintingOrder] = useState<OrderWithItems | null>(null);
   const [showClose, setShowClose] = useState(false);
 
   if (!cashSession) {
@@ -86,19 +87,31 @@ export default function CajaTab({
                     {subtitle ? ` · ${subtitle}` : ""}
                   </p>
                 </div>
-                <button
-                  onClick={() => setChargingOrder(order)}
-                  disabled={order.items.length === 0}
-                  className="btn btn-primary px-3 py-1.5 text-[0.62rem] disabled:opacity-60"
-                >
-                  Cobrar
-                </button>
+                <div className="flex shrink-0 gap-2">
+                  <button
+                    onClick={() => setPrintingOrder(order)}
+                    disabled={order.items.length === 0}
+                    className="btn btn-outline px-3 py-1.5 text-[0.62rem] disabled:opacity-60"
+                  >
+                    Ticket
+                  </button>
+                  <button
+                    onClick={() => setChargingOrder(order)}
+                    disabled={order.items.length === 0}
+                    className="btn btn-primary px-3 py-1.5 text-[0.62rem] disabled:opacity-60"
+                  >
+                    Cobrar
+                  </button>
+                </div>
               </div>
             );
           })}
         </div>
       )}
 
+      {printingOrder && (
+        <TicketModal order={printingOrder} tables={tables} products={products} onClose={() => setPrintingOrder(null)} />
+      )}
       {chargingOrder && (
         <CobrarModal
           order={chargingOrder}
@@ -159,6 +172,57 @@ function AbrirCajaForm({ companyId, onOpened }: { companyId: string; onOpened: (
         </button>
       </form>
     </div>
+  );
+}
+
+function TicketModal({
+  order,
+  tables,
+  products,
+  onClose,
+}: {
+  order: OrderWithItems;
+  tables: RestaurantTable[];
+  products: ProductoServicio[];
+  onClose: () => void;
+}) {
+  const subtotal = orderTotal(order, products);
+
+  return (
+    <Modal title="Ticket / cuenta" onClose={onClose}>
+      <div className="ticket-print-area border border-ink/10 bg-sand-2 p-4 font-mono text-xs">
+        <p className="text-center font-bold uppercase tracking-[0.08em]">{orderTitle(order, tables)}</p>
+        <p className="mt-1 text-center text-[0.62rem] text-muted">{new Date().toLocaleString("es-MX")}</p>
+        <div className="mt-3 divide-y divide-ink/10 border-y border-ink/10">
+          {order.items.map((item) => {
+            const product = products.find((p) => p.id === item.sales_product_id);
+            return (
+              <div key={item.id} className="flex items-center justify-between py-1.5">
+                <span>
+                  {item.cantidad}× {product?.nombre ?? "—"}
+                </span>
+                <span>${((product?.precio_unitario ?? 0) * item.cantidad).toFixed(2)}</span>
+              </div>
+            );
+          })}
+        </div>
+        <div className="mt-2 flex items-center justify-between font-bold">
+          <span>Subtotal</span>
+          <span>${subtotal.toFixed(2)}</span>
+        </div>
+        <p className="mt-3 border-t border-dashed border-ink/20 pt-2 text-[0.6rem] text-muted">Propina: __________</p>
+        <p className="mt-1 text-[0.6rem] text-muted">Total: __________</p>
+        <p className="mt-3 text-center text-[0.58rem] text-muted">Esta cuenta no es un comprobante fiscal.</p>
+      </div>
+      <div className="mt-4 flex gap-3">
+        <button onClick={onClose} className="btn btn-outline flex-1">
+          Cerrar
+        </button>
+        <button onClick={() => window.print()} className="btn btn-primary flex-1">
+          Imprimir
+        </button>
+      </div>
+    </Modal>
   );
 }
 

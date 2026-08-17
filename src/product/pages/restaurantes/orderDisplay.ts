@@ -10,7 +10,10 @@ export const CHANNEL_LABELS: Record<RestaurantOrderChannel, string> = {
 
 export function orderTitle(order: OrderWithItems, tables: RestaurantTable[]): string {
   if (order.canal === "mesa") {
-    return tables.find((t) => t.id === order.table_id)?.nombre ?? "Mesa";
+    const principal = tables.find((t) => t.id === order.table_id);
+    const unidas = tables.filter((t) => t.joined_to === order.table_id);
+    const nombres = [principal?.nombre, ...unidas.map((t) => t.nombre)].filter((n): n is string => !!n);
+    return nombres.length ? nombres.join(" + ") : "Mesa";
   }
   const base = CHANNEL_LABELS[order.canal];
   return order.cliente_nombre ? `${base} — ${order.cliente_nombre}` : base;

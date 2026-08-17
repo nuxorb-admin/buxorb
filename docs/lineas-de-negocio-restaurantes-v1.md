@@ -1,6 +1,6 @@
 # Línea de negocio: Restaurantes
 
-**Última actualización:** 17 de agosto de 2026 (v1.3 — pantalla completa de toma de orden con carrito y envío explícito a cocina)
+**Última actualización:** 17 de agosto de 2026 (v1.4 — opciones/modificadores de platillo y comentario al personalizar)
 
 ## 1. Objetivo
 
@@ -181,6 +181,34 @@ Los platillos ya enviados siguen siendo editables (cantidad, notas, quitar)
 directo contra la base, igual que en v1.2 — solo los del carrito sin
 enviar son ediciones puramente locales hasta que se confirman.
 
+### 3e. Opciones de platillo (ej. "elige tu cerveza") y comentario
+
+Tocar cualquier platillo del grid en `TomarOrdenScreen.tsx` abre
+`CustomizeItemModal` en vez de agregarlo directo — ahí se elige cantidad,
+un **comentario libre** (ej. "sin cebolla", siempre disponible sin
+importar el platillo) y, si el platillo tiene grupos de opciones
+configurados en Menú (ej. "Clamato" con el grupo "Elige tu cerveza":
+Corona/Modelo/Tecate), un radio por cada grupo — obligatorio o no según
+como se configuró. **v1: un grupo es siempre de selección única (radio,
+no checkboxes) y sin costo extra por opción** — decisión de producto para
+no complicar la captura ni el total.
+
+Se configuran en el tab **Menú** (`MenuTab.tsx`, botón "Opciones" por
+platillo): `ldn_restaurant_menu_item_option_groups` (nombre + si es
+obligatorio) y `ldn_restaurant_menu_item_options` (las opciones dentro de
+cada grupo) — migración `0056_ldn_restaurant_menu_item_options.sql`.
+
+El carrito de `TomarOrdenScreen.tsx` ahora agrupa por combinación
+producto+comentario+opciones, no solo por producto — dos "Clamato" con
+cervezas distintas son dos líneas separadas del carrito, aunque tocar el
+mismo platillo con la misma combinación sí suma cantidad en vez de
+duplicar. Al **Enviar orden**, las opciones elegidas se guardan en
+`ldn_restaurant_order_item_options` con un `nombre_snapshot` de la opción
+(no solo el FK) — si el negocio borra o renombra una opción después, el
+pedido histórico conserva lo que se eligió en su momento. Cocina muestra
+las opciones elegidas junto al platillo (imprescindible: el cocinero
+necesita saber qué cerveza preparar, no solo que es un "Clamato").
+
 ## 4. Campos de datos (tal como existen hoy en Supabase)
 
 Ver `supabase/migrations/0051_lineas_de_negocio.sql` (tabla de activación
@@ -190,9 +218,11 @@ operativas: `ldn_restaurant_menu_items`, `ldn_restaurant_tables`,
 `ldn_restaurant_cash_sessions`, `ldn_restaurant_tickets`,
 `ldn_restaurant_ticket_payments`, `ldn_restaurant_reservations`) y
 `0053_ldn_restaurant_order_channels.sql` (canales de pedido en
-`ldn_restaurant_orders`, ver 3a) y `0055_ldn_restaurant_tables_capacity_join.sql`
-(`capacidad` + `joined_to` en `ldn_restaurant_tables`, ver 3b) para el
-detalle campo por campo — son la fuente de verdad, no se duplica aquí.
+`ldn_restaurant_orders`, ver 3a), `0055_ldn_restaurant_tables_capacity_join.sql`
+(`capacidad` + `joined_to` en `ldn_restaurant_tables`, ver 3b) y
+`0056_ldn_restaurant_menu_item_options.sql` (grupos/opciones de platillo +
+`ldn_restaurant_order_item_options`, ver 3e) para el detalle campo por
+campo — son la fuente de verdad, no se duplica aquí.
 
 **Convención de nombres:** todo este eje usa el prefijo `ldn_` (Líneas de
 negocio) + prefijo de la línea (`ldn_restaurant_*` aquí, a futuro
@@ -238,9 +268,9 @@ negocio) + prefijo de la línea (`ldn_restaurant_*` aquí, a futuro
 - Impresión directa por protocolo ESC/POS (USB/Bluetooth) si el cliente
   termina con una impresora que no se puede instalar como impresora
   normal del sistema (ver 3c).
-- Sistema real de variantes/modificadores de producto (ej. un platillo
-  con opciones de tamaño elegibles al agregarlo) — v1 asume que cada
-  variante ya es su propio platillo dado de alta en Menú.
+- Grupos de opciones con costo extra por opción o selección múltiple
+  (checkboxes con límite, ej. "elige hasta 3 toppings") — v1 es siempre
+  radio de una sola opción, sin cargo adicional (ver 3e).
 - Carrito de `TomarOrdenScreen.tsx` como borrador persistente — hoy vive
   solo en memoria del navegador (ver 3d); si se necesita que sobreviva a
   un refresh o cambio de pestaña, requiere guardarlo en Supabase con un

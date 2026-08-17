@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { supabase } from "../../../lib/supabase";
-import type { ProductoServicio, RestaurantMenuItem } from "../../../lib/database.types";
+import type { ProductoServicio } from "../../../lib/database.types";
+import type { MenuItemWithOptions } from "./useRestaurantesData";
 import Modal from "../../../admin/components/Modal";
 import FieldInput from "../../../admin/components/FieldInput";
 
@@ -12,20 +13,22 @@ export default function MenuTab({
 }: {
   companyId: string;
   products: ProductoServicio[];
-  menuItems: RestaurantMenuItem[];
+  menuItems: MenuItemWithOptions[];
   reload: () => void;
 }) {
   const [showNew, setShowNew] = useState(false);
+  const [configuringOptionsForId, setConfiguringOptionsForId] = useState<string | null>(null);
+  const configuringOptionsFor = menuItems.find((m) => m.id === configuringOptionsForId) ?? null;
 
   const productsInMenu = new Set(menuItems.map((m) => m.sales_product_id));
   const availableProducts = products.filter((p) => !productsInMenu.has(p.id));
 
-  async function toggleDisponible(item: RestaurantMenuItem) {
+  async function toggleDisponible(item: MenuItemWithOptions) {
     await supabase.from("ldn_restaurant_menu_items").update({ disponible: !item.disponible }).eq("id", item.id);
     reload();
   }
 
-  async function quitarDelMenu(item: RestaurantMenuItem) {
+  async function quitarDelMenu(item: MenuItemWithOptions) {
     await supabase.from("ldn_restaurant_menu_items").delete().eq("id", item.id);
     reload();
   }
@@ -69,6 +72,9 @@ export default function MenuTab({
                   </p>
                 </div>
                 <div className="flex shrink-0 items-center gap-3">
+                  <button onClick={() => setConfiguringOptionsForId(item.id)} className="font-mono text-[0.62rem] uppercase text-teal hover:underline">
+                    Opciones {item.option_groups.length > 0 ? `(${item.option_groups.length})` : ""}
+                  </button>
                   <button onClick={() => toggleDisponible(item)} className="font-mono text-[0.62rem] uppercase text-muted hover:text-orange">
                     {item.disponible ? "Marcar agotado" : "Marcar disponible"}
                   </button>
@@ -84,6 +90,15 @@ export default function MenuTab({
 
       {showNew && (
         <NewMenuItemModal companyId={companyId} availableProducts={availableProducts} onClose={() => setShowNew(false)} onCreated={reload} />
+      )}
+
+      {configuringOptionsFor && (
+        <OptionsModal
+          item={configuringOptionsFor}
+          productName={products.find((p) => p.id === configuringOptionsFor.sales_product_id)?.nombre ?? "—"}
+          onClose={() => setConfiguringOptionsForId(null)}
+          onChanged={reload}
+        />
       )}
     </div>
   );
@@ -149,5 +164,147 @@ function NewMenuItemModal({
         </button>
       </form>
     </Modal>
+  );
+}
+
+function OptionsModal({
+  item,
+  productName,
+  onClose,
+  onChanged,
+}: {
+  item: MenuItemWithOptions;
+  productName: string;
+  onClose: () => void;
+  onChanged: () => void;
+}) {
+  const [showNewGroup, setShowNewGroup] = useState(false);
+
+  async function quitarGrupo(groupId: string) {
+    await supabase.from("ldn_restaurant_menu_item_option_groups").delete().eq("id", groupId);
+    onChanged();
+  }
+
+  async function quitarOpcion(optionId: string) {
+    await supabase.from("ldn_restaurant_menu_item_options").delete().eq("id", optionId);
+    onChanged();
+  }
+
+  return (
+    <Modal title={`Opciones — ${productName}`} onClose={onClose} size="lg">
+      <p className="mb-4 font-mono text-[0.62rem] text-muted">
+        Grupos de opciones que el mesero elige al agregar este platillo (ej. "Elige tu cerveza"). Cada grupo es de
+        una sola opción; márcalo obligatorio si no se puede agregar el platillo sin elegir una.
+      </p>
+
+      {item.option_groups.length === 0 ? (
+        <p className="mb-4 font-mono text-[0.68rem] text-muted">Sin grupos de opciones todavía.</p>
+      ) : (
+        <div className="mb-4 space-y-3">
+          {item.option_groups.map((group) => (
+            <div key={group.id} className="border border-ink/10 bg-sand-2 p-3">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-semibold text-ink">
+                  {group.nombre}{" "}
+                  {group.obligatorio && (
+                    <span className="ml-1 font-mono text-[0.56rem] uppercase tracking-[0.06em] text-orange">Obligatorio</span>
+                  )}
+                </p>
+                <button onClick={() => quitarGrupo(group.id)} className="font-mono text-[0.58rem] uppercase text-orange hover:underline">
+                  Quitar grupo
+                </button>
+              </div>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {group.options.map((opt) => (
+                  <span key={opt.id} className="flex items-center gap-1 border border-ink/15 bg-white px-2 py-1 font-mono text-[0.62rem] text-ink">
+                    {opt.nombre}
+                    <button onClick={() => quitarOpcion(opt.id)} className="text-muted hover:text-orange">
+                      ✕
+                    </button>
+                  </span>
+                ))}
+              </div>
+              <NewOptionForm groupId={group.id} onCreated={onChanged} />
+            </div>
+          ))}
+        </div>
+      )}
+
+      {showNewGroup ? (
+        <NewGroupForm menuItemId={item.id} onClose={() => setShowNewGroup(false)} onCreated={onChanged} />
+      ) : (
+        <button onClick={() => setShowNewGroup(true)} className="font-mono text-[0.66rem] uppercase tracking-[0.1em] text-teal hover:underline">
+          + Nuevo grupo de opciones
+        </button>
+      )}
+    </Modal>
+  );
+}
+
+function NewGroupForm({
+  menuItemId,
+  onClose,
+  onCreated,
+}: {
+  menuItemId: string;
+  onClose: () => void;
+  onCreated: () => void;
+}) {
+  const [nombre, setNombre] = useState("");
+  const [obligatorio, setObligatorio] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    if (!nombre.trim()) return;
+    setSaving(true);
+    await supabase.from("ldn_restaurant_menu_item_option_groups").insert({ menu_item_id: menuItemId, nombre: nombre.trim(), obligatorio });
+    setSaving(false);
+    onCreated();
+    onClose();
+  }
+
+  return (
+    <form onSubmit={submit} className="mt-2 flex flex-wrap items-end gap-2 border border-ink/10 bg-white p-3">
+      <div className="flex-1">
+        <FieldInput label="Nombre del grupo" value={nombre} onChange={setNombre} required placeholder="Ej. Elige tu cerveza" />
+      </div>
+      <label className="mb-2 flex items-center gap-1.5 font-mono text-[0.62rem] uppercase tracking-[0.06em] text-muted">
+        <input type="checkbox" checked={obligatorio} onChange={(e) => setObligatorio(e.target.checked)} />
+        Obligatorio
+      </label>
+      <button type="submit" disabled={saving} className="btn btn-primary mb-0 px-3 py-2 text-[0.62rem]">
+        {saving ? "Creando…" : "Crear grupo"}
+      </button>
+    </form>
+  );
+}
+
+function NewOptionForm({ groupId, onCreated }: { groupId: string; onCreated: () => void }) {
+  const [nombre, setNombre] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    if (!nombre.trim()) return;
+    setSaving(true);
+    await supabase.from("ldn_restaurant_menu_item_options").insert({ group_id: groupId, nombre: nombre.trim() });
+    setSaving(false);
+    setNombre("");
+    onCreated();
+  }
+
+  return (
+    <form onSubmit={submit} className="mt-2 flex gap-2">
+      <input
+        value={nombre}
+        onChange={(e) => setNombre(e.target.value)}
+        placeholder="Ej. Corona"
+        className="flex-1 border border-ink/15 bg-white px-2 py-1.5 font-mono text-xs text-ink focus:border-teal focus:outline-none"
+      />
+      <button type="submit" disabled={saving} className="font-mono text-[0.6rem] uppercase text-teal hover:underline">
+        + Agregar
+      </button>
+    </form>
   );
 }

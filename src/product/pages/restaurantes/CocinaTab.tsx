@@ -64,7 +64,11 @@ export default function CocinaTab({
             const preview = order.items
               .filter((i) => i.estado !== "entregado")
               .slice(0, 3)
-              .map((i) => products.find((p) => p.id === i.sales_product_id)?.nombre ?? "—");
+              .map((i) => {
+                const nombre = products.find((p) => p.id === i.sales_product_id)?.nombre ?? "—";
+                const opciones = i.option_selections.map((s) => s.nombre_snapshot).join("/");
+                return opciones ? `${nombre} (${opciones})` : nombre;
+              });
             return (
               <button
                 key={order.id}
@@ -97,6 +101,11 @@ export default function CocinaTab({
                     <p className="text-sm font-bold">
                       {item.cantidad}× {product?.nombre ?? "—"}
                     </p>
+                    {item.option_selections.length > 0 && (
+                      <p className="font-mono text-[0.6rem] font-bold">
+                        {item.option_selections.map((s) => s.nombre_snapshot).join(", ")}
+                      </p>
+                    )}
                     {item.notas && <p className="font-mono text-[0.6rem]">{item.notas}</p>}
                     <p className="mt-0.5 font-mono text-[0.58rem] uppercase tracking-[0.06em]">{STATUS_LABEL[item.estado]}</p>
                   </div>

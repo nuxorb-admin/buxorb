@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { supabase } from "../../../lib/supabase";
-import type { ProductoServicio, RestaurantMenuItem, RestaurantOrderChannel, RestaurantTable } from "../../../lib/database.types";
-import type { OrderWithItems } from "./useRestaurantesData";
+import type { ProductoServicio, RestaurantOrderChannel, RestaurantTable } from "../../../lib/database.types";
+import type { MenuItemWithOptions, OrderWithItems } from "./useRestaurantesData";
 import { CHANNEL_LABELS, orderSubtitle, orderTitle } from "./orderDisplay";
 import TomarOrdenScreen from "./TomarOrdenScreen";
 import Modal from "../../../admin/components/Modal";
@@ -28,7 +28,7 @@ export default function ComandasTab({
   companyId: string;
   tables: RestaurantTable[];
   openOrders: OrderWithItems[];
-  menuItems: RestaurantMenuItem[];
+  menuItems: MenuItemWithOptions[];
   products: ProductoServicio[];
   reload: () => void;
 }) {

@@ -1,16 +1,31 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../../../lib/supabase";
-import type { ProductoServicio, RestaurantMenuItem, RestaurantTable } from "../../../lib/database.types";
-import type { OrderWithItems } from "./useRestaurantesData";
+import type { ProductoServicio, RestaurantTable } from "../../../lib/database.types";
+import type { MenuItemWithOptions, OrderWithItems } from "./useRestaurantesData";
 import { orderSubtitle, orderTitle } from "./orderDisplay";
+import Modal from "../../../admin/components/Modal";
 
 const OTROS = "Otros";
 const TODAS = "Todas";
 
+interface CartSelection {
+  option_id: string;
+  nombre_snapshot: string;
+}
+
 interface CartLine {
+  id: string;
   sales_product_id: string;
   cantidad: number;
   notas: string;
+  selections: CartSelection[];
+}
+
+function sameSelections(a: CartSelection[], b: CartSelection[]): boolean {
+  if (a.length !== b.length) return false;
+  const idsA = [...a.map((s) => s.option_id)].sort();
+  const idsB = [...b.map((s) => s.option_id)].sort();
+  return idsA.every((id, i) => id === idsB[i]);
 }
 
 export default function TomarOrdenScreen({
@@ -26,7 +41,7 @@ export default function TomarOrdenScreen({
   order: OrderWithItems;
   openOrders: OrderWithItems[];
   tables: RestaurantTable[];
-  menuItems: RestaurantMenuItem[];
+  menuItems: MenuItemWithOptions[];
   products: ProductoServicio[];
   onBack: () => void;
   onSwitchOrder: (orderId: string) => void;
@@ -37,6 +52,7 @@ export default function TomarOrdenScreen({
   const [search, setSearch] = useState("");
   const [cart, setCart] = useState<CartLine[]>([]);
   const [sending, setSending] = useState(false);
+  const [customizingItem, setCustomizingItem] = useState<MenuItemWithOptions | null>(null);
   const [editingSentNotas, setEditingSentNotas] = useState<Record<string, string>>({});
 
   useEffect(() => {
@@ -70,30 +86,24 @@ export default function TomarOrdenScreen({
     return products.find((p) => p.id === salesProductId)?.nombre ?? "—";
   }
 
-  function agregarAlCarrito(salesProductId: string) {
+  function agregarAlCarrito(salesProductId: string, cantidad: number, notas: string, selections: CartSelection[]) {
     setCart((prev) => {
-      const existing = prev.find((l) => l.sales_product_id === salesProductId);
-      if (existing) {
-        return prev.map((l) => (l.sales_product_id === salesProductId ? { ...l, cantidad: l.cantidad + 1 } : l));
+      const idx = prev.findIndex(
+        (l) => l.sales_product_id === salesProductId && l.notas === notas && sameSelections(l.selections, selections),
+      );
+      if (idx >= 0) {
+        return prev.map((l, i) => (i === idx ? { ...l, cantidad: l.cantidad + cantidad } : l));
       }
-      return [...prev, { sales_product_id: salesProductId, cantidad: 1, notas: "" }];
+      return [...prev, { id: crypto.randomUUID(), sales_product_id: salesProductId, cantidad, notas, selections }];
     });
   }
 
-  function cambiarCantidadCarrito(salesProductId: string, delta: number) {
-    setCart((prev) =>
-      prev
-        .map((l) => (l.sales_product_id === salesProductId ? { ...l, cantidad: l.cantidad + delta } : l))
-        .filter((l) => l.cantidad > 0),
-    );
+  function cambiarCantidadCarrito(lineId: string, delta: number) {
+    setCart((prev) => prev.map((l) => (l.id === lineId ? { ...l, cantidad: l.cantidad + delta } : l)).filter((l) => l.cantidad > 0));
   }
 
-  function quitarDelCarrito(salesProductId: string) {
-    setCart((prev) => prev.filter((l) => l.sales_product_id !== salesProductId));
-  }
-
-  function actualizarNotasCarrito(salesProductId: string, notas: string) {
-    setCart((prev) => prev.map((l) => (l.sales_product_id === salesProductId ? { ...l, notas } : l)));
+  function quitarDelCarrito(lineId: string) {
+    setCart((prev) => prev.filter((l) => l.id !== lineId));
   }
 
   async function cambiarCantidadEnviado(itemId: string, cantidad: number, delta: number) {
@@ -125,14 +135,25 @@ export default function TomarOrdenScreen({
   async function enviarOrden() {
     if (cart.length === 0) return;
     setSending(true);
-    await supabase.from("ldn_restaurant_order_items").insert(
-      cart.map((l) => ({
-        order_id: order.id,
-        sales_product_id: l.sales_product_id,
-        cantidad: l.cantidad,
-        notas: l.notas.trim() || null,
-      })),
-    );
+    const { data: insertedItems } = await supabase
+      .from("ldn_restaurant_order_items")
+      .insert(
+        cart.map((l) => ({
+          order_id: order.id,
+          sales_product_id: l.sales_product_id,
+          cantidad: l.cantidad,
+          notas: l.notas.trim() || null,
+        })),
+      )
+      .select();
+    if (insertedItems) {
+      const optionRows = insertedItems.flatMap((row, i) =>
+        cart[i].selections.map((sel) => ({ order_item_id: row.id, option_id: sel.option_id, nombre_snapshot: sel.nombre_snapshot })),
+      );
+      if (optionRows.length > 0) {
+        await supabase.from("ldn_restaurant_order_item_options").insert(optionRows);
+      }
+    }
     setSending(false);
     setCart([]);
     reload();
@@ -199,11 +220,11 @@ export default function TomarOrdenScreen({
           ) : (
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
               {filtrados.map((m) => {
-                const enCarrito = cart.find((l) => l.sales_product_id === m.sales_product_id)?.cantidad ?? 0;
+                const enCarrito = cart.filter((l) => l.sales_product_id === m.sales_product_id).reduce((s, l) => s + l.cantidad, 0);
                 return (
                   <button
                     key={m.id}
-                    onClick={() => agregarAlCarrito(m.sales_product_id)}
+                    onClick={() => setCustomizingItem(m)}
                     className="relative flex flex-col items-start gap-1 border border-ink/10 bg-white p-3 text-left transition-colors hover:border-teal"
                   >
                     {enCarrito > 0 && (
@@ -243,6 +264,11 @@ export default function TomarOrdenScreen({
                         <div className="flex items-center justify-between gap-2">
                           <div>
                             <span className="font-mono text-[0.68rem] text-ink">{nombreDe(item.sales_product_id)}</span>
+                            {item.option_selections.length > 0 && (
+                              <p className="font-mono text-[0.58rem] text-muted">
+                                {item.option_selections.map((s) => s.nombre_snapshot).join(", ")}
+                              </p>
+                            )}
                             <p className="font-mono text-[0.56rem] uppercase tracking-[0.04em] text-teal">En cocina</p>
                           </div>
                           <div className="flex items-center gap-1.5">
@@ -283,40 +309,40 @@ export default function TomarOrdenScreen({
               {cart.length > 0 && (
                 <div className="divide-y divide-orange/20 border-y border-orange/30 bg-orange/5">
                   {cart.map((line) => (
-                    <div key={line.sales_product_id} className="px-2 py-2">
+                    <div key={line.id} className="px-2 py-2">
                       <div className="flex items-center justify-between gap-2">
                         <div>
                           <span className="font-mono text-[0.68rem] text-ink">{nombreDe(line.sales_product_id)}</span>
+                          {line.selections.length > 0 && (
+                            <p className="font-mono text-[0.58rem] text-muted">
+                              {line.selections.map((s) => s.nombre_snapshot).join(", ")}
+                            </p>
+                          )}
+                          {line.notas && <p className="font-mono text-[0.58rem] text-muted">{line.notas}</p>}
                           <p className="font-mono text-[0.56rem] uppercase tracking-[0.04em] text-orange">Nuevo — sin enviar</p>
                         </div>
                         <div className="flex items-center gap-1.5">
                           <button
-                            onClick={() => cambiarCantidadCarrito(line.sales_product_id, -1)}
+                            onClick={() => cambiarCantidadCarrito(line.id, -1)}
                             className="h-5 w-5 border border-ink/15 font-mono text-[0.6rem] text-muted hover:border-ink/30 hover:text-ink"
                           >
                             −
                           </button>
                           <span className="w-4 text-center font-mono text-[0.68rem] text-ink">{line.cantidad}</span>
                           <button
-                            onClick={() => cambiarCantidadCarrito(line.sales_product_id, 1)}
+                            onClick={() => cambiarCantidadCarrito(line.id, 1)}
                             className="h-5 w-5 border border-ink/15 font-mono text-[0.6rem] text-muted hover:border-ink/30 hover:text-ink"
                           >
                             +
                           </button>
                           <button
-                            onClick={() => quitarDelCarrito(line.sales_product_id)}
+                            onClick={() => quitarDelCarrito(line.id)}
                             className="font-mono text-[0.56rem] uppercase text-orange hover:underline"
                           >
                             Quitar
                           </button>
                         </div>
                       </div>
-                      <input
-                        value={line.notas}
-                        onChange={(e) => actualizarNotasCarrito(line.sales_product_id, e.target.value)}
-                        placeholder="Notas (ej. sin cebolla)"
-                        className="mt-1 w-full border-none bg-transparent font-mono text-[0.58rem] text-muted placeholder:text-muted/60 focus:outline-none"
-                      />
                     </div>
                   ))}
                 </div>
@@ -338,6 +364,124 @@ export default function TomarOrdenScreen({
           </button>
         </div>
       </div>
+
+      {customizingItem && (
+        <CustomizeItemModal
+          menuItem={customizingItem}
+          productName={nombreDe(customizingItem.sales_product_id)}
+          precio={precioDe(customizingItem.sales_product_id)}
+          onClose={() => setCustomizingItem(null)}
+          onConfirm={(cantidad, notas, selections) => {
+            agregarAlCarrito(customizingItem.sales_product_id, cantidad, notas, selections);
+            setCustomizingItem(null);
+          }}
+        />
+      )}
     </div>
+  );
+}
+
+function CustomizeItemModal({
+  menuItem,
+  productName,
+  precio,
+  onClose,
+  onConfirm,
+}: {
+  menuItem: MenuItemWithOptions;
+  productName: string;
+  precio: number;
+  onClose: () => void;
+  onConfirm: (cantidad: number, notas: string, selections: CartSelection[]) => void;
+}) {
+  const [cantidad, setCantidad] = useState(1);
+  const [notas, setNotas] = useState("");
+  const [selected, setSelected] = useState<Record<string, string>>({});
+  const [error, setError] = useState<string | null>(null);
+
+  const groups = [...menuItem.option_groups].sort((a, b) => a.orden - b.orden);
+
+  function confirmar() {
+    for (const group of groups) {
+      if (group.obligatorio && !selected[group.id]) {
+        setError(`Elige una opción de "${group.nombre}"`);
+        return;
+      }
+    }
+    const selections: CartSelection[] = groups
+      .filter((g) => selected[g.id])
+      .map((g) => {
+        const option = g.options.find((o) => o.id === selected[g.id])!;
+        return { option_id: option.id, nombre_snapshot: option.nombre };
+      });
+    onConfirm(cantidad, notas, selections);
+  }
+
+  return (
+    <Modal title={productName} onClose={onClose}>
+      <div className="space-y-4">
+        {error && <div className="border border-orange/40 bg-orange/10 px-3 py-2 font-mono text-[0.68rem] text-orange">{error}</div>}
+        <p className="font-mono text-sm text-muted">${precio.toFixed(2)}</p>
+
+        {groups.map((group) => (
+          <div key={group.id}>
+            <p className="mb-1.5 font-mono text-[0.62rem] font-bold uppercase tracking-[0.1em] text-ink">
+              {group.nombre}
+              {group.obligatorio && <span className="ml-1 text-orange">*</span>}
+            </p>
+            <div className="space-y-1.5">
+              {[...group.options]
+                .sort((a, b) => a.orden - b.orden)
+                .map((opt) => (
+                  <label key={opt.id} className="flex items-center gap-2 font-mono text-[0.7rem] text-ink">
+                    <input
+                      type="radio"
+                      name={group.id}
+                      checked={selected[group.id] === opt.id}
+                      onChange={() => {
+                        setSelected((prev) => ({ ...prev, [group.id]: opt.id }));
+                        setError(null);
+                      }}
+                    />
+                    {opt.nombre}
+                  </label>
+                ))}
+            </div>
+          </div>
+        ))}
+
+        <div>
+          <label className="mb-1 block font-mono text-[0.62rem] font-bold uppercase tracking-[0.12em] text-muted">
+            Comentario (opcional)
+          </label>
+          <input
+            value={notas}
+            onChange={(e) => setNotas(e.target.value)}
+            placeholder="Ej. sin cebolla"
+            className="w-full border border-ink/15 bg-sand-2 px-3 py-2 font-sans text-sm text-ink focus:border-teal focus:outline-none"
+          />
+        </div>
+
+        <div className="flex items-center justify-center gap-3">
+          <button
+            onClick={() => setCantidad((c) => Math.max(1, c - 1))}
+            className="h-8 w-8 border border-ink/15 font-mono text-sm text-muted hover:border-ink/30 hover:text-ink"
+          >
+            −
+          </button>
+          <span className="w-6 text-center font-mono text-sm text-ink">{cantidad}</span>
+          <button
+            onClick={() => setCantidad((c) => c + 1)}
+            className="h-8 w-8 border border-ink/15 font-mono text-sm text-muted hover:border-ink/30 hover:text-ink"
+          >
+            +
+          </button>
+        </div>
+
+        <button onClick={confirmar} className="btn btn-primary w-full">
+          Agregar al pedido
+        </button>
+      </div>
+    </Modal>
   );
 }

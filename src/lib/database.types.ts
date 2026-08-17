@@ -982,6 +982,31 @@ export interface RestaurantMenuItem {
   created_at: string;
 }
 
+export interface RestaurantMenuItemOptionGroup {
+  id: string;
+  menu_item_id: string;
+  nombre: string;
+  obligatorio: boolean;
+  orden: number;
+  created_at: string;
+}
+
+export interface RestaurantMenuItemOption {
+  id: string;
+  group_id: string;
+  nombre: string;
+  orden: number;
+  created_at: string;
+}
+
+export interface RestaurantOrderItemOption {
+  id: string;
+  order_item_id: string;
+  option_id: string | null;
+  nombre_snapshot: string;
+  created_at: string;
+}
+
 export interface RestaurantTable {
   id: string;
   company_id: string;

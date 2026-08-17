@@ -4,21 +4,36 @@ import type {
   ProductoServicio,
   RestaurantCashSession,
   RestaurantMenuItem,
+  RestaurantMenuItemOption,
+  RestaurantMenuItemOptionGroup,
   RestaurantOrder,
   RestaurantOrderItem,
+  RestaurantOrderItemOption,
   RestaurantReservation,
   RestaurantTable,
   RestaurantTicket,
 } from "../../../lib/database.types";
 
+export interface MenuItemOptionGroupWithOptions extends RestaurantMenuItemOptionGroup {
+  options: RestaurantMenuItemOption[];
+}
+
+export interface MenuItemWithOptions extends RestaurantMenuItem {
+  option_groups: MenuItemOptionGroupWithOptions[];
+}
+
+export interface OrderItemWithOptions extends RestaurantOrderItem {
+  option_selections: RestaurantOrderItemOption[];
+}
+
 export interface OrderWithItems extends RestaurantOrder {
-  items: RestaurantOrderItem[];
+  items: OrderItemWithOptions[];
 }
 
 export function useRestaurantesData(companyId: string) {
   const [loading, setLoading] = useState(true);
   const [products, setProducts] = useState<ProductoServicio[]>([]);
-  const [menuItems, setMenuItems] = useState<RestaurantMenuItem[]>([]);
+  const [menuItems, setMenuItems] = useState<MenuItemWithOptions[]>([]);
   const [tables, setTables] = useState<RestaurantTable[]>([]);
   const [openOrders, setOpenOrders] = useState<OrderWithItems[]>([]);
   const [cashSession, setCashSession] = useState<RestaurantCashSession | null>(null);
@@ -36,11 +51,15 @@ export function useRestaurantesData(companyId: string) {
       { data: reservationsData },
     ] = await Promise.all([
       supabase.from("sales_products_services").select("*").eq("company_id", companyId).eq("activo", true).order("nombre"),
-      supabase.from("ldn_restaurant_menu_items").select("*").eq("company_id", companyId).order("orden"),
+      supabase
+        .from("ldn_restaurant_menu_items")
+        .select("*, option_groups:ldn_restaurant_menu_item_option_groups(*, options:ldn_restaurant_menu_item_options(*))")
+        .eq("company_id", companyId)
+        .order("orden"),
       supabase.from("ldn_restaurant_tables").select("*").eq("company_id", companyId).order("nombre"),
       supabase
         .from("ldn_restaurant_orders")
-        .select("*, items:ldn_restaurant_order_items(*)")
+        .select("*, items:ldn_restaurant_order_items(*, option_selections:ldn_restaurant_order_item_options(*))")
         .eq("company_id", companyId)
         .eq("estado", "abierta")
         .order("opened_at"),
@@ -62,7 +81,7 @@ export function useRestaurantesData(companyId: string) {
     ]);
 
     setProducts(productsData ?? []);
-    setMenuItems(menuItemsData ?? []);
+    setMenuItems((menuItemsData ?? []) as unknown as MenuItemWithOptions[]);
     setTables(tablesData ?? []);
     setOpenOrders((ordersData ?? []) as unknown as OrderWithItems[]);
     setCashSession(cashSessionData ?? null);

@@ -1,6 +1,6 @@
 # Línea de negocio: Restaurantes
 
-**Última actualización:** 17 de agosto de 2026 (v1.2 — picker visual de menú, mesas en lote + juntar mesas, Cocina agrupada por comanda, ticket imprimible)
+**Última actualización:** 17 de agosto de 2026 (v1.3 — pantalla completa de toma de orden con carrito y envío explícito a cocina)
 
 ## 1. Objetivo
 
@@ -53,16 +53,13 @@ página — no hay una barra de tabs horizontal dentro de la pantalla.
 y resuelve las rutas anidadas (`<Routes>` relativas bajo `restaurantes/*`),
 sin estado de tab propio.
 
-1. **Comandas** (`ComandasTab.tsx`) — el mesero abre una mesa (crea
-   `ldn_restaurant_orders` con `canal='mesa'`) o da de alta un pedido por
-   otro canal (ver sección 3a). Agregar platillos usa `MenuPickerModal.tsx`
-   — selector visual estilo Rappi/Uber Eats: chips de categoría arriba,
-   grid de platillos abajo (foto si tiene, nombre, precio), tap para
-   agregar; si el platillo ya está en el pedido (todavía `pendiente`),
-   vuelve a tocar suma cantidad en vez de duplicar la fila. Ya en la
-   comanda, cada línea tiene +/− de cantidad y una nota editable en línea
-   — no hace falta un formulario aparte por platillo. Ver 3b para "juntar
-   mesas".
+1. **Comandas** (`ComandasTab.tsx` + `TomarOrdenScreen.tsx`) — el mesero
+   abre una mesa (crea `ldn_restaurant_orders` con `canal='mesa'`) o da de
+   alta un pedido por otro canal (ver sección 3a); al abrirlo entra directo
+   a la pantalla completa de toma de orden (ver 3d). `ComandasTab.tsx`
+   solo lista las comandas abiertas como cards resumen (título, subtítulo,
+   conteo, total) — toda la edición vive en `TomarOrdenScreen.tsx`. Ver 3b
+   para "juntar mesas".
 2. **Mesas y salón** (`MesasTab.tsx`) — grid de mesas por estado
    (`libre`/`ocupada`/`reservada`/`cuenta_abierta`), agrupadas por `salon`
    si el nivel lo permite, con su `capacidad` (personas) visible. Alta en
@@ -160,6 +157,30 @@ SDK ni driver especial del lado de Nuxorb. Si el negocio termina usando una
 impresora que solo habla ESC/POS por USB/Bluetooth directo, esa
 integración queda pendiente (ver §7).
 
+### 3d. Pantalla completa de toma de orden — carrito + envío explícito a cocina
+
+`TomarOrdenScreen.tsx` reemplaza el picker chico que abría la comanda como
+modal (v1.2) — ahora, entrar a una comanda toma toda la pantalla del tab
+Comandas: buscador + chips de categoría + grid de platillos a la
+izquierda, "Pedido actual" a la derecha. Un switcher "Mesa / Orden" en el
+encabezado permite saltar a otra comanda abierta sin volver al listado.
+
+**Los platillos que tocas NO se mandan a cocina de inmediato.** Se
+acumulan en un carrito que vive solo en el estado de React de esta
+pantalla (decisión de producto: más simple, sin cambio de esquema; el
+costo es que si el mesero navega a otro tab antes de mandar el pedido, ese
+carrito sin enviar se pierde y hay que rehacerlo). El carrito se distingue
+visualmente ("Nuevo — sin enviar", fondo naranja) de los platillos ya
+enviados ("En cocina", ya existen en `ldn_restaurant_order_items`). El
+botón **Enviar orden a cocina** hace un solo `insert` en lote de las
+líneas del carrito — a partir de ahí Cocina las ve igual que cualquier
+otro platillo. Se puede repetir: agregar otra ronda más tarde y volver a
+enviar, sobre la misma comanda.
+
+Los platillos ya enviados siguen siendo editables (cantidad, notas, quitar)
+directo contra la base, igual que en v1.2 — solo los del carrito sin
+enviar son ediciones puramente locales hasta que se confirman.
+
 ## 4. Campos de datos (tal como existen hoy en Supabase)
 
 Ver `supabase/migrations/0051_lineas_de_negocio.sql` (tabla de activación
@@ -220,3 +241,7 @@ negocio) + prefijo de la línea (`ldn_restaurant_*` aquí, a futuro
 - Sistema real de variantes/modificadores de producto (ej. un platillo
   con opciones de tamaño elegibles al agregarlo) — v1 asume que cada
   variante ya es su propio platillo dado de alta en Menú.
+- Carrito de `TomarOrdenScreen.tsx` como borrador persistente — hoy vive
+  solo en memoria del navegador (ver 3d); si se necesita que sobreviva a
+  un refresh o cambio de pestaña, requiere guardarlo en Supabase con un
+  estado que Cocina ignore hasta el envío explícito.

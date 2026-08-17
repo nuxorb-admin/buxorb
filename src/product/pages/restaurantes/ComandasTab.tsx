@@ -3,12 +3,19 @@ import { supabase } from "../../../lib/supabase";
 import type { ProductoServicio, RestaurantMenuItem, RestaurantOrderChannel, RestaurantTable } from "../../../lib/database.types";
 import type { OrderWithItems } from "./useRestaurantesData";
 import { CHANNEL_LABELS, orderSubtitle, orderTitle } from "./orderDisplay";
-import MenuPickerModal from "./MenuPickerModal";
+import TomarOrdenScreen from "./TomarOrdenScreen";
 import Modal from "../../../admin/components/Modal";
 import FieldInput from "../../../admin/components/FieldInput";
 
 type ExternalChannel = Exclude<RestaurantOrderChannel, "mesa">;
 const EXTERNAL_CHANNELS: ExternalChannel[] = ["telefono_domicilio", "recoger", "rappi"];
+
+function orderTotal(order: OrderWithItems, products: ProductoServicio[]): number {
+  return order.items.reduce((sum, item) => {
+    const product = products.find((p) => p.id === item.sales_product_id);
+    return sum + item.cantidad * (product?.precio_unitario ?? 0);
+  }, 0);
+}
 
 export default function ComandasTab({
   companyId,
@@ -29,7 +36,7 @@ export default function ComandasTab({
   const [joinMode, setJoinMode] = useState(false);
   const [selectedTables, setSelectedTables] = useState<string[]>([]);
   const [newChannel, setNewChannel] = useState<ExternalChannel | null>(null);
-  const [pickingMenuFor, setPickingMenuFor] = useState<string | null>(null);
+  const [activeOrderId, setActiveOrderId] = useState<string | null>(null);
   const freeTables = tables.filter((t) => t.estado === "libre");
 
   function closeTablePicker() {
@@ -42,12 +49,15 @@ export default function ComandasTab({
     const {
       data: { user },
     } = await supabase.auth.getUser();
-    await supabase
+    const { data: newOrder } = await supabase
       .from("ldn_restaurant_orders")
-      .insert({ company_id: table.company_id, table_id: table.id, canal: "mesa", mesero_id: user?.id ?? null });
+      .insert({ company_id: table.company_id, table_id: table.id, canal: "mesa", mesero_id: user?.id ?? null })
+      .select()
+      .single();
     await supabase.from("ldn_restaurant_tables").update({ estado: "ocupada" }).eq("id", table.id);
     closeTablePicker();
     reload();
+    if (newOrder) setActiveOrderId(newOrder.id);
   }
 
   function toggleSelected(tableId: string) {
@@ -61,9 +71,11 @@ export default function ComandasTab({
     const {
       data: { user },
     } = await supabase.auth.getUser();
-    await supabase
+    const { data: newOrder } = await supabase
       .from("ldn_restaurant_orders")
-      .insert({ company_id: principal.company_id, table_id: principal.id, canal: "mesa", mesero_id: user?.id ?? null });
+      .insert({ company_id: principal.company_id, table_id: principal.id, canal: "mesa", mesero_id: user?.id ?? null })
+      .select()
+      .single();
     await supabase.from("ldn_restaurant_tables").update({ estado: "ocupada" }).eq("id", principal.id);
     const resto = selectedTables.slice(1);
     if (resto.length > 0) {
@@ -71,9 +83,25 @@ export default function ComandasTab({
     }
     closeTablePicker();
     reload();
+    if (newOrder) setActiveOrderId(newOrder.id);
   }
 
-  const pickingMenuOrder = openOrders.find((o) => o.id === pickingMenuFor) ?? null;
+  const activeOrder = openOrders.find((o) => o.id === activeOrderId) ?? null;
+
+  if (activeOrder) {
+    return (
+      <TomarOrdenScreen
+        order={activeOrder}
+        openOrders={openOrders}
+        tables={tables}
+        menuItems={menuItems}
+        products={products}
+        onBack={() => setActiveOrderId(null)}
+        onSwitchOrder={setActiveOrderId}
+        reload={reload}
+      />
+    );
+  }
 
   return (
     <div>
@@ -151,34 +179,38 @@ export default function ComandasTab({
       )}
 
       {newChannel && (
-        <NewChannelOrderModal companyId={companyId} channel={newChannel} onClose={() => setNewChannel(null)} onCreated={reload} />
+        <NewChannelOrderModal
+          companyId={companyId}
+          channel={newChannel}
+          onClose={() => setNewChannel(null)}
+          onCreated={(newOrderId) => {
+            reload();
+            setActiveOrderId(newOrderId);
+          }}
+        />
       )}
 
       {openOrders.length === 0 ? (
         <p className="font-mono text-[0.68rem] text-muted">Sin pedidos abiertos.</p>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2">
-          {openOrders.map((order) => (
-            <OrderCard
-              key={order.id}
-              order={order}
-              tables={tables}
-              products={products}
-              onPickMenu={() => setPickingMenuFor(order.id)}
-              reload={reload}
-            />
-          ))}
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {openOrders.map((order) => {
+            const subtitle = orderSubtitle(order);
+            return (
+              <button
+                key={order.id}
+                onClick={() => setActiveOrderId(order.id)}
+                className="border border-ink/10 bg-white p-4 text-left transition-colors hover:border-teal"
+              >
+                <p className="text-sm font-bold text-ink">{orderTitle(order, tables)}</p>
+                {subtitle && <p className="mt-0.5 font-mono text-[0.6rem] text-muted">{subtitle}</p>}
+                <p className="mt-2 font-mono text-[0.62rem] text-muted">
+                  {order.items.length} platillo(s) · ${orderTotal(order, products).toFixed(2)}
+                </p>
+              </button>
+            );
+          })}
         </div>
-      )}
-
-      {pickingMenuOrder && (
-        <MenuPickerModal
-          order={pickingMenuOrder}
-          menuItems={menuItems}
-          products={products}
-          onClose={() => setPickingMenuFor(null)}
-          onAdded={reload}
-        />
       )}
     </div>
   );
@@ -193,7 +225,7 @@ function NewChannelOrderModal({
   companyId: string;
   channel: ExternalChannel;
   onClose: () => void;
-  onCreated: () => void;
+  onCreated: (newOrderId: string) => void;
 }) {
   const [clienteNombre, setClienteNombre] = useState("");
   const [telefono, setTelefono] = useState("");
@@ -214,21 +246,25 @@ function NewChannelOrderModal({
     const {
       data: { user },
     } = await supabase.auth.getUser();
-    const { error: insertError } = await supabase.from("ldn_restaurant_orders").insert({
-      company_id: companyId,
-      canal: channel,
-      mesero_id: user?.id ?? null,
-      cliente_nombre: clienteNombre.trim() || null,
-      telefono: telefono.trim() || null,
-      direccion: direccion.trim() || null,
-      referencia: referencia.trim() || null,
-    });
+    const { data: newOrder, error: insertError } = await supabase
+      .from("ldn_restaurant_orders")
+      .insert({
+        company_id: companyId,
+        canal: channel,
+        mesero_id: user?.id ?? null,
+        cliente_nombre: clienteNombre.trim() || null,
+        telefono: telefono.trim() || null,
+        direccion: direccion.trim() || null,
+        referencia: referencia.trim() || null,
+      })
+      .select()
+      .single();
     setSaving(false);
-    if (insertError) {
-      setError(insertError.message);
+    if (insertError || !newOrder) {
+      setError(insertError?.message ?? "No se pudo crear el pedido");
       return;
     }
-    onCreated();
+    onCreated(newOrder.id);
     onClose();
   }
 
@@ -251,101 +287,5 @@ function NewChannelOrderModal({
         </button>
       </form>
     </Modal>
-  );
-}
-
-function OrderCard({
-  order,
-  tables,
-  products,
-  onPickMenu,
-  reload,
-}: {
-  order: OrderWithItems;
-  tables: RestaurantTable[];
-  products: ProductoServicio[];
-  onPickMenu: () => void;
-  reload: () => void;
-}) {
-  const [editingNotas, setEditingNotas] = useState<Record<string, string>>({});
-
-  async function changeQty(itemId: string, cantidad: number, delta: number) {
-    const next = cantidad + delta;
-    if (next <= 0) {
-      await quitarItem(itemId);
-      return;
-    }
-    await supabase.from("ldn_restaurant_order_items").update({ cantidad: next }).eq("id", itemId);
-    reload();
-  }
-
-  async function quitarItem(itemId: string) {
-    await supabase.from("ldn_restaurant_order_items").delete().eq("id", itemId);
-    reload();
-  }
-
-  async function guardarNotas(itemId: string) {
-    const notas = editingNotas[itemId];
-    if (notas === undefined) return;
-    await supabase.from("ldn_restaurant_order_items").update({ notas: notas.trim() || null }).eq("id", itemId);
-    setEditingNotas((prev) => {
-      const { [itemId]: _removed, ...rest } = prev;
-      return rest;
-    });
-    reload();
-  }
-
-  const subtitle = orderSubtitle(order);
-
-  return (
-    <div className="border border-ink/10 bg-white p-4">
-      <p className="text-sm font-bold text-ink">{orderTitle(order, tables)}</p>
-      {subtitle && <p className="mt-0.5 font-mono text-[0.6rem] text-muted">{subtitle}</p>}
-      <div className="mt-2 divide-y divide-ink/10 border-y border-ink/10">
-        {order.items.length === 0 ? (
-          <p className="py-2 font-mono text-[0.62rem] text-muted">Sin platillos todavía.</p>
-        ) : (
-          order.items.map((item) => {
-            const product = products.find((p) => p.id === item.sales_product_id);
-            const notasValue = editingNotas[item.id] ?? item.notas ?? "";
-            return (
-              <div key={item.id} className="py-2">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="font-mono text-[0.68rem] text-ink">{product?.nombre ?? "—"}</span>
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => changeQty(item.id, item.cantidad, -1)}
-                      className="h-5 w-5 border border-ink/15 font-mono text-[0.6rem] text-muted hover:border-ink/30 hover:text-ink"
-                    >
-                      −
-                    </button>
-                    <span className="w-4 text-center font-mono text-[0.68rem] text-ink">{item.cantidad}</span>
-                    <button
-                      onClick={() => changeQty(item.id, item.cantidad, 1)}
-                      className="h-5 w-5 border border-ink/15 font-mono text-[0.6rem] text-muted hover:border-ink/30 hover:text-ink"
-                    >
-                      +
-                    </button>
-                    <button onClick={() => quitarItem(item.id)} className="font-mono text-[0.58rem] uppercase text-orange hover:underline">
-                      Quitar
-                    </button>
-                  </div>
-                </div>
-                <input
-                  value={notasValue}
-                  onChange={(e) => setEditingNotas((prev) => ({ ...prev, [item.id]: e.target.value }))}
-                  onBlur={() => guardarNotas(item.id)}
-                  placeholder="Notas (ej. sin cebolla)"
-                  className="mt-1 w-full border-none bg-transparent font-mono text-[0.58rem] text-muted placeholder:text-muted/60 focus:outline-none"
-                />
-              </div>
-            );
-          })
-        )}
-      </div>
-      <button onClick={onPickMenu} className="btn btn-primary mt-3 w-full py-1.5 text-[0.66rem]">
-        + Agregar platillos
-      </button>
-    </div>
   );
 }

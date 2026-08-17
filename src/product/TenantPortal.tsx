@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { supabase } from "../lib/supabase";
-import type { BusinessLineTier, CompanyModuleName } from "../lib/database.types";
+import type { BusinessLineTier, CompanyModuleName, CompanyRoleModuleKey } from "../lib/database.types";
 import ProductLayout, { type ExtraNavItem, type ModuleNavItem } from "./ProductLayout";
 import { limitsForTier } from "./pages/restaurantes/limits";
 import Tesoreria from "./pages/Tesoreria";
@@ -91,6 +91,7 @@ function TenantPortalGate({ tenant, subdomain }: { tenant: TenantInfo; subdomain
   const [membership, setMembership] = useState<Membership | null | undefined>(undefined);
   const [activeModules, setActiveModules] = useState<CompanyModuleName[]>([]);
   const [allowedModules, setAllowedModules] = useState<CompanyModuleName[]>([]);
+  const [roleCapabilities, setRoleCapabilities] = useState<CompanyRoleModuleKey[]>([]);
   const [moduleSeats, setModuleSeats] = useState<Partial<Record<CompanyModuleName, number>>>({});
   const [modulesLoaded, setModulesLoaded] = useState(false);
   const [needsSetup, setNeedsSetup] = useState<boolean | undefined>(undefined);
@@ -145,8 +146,8 @@ function TenantPortalGate({ tenant, subdomain }: { tenant: TenantInfo; subdomain
 
       const { data: roleModuleData } = memberRow.role_id
         ? await supabase.from("company_role_modules").select("module").eq("role_id", memberRow.role_id)
-        : { data: [] as { module: CompanyModuleName }[] };
-      const roleModules = (roleModuleData ?? []).map((m) => m.module as CompanyModuleName);
+        : { data: [] as { module: CompanyRoleModuleKey }[] };
+      const roleModules = (roleModuleData ?? []).map((m) => m.module as CompanyRoleModuleKey);
 
       const { data: addonRow } = await supabase
         .schema("nuxorb")
@@ -184,6 +185,7 @@ function TenantPortalGate({ tenant, subdomain }: { tenant: TenantInfo; subdomain
       // cualquier owner directo a "Usuarios y roles" en vez de su módulo).
       setActiveModules(active);
       setAllowedModules(active.filter((m) => roleModules.includes(m)));
+      setRoleCapabilities(roleModules);
       setModuleSeats(Object.fromEntries((modulesData ?? []).map((m) => [m.module, m.seats])));
       setMembership({ roleId: memberRow.role_id, isOwner: memberRow.is_owner });
       setModulesLoaded(true);
@@ -219,10 +221,17 @@ function TenantPortalGate({ tenant, subdomain }: { tenant: TenantInfo; subdomain
 
   const navModules = membership.isOwner ? activeModules : allowedModules;
   const firstActive = MODULE_NAV.find((m) => navModules.includes(m.module));
-  const restaurantesLimits = restaurantesTier ? limitsForTier(restaurantesTier) : null;
+  // Agentes IA, Lealtad y Restaurantes ya no se muestran a cualquier
+  // usuario de la empresa solo por estar contratados — el owner siempre
+  // los ve todos, cualquier otro usuario necesita que su rol tenga el
+  // permiso marcado en company_role_modules (ver Usuarios y roles).
+  const canSeeAgentes = agentesActivo && (membership.isOwner || roleCapabilities.includes("agentes_ia"));
+  const canSeeLealtad = lealtadActivo && (membership.isOwner || roleCapabilities.includes("lealtad"));
+  const canSeeRestaurantes = !!restaurantesTier && (membership.isOwner || roleCapabilities.includes("restaurantes"));
+  const restaurantesLimits = canSeeRestaurantes && restaurantesTier ? limitsForTier(restaurantesTier) : null;
   const extraNav: ExtraNavItem[] = [
-    ...(agentesActivo ? [{ to: "agentes", label: "Agentes IA" }] : []),
-    ...(lealtadActivo ? [{ to: "lealtad", label: "Lealtad" }] : []),
+    ...(canSeeAgentes ? [{ to: "agentes", label: "Agentes IA" }] : []),
+    ...(canSeeLealtad ? [{ to: "lealtad", label: "Lealtad" }] : []),
     ...(restaurantesLimits
       ? [
           {
@@ -261,11 +270,11 @@ function TenantPortalGate({ tenant, subdomain }: { tenant: TenantInfo; subdomain
           element={
             firstActive ? (
               <Navigate to={firstActive.to} replace />
-            ) : agentesActivo ? (
+            ) : canSeeAgentes ? (
               <Navigate to="agentes" replace />
-            ) : lealtadActivo ? (
+            ) : canSeeLealtad ? (
               <Navigate to="lealtad" replace />
-            ) : restaurantesTier ? (
+            ) : canSeeRestaurantes ? (
               <Navigate to="restaurantes/comandas" replace />
             ) : membership.isOwner ? (
               <Navigate to="usuarios" replace />
@@ -278,11 +287,11 @@ function TenantPortalGate({ tenant, subdomain }: { tenant: TenantInfo; subdomain
         <Route path="compras" element={<Compras />} />
         <Route path="personal" element={<Personal />} />
         <Route path="ventas" element={<Ventas />} />
-        {agentesActivo && <Route path="agentes" element={<Agentes companyId={tenant.id} />} />}
-        {lealtadActivo && (
+        {canSeeAgentes && <Route path="agentes" element={<Agentes companyId={tenant.id} />} />}
+        {canSeeLealtad && (
           <Route path="lealtad" element={<Lealtad companyId={tenant.id} companyName={tenant.name} subdomain={subdomain} />} />
         )}
-        {restaurantesTier && (
+        {canSeeRestaurantes && restaurantesTier && (
           <Route path="restaurantes/*" element={<Restaurantes companyId={tenant.id} tier={restaurantesTier} />} />
         )}
         {membership.isOwner && (
@@ -294,6 +303,9 @@ function TenantPortalGate({ tenant, subdomain }: { tenant: TenantInfo; subdomain
                 companyName={tenant.name}
                 activeModules={activeModules}
                 moduleSeats={moduleSeats}
+                agentesActivo={agentesActivo}
+                lealtadActivo={lealtadActivo}
+                restaurantesActivo={!!restaurantesTier}
                 maxUsers={tenant.max_users}
               />
             }

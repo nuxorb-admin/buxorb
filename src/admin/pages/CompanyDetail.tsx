@@ -13,6 +13,7 @@ import type {
   CompanyModule,
   CompanyModuleName,
   CompanyModuleTier,
+  CompanyRoleModuleKey,
   Contact,
   Lead,
   WhatsappConnection,
@@ -229,6 +230,18 @@ export default function CompanyDetail() {
     return <p className="font-mono text-xs text-muted">Cargando…</p>;
   }
 
+  // Productos adicionales / líneas de negocio con nav propia del lado del
+  // cliente entran al mismo checkbox de permiso por rol que los módulos
+  // del core (ver company_role_modules) — el resto de los addons (aún sin
+  // pantalla propia en el portal) no aplica.
+  const roleExtraCapabilities: { key: CompanyRoleModuleKey; label: string }[] = [
+    ...(addonSubs.some((a) => a.addon === "agentes_ia" && a.active) ? [{ key: "agentes_ia" as CompanyRoleModuleKey, label: ADDON_LABELS.agentes_ia }] : []),
+    ...(addonSubs.some((a) => a.addon === "lealtad" && a.active) ? [{ key: "lealtad" as CompanyRoleModuleKey, label: ADDON_LABELS.lealtad }] : []),
+    ...(businessLines.some((b) => b.business_line === "restaurantes" && b.active)
+      ? [{ key: "restaurantes" as CompanyRoleModuleKey, label: BUSINESS_LINE_LABELS.restaurantes }]
+      : []),
+  ];
+
   return (
     <div className="max-w-3xl">
       <button
@@ -436,6 +449,7 @@ export default function CompanyDetail() {
           companyName={company.name}
           activeModules={moduleSubs.filter((m) => m.active).map((m) => m.module)}
           moduleSeats={Object.fromEntries(moduleSubs.map((m) => [m.module, m.seats]))}
+          extraCapabilities={roleExtraCapabilities}
           maxUsers={company.max_users}
           canManage
         />

@@ -104,9 +104,17 @@ export interface CompanyRole {
   created_at: string;
 }
 
+/**
+ * Además de los 4 módulos del core, un rol también puede tener permiso
+ * sobre productos adicionales/líneas de negocio con nav propia del lado
+ * del cliente (Agentes IA, Lealtad, Restaurantes) — misma tabla
+ * company_role_modules, mismo mecanismo, ver 0054_role_permissions_extras.sql.
+ */
+export type CompanyRoleModuleKey = CompanyModuleName | "agentes_ia" | "lealtad" | BusinessLineKey;
+
 export interface CompanyRoleModule {
   role_id: string;
-  module: CompanyModuleName;
+  module: CompanyRoleModuleKey;
 }
 
 export interface CompanyUser {

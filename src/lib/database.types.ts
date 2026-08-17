@@ -937,6 +937,115 @@ export interface LoyaltyMember {
   updated_at: string;
 }
 
+// ---------------------------------------------------------
+// Líneas de negocio — v1: Restaurantes. Tercer eje de producto (junto a
+// CompanyModuleName/CompanyAddonName): suites completas por giro de
+// negocio, con un solo nivel por línea en vez de por módulo individual.
+// ---------------------------------------------------------
+export type BusinessLineKey = "restaurantes";
+export type BusinessLineTier = CompanyModuleTier;
+
+export interface CompanyBusinessLine {
+  id: string;
+  company_id: string;
+  business_line: BusinessLineKey;
+  tier: BusinessLineTier;
+  active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export type RestaurantTableStatus = "libre" | "ocupada" | "reservada" | "cuenta_abierta";
+export type RestaurantOrderStatus = "abierta" | "cerrada";
+export type RestaurantOrderItemStatus = "pendiente" | "en_preparacion" | "listo" | "entregado";
+export type RestaurantCashSessionStatus = "abierta" | "cerrada";
+export type RestaurantPaymentMethod = "efectivo" | "tarjeta" | "transferencia" | "otro";
+export type RestaurantReservationStatus = "pendiente" | "confirmada" | "cancelada" | "completada";
+
+export interface RestaurantMenuItem {
+  id: string;
+  company_id: string;
+  sales_product_id: string;
+  categoria: string | null;
+  orden: number;
+  foto_url: string | null;
+  disponible: boolean;
+  created_at: string;
+}
+
+export interface RestaurantTable {
+  id: string;
+  company_id: string;
+  salon: string;
+  nombre: string;
+  estado: RestaurantTableStatus;
+  created_at: string;
+}
+
+export interface RestaurantOrder {
+  id: string;
+  company_id: string;
+  table_id: string;
+  mesero_id: string | null;
+  estado: RestaurantOrderStatus;
+  opened_at: string;
+  closed_at: string | null;
+}
+
+export interface RestaurantOrderItem {
+  id: string;
+  order_id: string;
+  sales_product_id: string;
+  cantidad: number;
+  notas: string | null;
+  estado: RestaurantOrderItemStatus;
+  created_at: string;
+}
+
+export interface RestaurantCashSession {
+  id: string;
+  company_id: string;
+  opened_by: string | null;
+  opened_at: string;
+  opening_amount: number;
+  closed_by: string | null;
+  closed_at: string | null;
+  closing_amount_expected: number | null;
+  closing_amount_counted: number | null;
+  status: RestaurantCashSessionStatus;
+}
+
+export interface RestaurantTicket {
+  id: string;
+  company_id: string;
+  order_id: string;
+  cash_session_id: string;
+  subtotal: number;
+  propina: number;
+  total: number;
+  treasury_movement_id: string | null;
+  created_at: string;
+}
+
+export interface RestaurantTicketPayment {
+  id: string;
+  ticket_id: string;
+  method: RestaurantPaymentMethod;
+  amount: number;
+}
+
+export interface RestaurantReservation {
+  id: string;
+  company_id: string;
+  table_id: string | null;
+  cliente_nombre: string;
+  telefono: string | null;
+  personas: number;
+  fecha_hora: string;
+  estado: RestaurantReservationStatus;
+  created_at: string;
+}
+
 export interface Database {
   public: {
     Tables: {

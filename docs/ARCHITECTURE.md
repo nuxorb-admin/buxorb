@@ -116,6 +116,20 @@ context={{scopeId}}/>`) es el shell de `TenantPortal`, así que también es
 compartido entre el demo y el portal real — es literalmente el mismo árbol
 de componentes.
 
+### Tercer eje de producto: Líneas de negocio
+
+Además de **Suscripción Nuxorb** (`nuxorb.company_modules`, 4 módulos fijos
+con nivel cada uno) y **Productos adicionales** (`nuxorb.company_addons`,
+feature suelta on/off), existe un tercer eje: **Líneas de negocio**
+(`nuxorb.ldn_company_business_lines`) — suites completas por giro de
+negocio (ej. "Restaurantes"), empaquetadas como bundle con **un solo nivel
+para toda la línea**, no por módulo individual dentro de ella. Se activa en
+`CompanyDetail.tsx` junto a los otros dos ejes. Convención de nombres de
+tabla: prefijo `ldn_` + prefijo de la línea específica
+(`ldn_restaurant_*` para Restaurantes), separado de los prefijos de módulo
+del core. Detalle de la primera línea en
+[`docs/lineas-de-negocio-restaurantes-v1.md`](lineas-de-negocio-restaurantes-v1.md).
+
 ### Categoría interna (CRM/ERP/Otro) — solo metadata de catálogo
 
 `src/lib/moduleCategories.ts` etiqueta cada módulo y cada producto adicional
@@ -160,6 +174,8 @@ número — nunca se edita uno ya aplicado.
 | `notes` | Timeline de comentarios, polimórfico (`lead`\|`company`\|`task`) | Equipo: todo |
 | `company_modules` | Qué módulo del SaaS + qué nivel (essential/professional/enterprise) + `seats` tiene contratado cada empresa | Equipo: todo. Miembros de esa empresa: lectura propia. Público: solo módulos `active=true` de empresas con `subdomain` (login del portal) |
 | `company_addons` | Los 8 productos adicionales del pricing, por empresa | Equipo: todo |
+| `ldn_company_business_lines` | Qué línea de negocio (ej. `restaurantes`) + qué nivel tiene activa cada empresa — tercer eje de producto, ver arriba | Equipo: todo. Miembros de esa empresa: lectura propia |
+| `ldn_restaurant_*` (8 tablas: `menu_items`, `tables`, `orders`, `order_items`, `cash_sessions`, `tickets`, `ticket_payments`, `reservations`) | Datos operativos de la línea "Restaurantes" | Equipo: todo. Miembros de esa empresa: todo lo de su empresa |
 | `company_roles` | Roles definidos por cada empresa (ej. "Administrador", "Cajero") | Equipo: todo. Miembros: lectura propia. Owner de esa empresa: escritura |
 | `company_role_modules` | Qué módulos puede ver cada rol (many-to-many rol↔módulo) | Igual que `company_roles` — al marcar/crear se valida contra `company_modules.seats` (ver `CompanyUsersRoles.tsx`, no es un límite de RLS) |
 | `company_users` | Usuarios de una empresa: `user_id` (auth.users) + `role_id` + `is_owner`. El primer usuario de cada empresa (el que se le entrega al cliente) es `is_owner = true` y ve todos los módulos activos sin importar su rol | Igual que `company_roles` |

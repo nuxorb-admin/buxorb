@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { supabase } from "../lib/supabase";
-import type { CompanyModuleName } from "../lib/database.types";
+import type { BusinessLineTier, CompanyModuleName } from "../lib/database.types";
 import ProductLayout, { type ModuleNavItem } from "./ProductLayout";
 import Tesoreria from "./pages/Tesoreria";
 import Compras from "./pages/Compras";
@@ -10,6 +10,7 @@ import Ventas from "./pages/Ventas";
 import UsersRoles from "./pages/UsersRoles";
 import Agentes from "./pages/Agentes";
 import Lealtad from "./pages/Lealtad";
+import Restaurantes from "./pages/Restaurantes";
 import LoyaltyEnroll from "../public/LoyaltyEnroll";
 import { TenantAuthProvider, useTenantAuth } from "./TenantAuthProvider";
 import TenantLogin from "./TenantLogin";
@@ -94,6 +95,7 @@ function TenantPortalGate({ tenant, subdomain }: { tenant: TenantInfo; subdomain
   const [needsSetup, setNeedsSetup] = useState<boolean | undefined>(undefined);
   const [agentesActivo, setAgentesActivo] = useState(false);
   const [lealtadActivo, setLealtadActivo] = useState(false);
+  const [restaurantesTier, setRestaurantesTier] = useState<BusinessLineTier | null>(null);
 
   // Independiente de la membresía: un usuario recién creado (create-company-user)
   // tiene needs_setup=true hasta que captura su correo real + su propia
@@ -165,6 +167,16 @@ function TenantPortalGate({ tenant, subdomain }: { tenant: TenantInfo; subdomain
         .maybeSingle();
       setLealtadActivo(!!lealtadRow);
 
+      const { data: businessLineRow } = await supabase
+        .schema("nuxorb")
+        .from("ldn_company_business_lines")
+        .select("tier")
+        .eq("company_id", tenant.id)
+        .eq("business_line", "restaurantes")
+        .eq("active", true)
+        .maybeSingle();
+      setRestaurantesTier((businessLineRow?.tier as BusinessLineTier) ?? null);
+
       // Se calculan primero los módulos y hasta el final se marca membership +
       // modulesLoaded juntos, para que nunca haya un render intermedio con
       // membership ya resuelto pero navModules todavía vacío (eso mandaba a
@@ -209,6 +221,7 @@ function TenantPortalGate({ tenant, subdomain }: { tenant: TenantInfo; subdomain
   const extraNav = [
     ...(agentesActivo ? [{ to: "agentes", label: "Agentes IA" }] : []),
     ...(lealtadActivo ? [{ to: "lealtad", label: "Lealtad" }] : []),
+    ...(restaurantesTier ? [{ to: "restaurantes", label: "Restaurantes" }] : []),
     ...(membership.isOwner ? [{ to: "usuarios", label: "Usuarios y roles" }] : []),
   ];
 
@@ -236,6 +249,8 @@ function TenantPortalGate({ tenant, subdomain }: { tenant: TenantInfo; subdomain
               <Navigate to="agentes" replace />
             ) : lealtadActivo ? (
               <Navigate to="lealtad" replace />
+            ) : restaurantesTier ? (
+              <Navigate to="restaurantes" replace />
             ) : membership.isOwner ? (
               <Navigate to="usuarios" replace />
             ) : (
@@ -250,6 +265,9 @@ function TenantPortalGate({ tenant, subdomain }: { tenant: TenantInfo; subdomain
         {agentesActivo && <Route path="agentes" element={<Agentes companyId={tenant.id} />} />}
         {lealtadActivo && (
           <Route path="lealtad" element={<Lealtad companyId={tenant.id} companyName={tenant.name} subdomain={subdomain} />} />
+        )}
+        {restaurantesTier && (
+          <Route path="restaurantes" element={<Restaurantes companyId={tenant.id} tier={restaurantesTier} />} />
         )}
         {membership.isOwner && (
           <Route

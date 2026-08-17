@@ -4,9 +4,12 @@ import { supabase } from "../../lib/supabase";
 import type {
   AiAgent,
   AiAgentTypeTemplate,
+  BusinessLineKey,
+  BusinessLineTier,
   Company,
   CompanyAddon,
   CompanyAddonName,
+  CompanyBusinessLine,
   CompanyModule,
   CompanyModuleName,
   CompanyModuleTier,
@@ -56,6 +59,19 @@ const ADDON_LABELS: Record<CompanyAddonName, string> = {
 
 const ADDON_ORDER = Object.keys(ADDON_LABELS) as CompanyAddonName[];
 
+const BUSINESS_LINE_LABELS: Record<BusinessLineKey, string> = {
+  restaurantes: "Restaurantes",
+};
+
+const BUSINESS_LINE_ORDER = Object.keys(BUSINESS_LINE_LABELS) as BusinessLineKey[];
+
+// Requisito de módulo del core por línea de negocio — el Menú de
+// Restaurantes reusa el catálogo de Ventas y CxC en vez de duplicarlo, así
+// que no se puede activar sin ese módulo.
+const BUSINESS_LINE_REQUIRES: Record<BusinessLineKey, CompanyModuleName> = {
+  restaurantes: "ventas_cxc",
+};
+
 const CATEGORY_BADGE_COLOR: Record<InternalCategory, "teal" | "orange" | "muted"> = {
   crm: "teal",
   erp: "orange",
@@ -88,6 +104,7 @@ export default function CompanyDetail() {
   const [agentTemplates, setAgentTemplates] = useState<AiAgentTypeTemplate[]>([]);
   const [companyAgents, setCompanyAgents] = useState<AiAgent[]>([]);
   const [whatsappConnections, setWhatsappConnections] = useState<WhatsappConnection[]>([]);
+  const [businessLines, setBusinessLines] = useState<CompanyBusinessLine[]>([]);
   const [loading, setLoading] = useState(true);
   const [showNewContact, setShowNewContact] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState<InternalCategory | "todos">("todos");
@@ -104,6 +121,7 @@ export default function CompanyDetail() {
       { data: templatesData },
       { data: agentsData },
       { data: connectionsData },
+      { data: businessLinesData },
     ] = await Promise.all([
       supabase.schema("nuxorb").from("companies").select("*").eq("id", id).single(),
       supabase.schema("nuxorb").from("contacts").select("*").eq("company_id", id).order("name"),
@@ -113,6 +131,7 @@ export default function CompanyDetail() {
       supabase.schema("nuxorb").from("ai_agent_type_templates").select("*").order("name"),
       supabase.from("ai_agents").select("*").eq("company_id", id).order("created_at"),
       supabase.from("whatsapp_connections").select("*").eq("company_id", id).order("created_at"),
+      supabase.schema("nuxorb").from("ldn_company_business_lines").select("*").eq("company_id", id),
     ]);
     setCompany(companyData);
     setContacts(contactsData ?? []);
@@ -122,6 +141,7 @@ export default function CompanyDetail() {
     setAgentTemplates(templatesData ?? []);
     setCompanyAgents(agentsData ?? []);
     setWhatsappConnections(connectionsData ?? []);
+    setBusinessLines(businessLinesData ?? []);
     setLoading(false);
   }
 
@@ -144,6 +164,18 @@ export default function CompanyDetail() {
       .update({ seats })
       .eq("company_id", company.id)
       .eq("module", module);
+    load();
+  }
+
+  async function setBusinessLineTier(businessLine: BusinessLineKey, tier: BusinessLineTier | "") {
+    if (!company) return;
+    if (tier === "") {
+      await supabase.schema("nuxorb").from("ldn_company_business_lines").delete().eq("company_id", company.id).eq("business_line", businessLine);
+    } else {
+      await supabase
+        .schema("nuxorb").from("ldn_company_business_lines")
+        .upsert({ company_id: company.id, business_line: businessLine, tier, active: true }, { onConflict: "company_id,business_line" });
+    }
     load();
   }
 
@@ -326,6 +358,38 @@ export default function CompanyDetail() {
               );
             },
           )}
+        </div>
+
+        <h3 className="mb-3 mt-6 font-mono text-[0.68rem] font-bold uppercase tracking-[0.1em] text-muted">
+          Líneas de negocio
+        </h3>
+        <div className="mb-6 divide-y divide-ink/10 border border-ink/10 bg-white">
+          {BUSINESS_LINE_ORDER.map((line) => {
+            const sub = businessLines.find((s) => s.business_line === line);
+            const requiredModule = BUSINESS_LINE_REQUIRES[line];
+            const meetsRequirement = moduleSubs.some((s) => s.module === requiredModule);
+            return (
+              <div key={line} className="flex flex-wrap items-center gap-4 px-4 py-3">
+                <span className="w-52 flex-none text-sm font-semibold text-ink">{BUSINESS_LINE_LABELS[line]}</span>
+                <select
+                  value={sub?.tier ?? ""}
+                  onChange={(e) => setBusinessLineTier(line, e.target.value as BusinessLineTier | "")}
+                  disabled={!meetsRequirement}
+                  className="border border-ink/15 bg-sand-2 px-3 py-1.5 font-mono text-xs uppercase tracking-[0.06em] text-ink focus:border-teal focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <option value="">Sin contratar</option>
+                  <option value="essential">Essential</option>
+                  <option value="professional">Professional</option>
+                  <option value="enterprise">Enterprise</option>
+                </select>
+                {!meetsRequirement && (
+                  <span className="font-mono text-[0.62rem] text-orange">
+                    Requiere {MODULE_LABELS[requiredModule]} activo
+                  </span>
+                )}
+              </div>
+            );
+          })}
         </div>
 
         <h3 className="mb-3 mt-6 font-mono text-[0.68rem] font-bold uppercase tracking-[0.1em] text-muted">

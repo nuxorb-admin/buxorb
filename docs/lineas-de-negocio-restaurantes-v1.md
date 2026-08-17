@@ -220,11 +220,23 @@ la empresa dentro de un **Shared Drive** de Google Workspace llamado
 `0057_ldn_restaurant_settings_drive.sql`). Es idempotente — si la empresa
 ya tiene carpeta, no crea otra.
 
-Desde el tab **Menú**, el botón "Subir foto" de cada platillo llama a la
-Edge Function `upload-menu-item-photo`, que sube el archivo a esa carpeta,
-lo marca visible por link (`anyone: reader` — necesario para poder usarlo
-como `<img src>`, el navegador no manda credenciales al pedir la imagen) y
-guarda la URL resultante en `ldn_restaurant_menu_items.foto_url`.
+Desde el tab **Menú**, el botón "Subir foto" (o "Cambiar foto" si ya tenía
+una) de cada platillo llama a la Edge Function `upload-menu-item-photo`,
+que sube el archivo a la carpeta de la empresa, lo marca visible por link
+(`anyone: reader` — necesario para poder usarlo como `<img src>`, el
+navegador no manda credenciales al pedir la imagen) y guarda la URL en
+`ldn_restaurant_menu_items.foto_url` con un `&v=<timestamp>` al final para
+que el navegador no siga mostrando una versión vieja cacheada.
+
+**Siempre se sube un archivo nuevo, nunca se reemplaza el contenido de
+uno existente** — se probó primero reemplazar el mismo archivo (mismo id,
+mismo link) para no acumular basura en la carpeta, pero la miniatura que
+sirve `thumbnail?id=` queda cacheada del lado de Google por un buen rato
+después de reemplazar el contenido, y no hay parámetro que fuerce ese
+refresh. Subir siempre un archivo con id nuevo evita el problema (una
+miniatura nueva nunca está cacheada); si el platillo ya tenía foto, la
+anterior se borra de Drive justo después (`deleteDriveFile`) para no
+dejarla tirada.
 
 **Por qué un Shared Drive y no la cuenta de servicio directo:** desde 2020
 Google ya no da espacio de almacenamiento propio a las cuentas de
@@ -323,12 +335,16 @@ negocio) + prefijo de la línea (`ldn_restaurant_*` aquí, a futuro
   solo en memoria del navegador (ver 3d); si se necesita que sobreviva a
   un refresh o cambio de pestaña, requiere guardarlo en Supabase con un
   estado que Cocina ignore hasta el envío explícito.
-- Fotos de platillo: el link `drive.google.com/uc?export=view&id=...`
-  usado en 3f es un truco ampliamente usado pero no es una API oficial de
-  Google para "servir imágenes embebidas" — Google podría cambiar su
-  comportamiento sin aviso. Si eso pasa, hay que migrar a copiar el
-  archivo a un bucket propio de Supabase Storage (o a `webContentLink` de
-  la respuesta de la API de Drive) en vez de depender de esa URL.
-- Borrado de fotos huérfanas en Drive si se quita una foto o se borra un
-  platillo del menú — v1 no borra el archivo en Drive, solo deja de usar
-  la URL.
+- Fotos de platillo: el link usado para mostrar la foto
+  (`drive.google.com/thumbnail?id=...&sz=w1000`, ver 3f — se probó primero
+  `uc?export=view&id=...`, que en la práctica no cargaba como `<img>`,
+  Google regresaba una página en vez del archivo) sigue sin ser una API
+  oficial de Google para "servir imágenes embebidas". Si Google cambia su
+  comportamiento de nuevo, hay que migrar a copiar el archivo a un bucket
+  propio de Supabase Storage en vez de depender de una URL de Drive.
+- Borrado del archivo en Drive si se **borra el platillo del menú**
+  (`Quitar` en `MenuTab.tsx`) — v1 solo borra la fila de
+  `ldn_restaurant_menu_items`, el archivo se queda en Drive. "Cambiar
+  foto" de un platillo que ya existe sí está resuelto: reemplaza el
+  contenido del mismo archivo (`replaceDriveFile` en `googleDrive.ts`) en
+  vez de crear uno nuevo, así que no deja basura en ese caso.

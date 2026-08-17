@@ -1,5 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { uploadDriveFile } from "./googleDrive.ts";
+import { deleteDriveFile, uploadDriveFile } from "./googleDrive.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -55,14 +55,33 @@ Deno.serve(async (req) => {
       return json({ error: "Esta empresa todavía no tiene carpeta de Drive — activa Restaurantes de nuevo o avisa a Nuxorb" }, 400);
     }
 
+    const { data: existingItem } = await admin.from("ldn_restaurant_menu_items").select("foto_url").eq("id", menuItemId).maybeSingle();
+    const existingFileId = existingItem?.foto_url?.match(/[?&]id=([^&]+)/)?.[1] ?? null;
+
     const bytes = new Uint8Array(await file.arrayBuffer());
+    const mimeType = file.type || "image/jpeg";
     const ext = file.name.includes(".") ? file.name.split(".").pop() : "jpg";
-    const { url } = await uploadDriveFile({
+
+    // Siempre se sube un archivo nuevo (miniatura de Drive nunca cacheada,
+    // porque el id es nuevo) y se borra el anterior si había — así no se
+    // acumula basura en la carpeta sin depender de que Drive refresque la
+    // miniatura de un archivo reemplazado en el mismo id (eso tarda y no
+    // se puede forzar).
+    const { fileId, url: baseUrl } = await uploadDriveFile({
       folderId: settings.drive_folder_id,
       filename: `${menuItemId}.${ext}`,
-      mimeType: file.type || "image/jpeg",
+      mimeType,
       bytes,
     });
+    const url = `${baseUrl}&v=${Date.now()}`;
+
+    if (existingFileId && existingFileId !== fileId) {
+      try {
+        await deleteDriveFile(existingFileId);
+      } catch (err) {
+        console.error("No se pudo borrar la foto anterior en Drive:", err);
+      }
+    }
 
     const { error: updateError } = await admin.from("ldn_restaurant_menu_items").update({ foto_url: url }).eq("id", menuItemId);
     if (updateError) return json({ error: updateError.message }, 400);

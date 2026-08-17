@@ -130,5 +130,26 @@ export async function uploadDriveFile(params: {
   });
   if (!permRes.ok) throw new Error(`Google Drive permission error: ${JSON.stringify(await permRes.json())}`);
 
-  return { fileId, url: `https://drive.google.com/uc?export=view&id=${fileId}` };
+  // uc?export=view no es confiable como <img src> (a veces Google regresa
+  // una página de aviso en vez de la imagen) — thumbnail?id= sí sirve para
+  // eso de forma consistente mientras el archivo sea "cualquiera con el
+  // link puede ver" (permiso ya aplicado arriba).
+  return { fileId, url: `https://drive.google.com/thumbnail?id=${fileId}&sz=w1000` };
+}
+
+// Borra un archivo de Drive — se usa para quitar la foto anterior de un
+// platillo cuando se sube una nueva. Se intentó primero reemplazar el
+// CONTENIDO del mismo archivo (mismo id) para no tener que borrar nada,
+// pero la miniatura de thumbnail?id= que sirve Drive queda cacheada del
+// lado de Google por un buen rato después de reemplazar el contenido —
+// ningún parámetro que nosotros agreguemos a la URL fuerza ese refresh.
+// Subir siempre un archivo nuevo (miniatura nunca cacheada, porque el id
+// es nuevo) y borrar el viejo evita ese problema.
+export async function deleteDriveFile(fileId: string): Promise<void> {
+  const token = await getAccessToken();
+  const res = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?supportsAllDrives=true`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok && res.status !== 404) throw new Error(`Google Drive delete error: ${res.status}`);
 }

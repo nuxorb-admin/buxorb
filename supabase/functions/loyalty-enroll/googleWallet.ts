@@ -165,6 +165,10 @@ export async function ensureLoyaltyObject(params: {
       label: "Sellos",
       balance: { string: `${params.stamps}/${params.stampsRequired}` },
     },
+    // QR con el id del miembro (loyalty_members.id) — lo que el negocio
+    // escanea desde "Miembros" para sumar un sello, en vez de buscar por
+    // teléfono a mano cada vez.
+    barcode: { type: "QR_CODE", value: params.memberId },
   };
   const { ok, data } = await walletFetch("loyaltyObject", "POST", body);
   if (!ok) throw new Error(`Google Wallet object error: ${JSON.stringify(data)}`);
@@ -173,9 +177,13 @@ export async function ensureLoyaltyObject(params: {
 
 // Actualiza el conteo de sellos de una tarjeta ya existente — Google
 // sincroniza esto al celular del cliente sin que nosotros hagamos nada más.
-export async function patchLoyaltyObjectStamps(objectId: string, stamps: number, stampsRequired: number) {
+// Manda también el barcode en cada PATCH (no solo en la creación) para que
+// una tarjeta creada antes de que existiera el QR se autorepare la
+// siguiente vez que se le suma un sello, sin necesitar un backfill aparte.
+export async function patchLoyaltyObjectStamps(objectId: string, memberId: string, stamps: number, stampsRequired: number) {
   const { ok, data } = await walletFetch(`loyaltyObject/${objectId}`, "PATCH", {
     loyaltyPoints: { label: "Sellos", balance: { string: `${stamps}/${stampsRequired}` } },
+    barcode: { type: "QR_CODE", value: memberId },
   });
   if (!ok) throw new Error(`Google Wallet update error: ${JSON.stringify(data)}`);
 }

@@ -74,7 +74,7 @@ Deno.serve(async (req) => {
     }
 
     if (member.google_object_id) {
-      await patchLoyaltyObjectStamps(member.google_object_id, nextStamps, program.stamps_required);
+      await patchLoyaltyObjectStamps(member.google_object_id, member_id, nextStamps, program.stamps_required);
     }
 
     return new Response(JSON.stringify({ ok: true, stamps: nextStamps }), {

@@ -72,8 +72,9 @@ del commit que introdujo "Lealtad". Si se prefiere borrar a mano:
   `ENROLL_PATH`, el bloque `if (enrollMatch)` que renderiza
   `LoyaltyEnroll` sin auth, y el
   `import LoyaltyEnroll from "../public/LoyaltyEnroll"`.
-- `package.json` — quitar `qrcode` y `@types/qrcode` si no se usan en
-  ningún otro lado (correr `npm uninstall qrcode @types/qrcode`).
+- `package.json` — quitar `qrcode`, `@types/qrcode` y `jsqr` (este último
+  agregado para el escáner de QR de "Miembros") si no se usan en ningún
+  otro lado (correr `npm uninstall qrcode @types/qrcode jsqr`).
 
 Después de aplicar todo lo anterior, correr `npm run build` para confirmar
 que no queda ninguna referencia suelta.

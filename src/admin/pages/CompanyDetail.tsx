@@ -227,12 +227,7 @@ export default function CompanyDetail() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
-  async function remove() {
-    if (!company) return;
-    if (!confirm("¿Eliminar esta empresa?")) return;
-    await supabase.schema("nuxorb").from("companies").delete().eq("id", company.id);
-    navigate("/admin/companies");
-  }
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
 
   if (loading || !company) {
     return <p className="font-mono text-xs text-muted">Cargando…</p>;
@@ -273,12 +268,19 @@ export default function CompanyDetail() {
           )}
         </div>
         <button
-          onClick={remove}
+          onClick={() => setShowDeleteModal(true)}
           className="whitespace-nowrap font-mono text-[0.66rem] uppercase tracking-[0.1em] text-orange hover:underline"
         >
           Eliminar
         </button>
       </div>
+      {showDeleteModal && (
+        <DeleteCompanyModal
+          company={company}
+          onClose={() => setShowDeleteModal(false)}
+          onDeleted={() => navigate("/admin/companies")}
+        />
+      )}
       {company.notes && <p className="mt-4 max-w-xl text-sm text-muted">{company.notes}</p>}
 
       <div className="mt-8 grid gap-4 border border-ink/10 bg-white p-5 sm:grid-cols-2">
@@ -900,6 +902,61 @@ function NewContactModal({
           {saving ? "Guardando…" : "Agregar contacto"}
         </button>
       </form>
+    </Modal>
+  );
+}
+
+function DeleteCompanyModal({
+  company,
+  onClose,
+  onDeleted,
+}: {
+  company: Company;
+  onClose: () => void;
+  onDeleted: () => void;
+}) {
+  const [confirmName, setConfirmName] = useState("");
+  const [deleting, setDeleting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const matches = confirmName.trim() === company.name;
+
+  async function confirmDelete() {
+    if (!matches) return;
+    setDeleting(true);
+    setError(null);
+    const { data, error: fnError } = await supabase.functions.invoke("delete-company", { body: { company_id: company.id } });
+    setDeleting(false);
+    if (fnError || data?.error) {
+      setError(data?.error ?? fnError?.message ?? "No se pudo eliminar la empresa");
+      return;
+    }
+    onDeleted();
+  }
+
+  return (
+    <Modal title="Eliminar empresa" onClose={onClose}>
+      <div className="space-y-3">
+        {error && <div className="border border-orange/40 bg-orange/10 px-3 py-2 font-mono text-[0.68rem] text-orange">{error}</div>}
+        <p className="text-sm text-ink">
+          Esto borra <strong>todo</strong> lo de <strong>{company.name}</strong>: módulos, addons, líneas de negocio,
+          usuarios y sus cuentas de acceso, archivos subidos (documentos, logos, fotos de platillo), y sus
+          contactos/leads/tareas del CRM. No se puede deshacer.
+        </p>
+        <FieldInput
+          label={`Escribe "${company.name}" para confirmar`}
+          value={confirmName}
+          onChange={setConfirmName}
+          placeholder={company.name}
+        />
+        <button
+          onClick={confirmDelete}
+          disabled={!matches || deleting}
+          className="w-full border border-orange bg-orange px-4 py-2 font-mono text-xs uppercase tracking-[0.1em] text-white disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {deleting ? "Eliminando…" : "Eliminar empresa definitivamente"}
+        </button>
+      </div>
     </Modal>
   );
 }

@@ -182,6 +182,32 @@ número — nunca se edita uno ya aplicado.
 | `treasury_accounts` / `treasury_categories` / `treasury_movements` / `treasury_statement_imports` | Esquema de producción de Tesorería, por `company_id` real (no `scope_id`) | Equipo: todo. Miembros de esa empresa: todo lo de su empresa |
 | `demo_crm_deals` / `demo_erp_inventory_movements` | Sin uso — quedaron de un prototipo anterior de "CRM/ERP como líneas de producto aparte", descartado (ver contexto arriba) | Sin código que las lea/escriba |
 
+### Borrar una empresa — Edge Function `delete-company`, no un delete directo
+
+`CompanyDetail.tsx` ya no borra `nuxorb.companies` directo desde el
+cliente (aunque casi todo el modelo cuelga de esa fila con
+`on delete cascade` — ver 3a/3b/3c más abajo por línea de negocio). La
+cascada de Postgres **no alcanza** tres cosas, así que un `delete()` a
+secas dejaba basura huérfana para siempre:
+
+1. **Archivos en Storage** (`hr-employee-documents`, `loyalty-logos`) —
+   Postgres no tiene forma de cascadear hacia `storage.objects`.
+2. **La carpeta de Google Drive** de Restaurantes (si la línea está
+   activa) — vive fuera de Supabase por completo.
+3. **Cuentas de Auth** de los usuarios de esa empresa — `company_users`
+   cascada (se borra el vínculo), pero la cuenta real en `auth.users`
+   (correo + contraseña) sigue existiendo, huérfana.
+
+`delete-company` (solo equipo) limpia las tres cosas antes de borrar la
+fila de `companies`, y de paso borra también `contacts`/`leads`/`tasks`
+de esa empresa — que por diseño tienen `company_id` en
+`on delete set null` (sobreviven sin empresa en un borrado normal, a
+propósito, para no perder historial de CRM cuando la relación con esa
+empresa se resuelve de otra forma) pero aquí sí se eliminan, porque
+"eliminar empresa" desde el admin se decidió que fuera un wipe completo.
+El admin ahora pide escribir el nombre exacto de la empresa para
+confirmar, en vez de un `confirm()` simple, dado el alcance del borrado.
+
 ### Equipo interno vs. cuentas de clientes — `is_team_member()`
 
 Desde que el portal de cada tenant tiene login real (usuarios creados vía la

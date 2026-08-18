@@ -132,6 +132,25 @@ export async function upsertLoyaltyClass(params: {
     ...(params.logoUrl
       ? { programLogo: { sourceUri: { uri: params.logoUrl }, contentDescription: { defaultValue: { language: "es-MX", value: "Logo" } } } }
       : {}),
+    // Sin esto, Wallet no muestra el nombre del titular (object.accountName)
+    // en ningún lado de la tarjeta por default — hay que pedirlo explícito
+    // como fila del template. Aplica a toda tarjeta de este programa
+    // (mismo classId), no por cliente.
+    classTemplateInfo: {
+      cardTemplateOverride: {
+        cardRowTemplateInfos: [
+          {
+            oneItem: {
+              item: {
+                firstValue: {
+                  fields: [{ fieldPath: "object.accountName" }],
+                },
+              },
+            },
+          },
+        ],
+      },
+    },
   };
 
   const existing = await walletFetch(`loyaltyClass/${classId}`, "GET");
@@ -168,7 +187,9 @@ export async function ensureLoyaltyObject(params: {
     // QR con el id del miembro (loyalty_members.id) — lo que el negocio
     // escanea desde "Miembros" para sumar un sello, en vez de buscar por
     // teléfono a mano cada vez.
-    barcode: { type: "QR_CODE", value: params.memberId },
+    // alternateText vacío — sin esto Wallet muestra el value crudo (el
+    // uuid del miembro) como texto debajo del QR.
+    barcode: { type: "QR_CODE", value: params.memberId, alternateText: "" },
   };
   const { ok, data } = await walletFetch("loyaltyObject", "POST", body);
   if (!ok) throw new Error(`Google Wallet object error: ${JSON.stringify(data)}`);
@@ -183,7 +204,7 @@ export async function ensureLoyaltyObject(params: {
 export async function patchLoyaltyObjectStamps(objectId: string, memberId: string, stamps: number, stampsRequired: number) {
   const { ok, data } = await walletFetch(`loyaltyObject/${objectId}`, "PATCH", {
     loyaltyPoints: { label: "Sellos", balance: { string: `${stamps}/${stampsRequired}` } },
-    barcode: { type: "QR_CODE", value: memberId },
+    barcode: { type: "QR_CODE", value: memberId, alternateText: "" },
   });
   if (!ok) throw new Error(`Google Wallet update error: ${JSON.stringify(data)}`);
 }

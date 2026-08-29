@@ -6,8 +6,9 @@ import CicloCompraTab from "./compras/CicloCompraTab";
 import FacturasCxCTab from "./compras/FacturasCxCTab";
 import ProveedoresTab from "./compras/ProveedoresTab";
 import CatalogoTab from "./compras/CatalogoTab";
+import AlmacenesTab from "./compras/AlmacenesTab";
 
-type Tab = "ciclo" | "facturas" | "proveedores" | "catalogo";
+type Tab = "ciclo" | "facturas" | "proveedores" | "catalogo" | "almacenes";
 
 export default function Compras() {
   const { scopeId: companyId } = useOutletContext<ProductContext>();
@@ -27,7 +28,10 @@ export default function Compras() {
     ticketsUsados,
     productos,
     inventario,
+    inventarioPorAlmacen,
     unidadesCatalogo,
+    almacenes,
+    almacenImplicitoId,
     reload,
   } = useComprasData(companyId);
   const [tab, setTab] = useState<Tab>("ciclo");
@@ -40,7 +44,8 @@ export default function Compras() {
     { id: "ciclo", label: "Ciclo de compra" },
     { id: "facturas", label: "Facturas y CxC" },
     { id: "proveedores", label: "Proveedores" },
-    ...(limits.catalogoProductos ? [{ id: "catalogo" as const, label: "Catálogo" }] : []),
+    { id: "catalogo", label: "Catálogo" },
+    ...(limits.almacenesYTraspasos ? [{ id: "almacenes" as const, label: "Almacenes" }] : []),
   ];
 
   return (
@@ -80,6 +85,7 @@ export default function Compras() {
             limits={limits}
             companyUserCount={companyUsers.length}
             productos={productos}
+            almacenImplicitoId={almacenImplicitoId}
             reload={reload}
           />
         )}
@@ -106,13 +112,24 @@ export default function Compras() {
             reload={reload}
           />
         )}
-        {tab === "catalogo" && limits.catalogoProductos && (
+        {tab === "catalogo" && (
           <CatalogoTab
             companyId={companyId}
             productos={productos}
             inventario={inventario}
             unidadesCatalogo={unidadesCatalogo}
             settings={settings}
+            limits={limits}
+            reload={reload}
+          />
+        )}
+        {tab === "almacenes" && limits.almacenesYTraspasos && (
+          <AlmacenesTab
+            companyId={companyId}
+            productos={productos}
+            almacenes={almacenes}
+            inventarioPorAlmacen={inventarioPorAlmacen}
+            limits={limits}
             reload={reload}
           />
         )}

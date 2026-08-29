@@ -1,14 +1,18 @@
 # Módulo: Compras y Proveedores
 
-**Versión:** 0.2 (construido — ver notas de cambio)
-**Fecha:** 19 de julio de 2026 (v0.1) — actualizado 2 de agosto de 2026 (v0.2)
-**Estado:** Construido y en producción. Pendiente: pricing y límites finos (ver `compras-pendientes.md`), y los puntos marcados "V2" abajo.
+**Versión:** 0.3 (construido + ampliación de inventario planeada — ver notas de cambio)
+**Fecha:** 19 de julio de 2026 (v0.1) — actualizado 2 de agosto de 2026 (v0.2) — actualizado 28 de agosto de 2026 (v0.3)
+**Estado:** Construido y en producción (secciones 4, 5, 6 y el núcleo de 7). Pendiente: pricing y límites finos (ver `compras-pendientes.md`), los puntos marcados "V2" abajo, y la ampliación de inventario de la sección 7 (**planeada, no construida** — ver nota ahí).
 
 **Cambios de alcance respecto a v0.1 (decisiones tomadas durante la construcción):**
 - **Inventario SÍ quedó dentro de este módulo** (Professional), contradiciendo la nota de v0.1 de que era producto aparte — ver sección 7.1. No se construyó como addon separado.
 - **Facturas y notas de crédito son documentos independientes de la OC**, no un dato colgado de ella: una factura puede existir sin OC, una OC puede tener 0, 1 o varias facturas/NC, y una NC se liga a la factura que abona. Ver sección 5.
 - **Se eliminó el puente `mov_esperados`/`mov_confirmados` hacia Tesorería.** En su lugar, el pago de una OC/factura se cruza directo contra un movimiento bancario real (`treasury_movements`) desde Compras — ver sección 8. La razón: el puente antiguo publicaba un proyectado pero el resultado de la conciliación en Tesorería nunca regresaba a Compras, así que la OC/factura nunca se marcaba pagada por esa vía.
 - **Catálogo de productos con SKU** (Professional): las OC seleccionan líneas de un catálogo en vez de solo texto libre, y las facturas cargadas por XML se concilian contra ese catálogo asignando un SKU a cada concepto — ver sección 5.3 y 7.1.
+
+**Cambios de alcance respecto a v0.2 (decisión tomada, pendiente de construcción):**
+- **El catálogo de productos y la existencia consolidada bajan de Professional a Essential.** Almacenes/canales, traspasos, salidas con motivo, ajustes por conteo, alertas de mínimo y valor de inventario quedan como ampliación de Professional. Detalle completo en sección 7.2. Implica migrar el gate `catalogoProductos` — ver pendientes.
+- **Nuevo producto adicional candidato:** Conectores de marketplace (sync automática de existencias vía API con Amazon, Mercado Libre, etc.) — ficha pendiente de agregar a `productos-adicionales.md`.
 
 ---
 
@@ -29,6 +33,7 @@ Dar a negocios (emprendimientos y PyMEs) control del ciclo completo de compras �
 | Lectura de tickets (IA) | Incluida con límite mensual (pendiente definir N) | Incluida con límite mayor (pendiente definir N) | A medida |
 | Cuentas por pagar | Saldo por proveedor + fechas de vencimiento | + Antigüedad de saldos + calendario de pagos | A medida |
 | Proveedores | Catálogo: contacto, datos fiscales, historial de compras | + Evaluación: cumplimiento de entregas, comparativo de precios | A medida |
+| Inventario ⏳ *(planeado, no construido)* | Catálogo de productos + existencia consolidada (un almacén implícito) | + Almacenes/canales con traspasos, salidas con motivo, ajustes por conteo, alertas de mínimo, valor de inventario (costo y venta) | A medida |
 | Usuarios (además del admin de cuenta) | 1 | 3 | A medida |
 | Integraciones API | 1 (definida por el cliente) | +2 adicionales | A medida |
 
@@ -218,22 +223,51 @@ Los datos bancarios (`clabe`, `banco`, `titular_cuenta`) son opcionales y no se 
 
 ---
 
-## 7. Inventario y catálogo de productos (Professional)
+## 7. Inventario y catálogo de productos
 
-**Cambio de alcance respecto a v0.1:** originalmente esto se planeó como producto adicional aparte (`productos-adicionales.md`). Se decidió meterlo **dentro** de este módulo, gateado a Professional (`catalogoProductos` en los límites del tier), en vez de como addon independiente.
+**Cambio de alcance respecto a v0.1:** originalmente esto se planeó como producto adicional aparte (`productos-adicionales.md`). Se decidió meterlo **dentro** de este módulo en vez de como addon independiente.
 
-### 7.1 Qué se construyó
+**Cambio de alcance respecto a v0.2 (⏳ planeado, no construido):** el catálogo de productos y la existencia consolidada bajan de Professional a Essential. Lo que era el alcance completo de Professional en v0.2 (7.1) se conserva, y se amplía con almacenes/canales, traspasos, salidas con motivo, ajustes por conteo, alertas de mínimo y valor de inventario (7.2). Implica migrar el gate `catalogoProductos` de Professional a Essential — ver `compras-pendientes.md`.
+
+### 7.1 Qué se construyó (hoy, gateado a Professional vía `catalogoProductos`)
 - **Catálogo de productos** (`producto`): SKU (obligatorio, único por empresa), nombre, descripción, unidad de medida, activo/inactivo.
 - **Costo de referencia = promedio calculado, no un número capturado a mano.** Se recalcula (ponderado por cantidad) cada vez que una línea de factura o de ticket se le asigna a ese SKU — no de líneas de OC manual, cuyo precio normalmente es solo una copia del propio costo de referencia. Al crear un producto nuevo (sin historial) sí se pide un estimado inicial, editable; en cuanto existe, deja de ser editable a mano.
 - **Catálogo de unidades de medida** (`unidad_medida`, global — pza, kg, g, l, ml, m, cm, caja, paquete, docena, ton, m², m³, con `factor_base` de conversión): cada empresa elige en Configuración qué subconjunto usar; eso es lo que se ofrece al capturar un producto. **Conversión real entre unidades:** cada línea de factura/ticket guarda en qué unidad vino (con sugerencia automática desde el XML) y se normaliza contra la unidad del producto en catálogo al calcular el costo promedio — ej. factura en kg, catálogo en g, se convierte solo. Sin factor de conversión definido (caja/paquete: contenido variable; unidades de categorías distintas) se asume 1:1.
-- **Órdenes de compra seleccionan del catálogo** (Professional): cada renglón de una OC nueva se elige de la lista de productos activos, en vez de texto libre. *(Essential sigue siendo texto libre, sin catálogo.)*
+- **Órdenes de compra seleccionan del catálogo** (Professional): cada renglón de una OC nueva se elige de la lista de productos activos, en vez de texto libre. *(Essential sigue siendo texto libre, sin catálogo — cambia con la ampliación de 7.2.)*
 - **Conciliación factura/ticket↔catálogo** ("Asignar SKU's por conceptos" / "Asignar SKU"): al cargar una factura por XML, o al capturar un ticket, sus conceptos se ligan a productos del catálogo — con sugerencia automática y opción de crear el producto ahí mismo si no existe.
 - **Inventario (kardex):** cada recepción (total o parcial) de un renglón con producto asignado genera una entrada en `movimiento_inventario` (entrada/salida). La existencia de cada producto es la suma de sus movimientos, no una columna que se actualiza a mano.
 
-### 7.2 Otros productos adicionales relacionados
+### 7.2 Ampliación planeada ⏳ (no construida)
+
+**Baja a Essential:**
+- Catálogo de productos (igual que 7.1) + campo nuevo `precio_venta` (decimal, opcional)
+- Existencia consolidada por producto, operando sobre un **almacén único implícito** (creado automáticamente por empresa, no visible como concepto — el usuario solo ve "existencia")
+- Salidas manuales simples (producto, cantidad, fecha, sin motivo detallado)
+
+**Se mantiene y amplía en Professional:**
+- Órdenes de compra seleccionan del catálogo (ya construido, sin cambio)
+- **Almacenes y canales** (`almacen`, nueva): catálogo de ubicaciones con `tipo` (físico / canal — Amazon, Mercado Libre, tienda propia, etc.). Mismo kardex para ambos tipos; enviar mercancía a un canal (ej. FBA) es un **traspaso**, igual que entre dos bodegas físicas — sin lógica especial. Existencia por almacén + vista consolidada.
+- **Traspasos entre almacenes/canales:** genera un par de movimientos vinculados (salida en origen, entrada en destino), mismo producto y cantidad.
+- **Salidas con motivo:** venta / merma / consumo interno / ajuste — en vez de "salida manual" genérica.
+- **Ajustes por conteo físico:** captura de existencia real contable; el sistema genera el movimiento de ajuste (entrada o salida) por la diferencia.
+- **Alerta de mínimos:** `stock_minimo` por producto (global, no por almacén en v1); aviso cuando la existencia consolidada cae por debajo.
+- **Valor de inventario:** dashboard con valuación a costo (existencia × costo promedio) y a precio de venta (existencia × `precio_venta`), consolidado y por almacén.
+
+**Fuera de alcance v1 (candidato a producto adicional):** sync automática de existencias con marketplaces vía sus APIs. Los almacenes tipo canal se actualizan por traspaso manual en v1 — ver "Conectores de marketplace" abajo.
+
+### 7.3 Campos de datos — ampliación planeada
+
+**`producto`**: + `precio_venta` (decimal, opcional), + `stock_minimo` (decimal, opcional, Professional).
+
+**`almacen`** (nueva, Professional): id, company_id, nombre, tipo (fisico/canal), activo.
+
+**`movimiento_inventario`**: + `almacen_id` (en Essential apunta al almacén único implícito), + `motivo` (entrada_compra/salida_manual/venta/merma/consumo/ajuste/traspaso) — `salida_manual` solo en Essential; Professional usa motivos específicos.
+
+### 7.4 Otros productos adicionales relacionados
 Se documentan en `productos-adicionales.md`:
 - **Lectura de tickets ampliada** (más documentos/mes que el límite del nivel; mismo modelo que Conciliación con PDF ampliada, Tesorería)
 - **Almacenamiento de documentos originales** (XML/foto de ticket) — candidato a addon futuro, ver sección 5.4.
+- **Conectores de marketplace** ⏳ *(nuevo, ficha pendiente de agregar)*: sync automática de existencias vía API con Amazon, Mercado Libre, etc. — sustituye el traspaso manual al almacén tipo canal descrito en 7.2. Cobro mensual por canal conectado, pricing pendiente.
 
 ---
 
@@ -265,6 +299,8 @@ Explícitamente pospuesto — no es que se haya intentado y quedó a medias, es 
 - **`categoria_gasto_default` del proveedor:** la columna existe pero no se captura en el formulario; su propósito original (heredar categoría al proyectado de Tesorería) perdió sentido al eliminarse el puente `mov_esperados` — habría que redefinir para qué se usaría antes de exponerla.
 - **Proyecciones de flujo de caja hacia Tesorería:** cómo debe verse ahora que no existe el puente `mov_esperados` (tema abierto, a definir en conjunto con Tesorería).
 - **Automatizaciones N8N** (sección 9): sin diseñar.
+- **Sync automática de existencias con marketplaces vía API:** ver 7.4, "Conectores de marketplace".
+- **Alertas de mínimo por almacén** (v1 es solo a nivel global de producto).
 
 **Resuelto (ya no está pendiente, se construyó tras el borrador inicial de esta lista):**
 - **Conversión entre unidades de medida** al calcular el costo promedio: cada línea de factura/ticket guarda en qué unidad vino (`unidad`, con sugerencia automática desde `ClaveUnidad`/`Unidad` del CFDI), y `procurement_units.factor_base` normaliza esa cantidad a la unidad del producto en catálogo antes de promediar (ej. factura en kg, catálogo en g). Sin factor definido (caja, paquete — contenido variable por producto) o entre categorías distintas, se asume 1:1 igual que antes.

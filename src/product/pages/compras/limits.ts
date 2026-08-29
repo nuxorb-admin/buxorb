@@ -6,7 +6,11 @@ export interface ComprasTierLimits {
   matchFacturaVsOC: boolean;
   antiguedadYCalendarioPagos: boolean;
   evaluacionProveedores: boolean;
-  catalogoProductos: boolean;
+  // Catálogo de productos + existencia consolidada ahora vive en ambos
+  // tiers (bajó de Professional a Essential, v0.3 del MD) — ya no es gate.
+  almacenesYTraspasos: boolean;
+  alertaStockMinimo: boolean;
+  valorInventario: boolean;
   maxTicketsIAPorMes: number;
 }
 
@@ -18,7 +22,9 @@ const ESSENTIAL: ComprasTierLimits = {
   matchFacturaVsOC: false,
   antiguedadYCalendarioPagos: false,
   evaluacionProveedores: false,
-  catalogoProductos: false,
+  almacenesYTraspasos: false,
+  alertaStockMinimo: false,
+  valorInventario: false,
   maxTicketsIAPorMes: 10,
 };
 
@@ -28,7 +34,9 @@ const PROFESSIONAL: ComprasTierLimits = {
   matchFacturaVsOC: true,
   antiguedadYCalendarioPagos: true,
   evaluacionProveedores: true,
-  catalogoProductos: true,
+  almacenesYTraspasos: true,
+  alertaStockMinimo: true,
+  valorInventario: true,
   maxTicketsIAPorMes: 40,
 };
 

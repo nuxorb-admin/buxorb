@@ -13,6 +13,7 @@ import type {
   ProcurementInventoryMovement,
   ProcurementProduct,
   ProcurementUnit,
+  ProcurementWarehouse,
   Proveedor,
   Recepcion,
   ReglaAprobacion,
@@ -63,7 +64,9 @@ export function useComprasData(companyId: string) {
   const [ticketsUsados, setTicketsUsados] = useState(0);
   const [productos, setProductos] = useState<ProcurementProduct[]>([]);
   const [inventario, setInventario] = useState<Record<string, number>>({});
+  const [inventarioPorAlmacen, setInventarioPorAlmacen] = useState<Record<string, number>>({});
   const [unidadesCatalogo, setUnidadesCatalogo] = useState<ProcurementUnit[]>([]);
+  const [almacenes, setAlmacenes] = useState<ProcurementWarehouse[]>([]);
 
   async function load() {
     setLoading(true);
@@ -103,6 +106,7 @@ export function useComprasData(companyId: string) {
       { data: productoRows },
       { data: movimientoRows },
       { data: unidadRows },
+      { data: almacenRows },
     ] = await Promise.all([
       supabase.from("procurement_suppliers").select("*").eq("company_id", companyId).order("razon_social"),
       supabase.from("departments").select("*").eq("company_id", companyId).order("nombre"),
@@ -128,6 +132,7 @@ export function useComprasData(companyId: string) {
       supabase.from("procurement_products").select("*").eq("company_id", companyId).order("nombre"),
       supabase.from("procurement_inventory_movements").select("*").eq("company_id", companyId),
       supabase.from("procurement_units").select("*").order("orden"),
+      supabase.from("procurement_warehouses").select("*").eq("company_id", companyId).order("created_at"),
     ]);
 
     setProveedores(proveedorRows ?? []);
@@ -145,12 +150,17 @@ export function useComprasData(companyId: string) {
     setTicketsUsados(usoRow?.veces_usado ?? 0);
     setProductos(productoRows ?? []);
     const stock: Record<string, number> = {};
+    const stockPorAlmacen: Record<string, number> = {};
     for (const m of (movimientoRows as ProcurementInventoryMovement[] | null) ?? []) {
       const signo = m.tipo === "entrada" ? 1 : -1;
       stock[m.producto_id] = (stock[m.producto_id] ?? 0) + signo * Number(m.cantidad);
+      const clave = `${m.producto_id}:${m.almacen_id}`;
+      stockPorAlmacen[clave] = (stockPorAlmacen[clave] ?? 0) + signo * Number(m.cantidad);
     }
     setInventario(stock);
+    setInventarioPorAlmacen(stockPorAlmacen);
     setUnidadesCatalogo(unidadRows ?? []);
+    setAlmacenes(almacenRows ?? []);
 
     const proveedorIds = (proveedorRows ?? []).map((p) => p.id);
     if (proveedorIds.length > 0) {
@@ -171,6 +181,23 @@ export function useComprasData(companyId: string) {
       );
     } else {
       setCompanyUsers([]);
+    }
+
+    // Fallback: si por lo que sea la empresa no tiene todavía su almacén
+    // implícito (creado normalmente por el trigger sobre company_modules),
+    // se crea aquí mismo — la función es idempotente.
+    if ((almacenRows ?? []).length === 0) {
+      const { data: nuevoAlmacenId } = await supabase.rpc("procurement_ensure_default_warehouse", {
+        p_company_id: companyId,
+      });
+      if (nuevoAlmacenId) {
+        const { data: almacenRows2 } = await supabase
+          .from("procurement_warehouses")
+          .select("*")
+          .eq("company_id", companyId)
+          .order("created_at");
+        setAlmacenes(almacenRows2 ?? []);
+      }
     }
 
     setLoading(false);
@@ -199,7 +226,10 @@ export function useComprasData(companyId: string) {
     ticketsUsados,
     productos,
     inventario,
+    inventarioPorAlmacen,
     unidadesCatalogo,
+    almacenes,
+    almacenImplicitoId: almacenes.find((a) => a.es_implicito)?.id ?? null,
     reload: load,
   };
 }

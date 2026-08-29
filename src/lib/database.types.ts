@@ -406,9 +406,20 @@ export interface ProcurementProduct {
   descripcion: string | null;
   unidad: string;
   costo_referencia: number;
+  precio_venta: number | null;
+  stock_minimo: number | null;
   activo: boolean;
   created_at: string;
 }
+
+export type ProcurementInventoryMotivo =
+  | "entrada_compra"
+  | "salida_manual"
+  | "venta"
+  | "merma"
+  | "consumo_interno"
+  | "ajuste"
+  | "traspaso";
 
 export interface ProcurementInventoryMovement {
   id: string;
@@ -418,7 +429,20 @@ export interface ProcurementInventoryMovement {
   cantidad: number;
   compra_id: string | null;
   recepcion_id: string | null;
+  almacen_id: string;
+  motivo: ProcurementInventoryMotivo;
+  traspaso_id: string | null;
   fecha: string;
+  created_at: string;
+}
+
+export interface ProcurementWarehouse {
+  id: string;
+  company_id: string;
+  nombre: string;
+  tipo: "fisico" | "canal";
+  es_implicito: boolean;
+  activo: boolean;
   created_at: string;
 }
 

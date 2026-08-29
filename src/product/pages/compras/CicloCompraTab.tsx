@@ -47,6 +47,7 @@ export default function CicloCompraTab({
   limits,
   companyUserCount,
   productos,
+  almacenImplicitoId,
   reload,
 }: {
   companyId: string;
@@ -59,6 +60,7 @@ export default function CicloCompraTab({
   limits: ComprasTierLimits;
   companyUserCount: number;
   productos: ProcurementProduct[];
+  almacenImplicitoId: string | null;
   reload: () => void;
 }) {
   const [userId, setUserId] = useState<string | null>(null);
@@ -148,7 +150,7 @@ export default function CicloCompraTab({
     );
 
     const conProducto = entradas.filter((e) => e.item.producto_id);
-    if (conProducto.length > 0) {
+    if (conProducto.length > 0 && almacenImplicitoId) {
       await supabase.from("procurement_inventory_movements").insert(
         conProducto.map((e) => ({
           company_id: compra.company_id,
@@ -157,6 +159,8 @@ export default function CicloCompraTab({
           cantidad: e.cantidad,
           compra_id: compra.id,
           recepcion_id: recepcion.id,
+          almacen_id: almacenImplicitoId,
+          motivo: "entrada_compra" as const,
         })),
       );
     }
@@ -343,7 +347,7 @@ export default function CicloCompraTab({
           settings={settings}
           companyUserCount={companyUserCount}
           productos={productos}
-          catalogoActivo={limits.catalogoProductos}
+          catalogoActivo={productos.length > 0}
           prefillDepartamento={prefillDepartamento}
           prefillRequisicionId={prefillRequisicionId}
           onClose={() => setShowNew(false)}

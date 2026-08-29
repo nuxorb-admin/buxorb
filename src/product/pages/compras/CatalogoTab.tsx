@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { supabase } from "../../../lib/supabase";
 import type { ComprasSettings, ProcurementProduct, ProcurementUnit } from "../../../lib/database.types";
+import type { ComprasTierLimits } from "./limits";
 import Modal from "../../../admin/components/Modal";
 import Badge from "../../../admin/components/Badge";
 
@@ -14,6 +15,7 @@ export default function CatalogoTab({
   inventario,
   unidadesCatalogo,
   settings,
+  limits,
   reload,
 }: {
   companyId: string;
@@ -21,6 +23,7 @@ export default function CatalogoTab({
   inventario: Record<string, number>;
   unidadesCatalogo: ProcurementUnit[];
   settings: ComprasSettings;
+  limits: ComprasTierLimits;
   reload: () => void;
 }) {
   const [showNew, setShowNew] = useState(false);
@@ -59,10 +62,15 @@ export default function CatalogoTab({
                 {p.nombre} {p.sku && <span className="font-mono text-[0.62rem] text-muted">({p.sku})</span>}
               </p>
               <p className="font-mono text-[0.66rem] text-muted">
-                {p.unidad} · costo ref. {money(p.costo_referencia)} · existencia {inventario[p.id] ?? 0} {p.unidad}
+                {p.unidad} · costo ref. {money(p.costo_referencia)}
+                {p.precio_venta != null && <> · venta {money(p.precio_venta)}</>} · existencia{" "}
+                {inventario[p.id] ?? 0} {p.unidad}
               </p>
             </div>
             <div className="flex items-center gap-3">
+              {limits.alertaStockMinimo && p.stock_minimo != null && (inventario[p.id] ?? 0) < p.stock_minimo && (
+                <Badge color="orange">Bajo mínimo</Badge>
+              )}
               {!p.activo && <Badge color="muted">Inactivo</Badge>}
               <button onClick={() => setEditing(p)} className="font-mono text-[0.62rem] uppercase text-muted hover:text-ink">
                 Editar
@@ -80,6 +88,7 @@ export default function CatalogoTab({
           companyId={companyId}
           producto={editing}
           unidadesActivas={unidadesActivas}
+          limits={limits}
           onClose={() => {
             setShowNew(false);
             setEditing(null);
@@ -169,12 +178,14 @@ function ProductoModal({
   companyId,
   producto,
   unidadesActivas,
+  limits,
   onClose,
   onSaved,
 }: {
   companyId: string;
   producto: ProcurementProduct | null;
   unidadesActivas: ProcurementUnit[];
+  limits: ComprasTierLimits;
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -183,6 +194,8 @@ function ProductoModal({
   const [descripcion, setDescripcion] = useState(producto?.descripcion ?? "");
   const [unidad, setUnidad] = useState(producto?.unidad ?? unidadesActivas[0]?.codigo ?? "pza");
   const [costoReferencia, setCostoReferencia] = useState(String(producto?.costo_referencia ?? "0"));
+  const [precioVenta, setPrecioVenta] = useState(producto?.precio_venta != null ? String(producto.precio_venta) : "");
+  const [stockMinimo, setStockMinimo] = useState(producto?.stock_minimo != null ? String(producto.stock_minimo) : "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -195,17 +208,19 @@ function ProductoModal({
     // existe — es el promedio calculado de facturas/tickets ya
     // conciliados (ver recalcularCostoReferencia). Al crear sí se manda
     // un estimado inicial porque todavía no hay historial.
+    const camposComunes = {
+      sku: sku.trim(),
+      nombre: nombre.trim(),
+      descripcion: descripcion.trim() || null,
+      unidad,
+      precio_venta: precioVenta.trim() ? Number(precioVenta) : null,
+      stock_minimo: limits.almacenesYTraspasos && stockMinimo.trim() ? Number(stockMinimo) : null,
+    };
     const { error: dbError } = producto
-      ? await supabase
-          .from("procurement_products")
-          .update({ sku: sku.trim(), nombre: nombre.trim(), descripcion: descripcion.trim() || null, unidad })
-          .eq("id", producto.id)
+      ? await supabase.from("procurement_products").update(camposComunes).eq("id", producto.id)
       : await supabase.from("procurement_products").insert({
           company_id: companyId,
-          sku: sku.trim(),
-          nombre: nombre.trim(),
-          descripcion: descripcion.trim() || null,
-          unidad,
+          ...camposComunes,
           costo_referencia: Number(costoReferencia),
         });
     setSaving(false);
@@ -266,6 +281,24 @@ function ProductoModal({
               </option>
             ))}
           </select>
+        </div>
+        <div className="flex gap-2">
+          <input
+            type="number"
+            value={precioVenta}
+            onChange={(e) => setPrecioVenta(e.target.value)}
+            placeholder="Precio de venta (opcional)"
+            className="w-1/2 border border-ink/15 bg-sand-2 px-3 py-2 text-sm text-ink focus:border-teal focus:outline-none"
+          />
+          {limits.almacenesYTraspasos && (
+            <input
+              type="number"
+              value={stockMinimo}
+              onChange={(e) => setStockMinimo(e.target.value)}
+              placeholder="Stock mínimo (opcional)"
+              className="w-1/2 border border-ink/15 bg-sand-2 px-3 py-2 text-sm text-ink focus:border-teal focus:outline-none"
+            />
+          )}
         </div>
         <p className="font-mono text-[0.6rem] text-muted">
           {producto

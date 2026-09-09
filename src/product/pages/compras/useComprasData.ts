@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { supabase } from "../../../lib/supabase";
 import type {
   AprobacionCompra,
@@ -54,6 +54,12 @@ function currentPeriod() {
 
 export function useComprasData(companyId: string) {
   const [loading, setLoading] = useState(true);
+  // Solo la primera carga de una empresa muestra "Cargando…" — un reload()
+  // posterior (ej. cada vez que se agrega un costo/producto en Prorrateo)
+  // no debe desmontar Compras.tsx completo, o cualquier modal abierto
+  // (que a diferencia del resto de los modales de Compras, en Prorrateo se
+  // queda abierto a propósito para seguir agregando) se cierra solo.
+  const loadedOnce = useRef(false);
   const [tier, setTier] = useState<CompanyModuleTier | null>(null);
   const [proveedores, setProveedores] = useState<Proveedor[]>([]);
   const [departamentos, setDepartamentos] = useState<Departamento[]>([]);
@@ -76,7 +82,7 @@ export function useComprasData(companyId: string) {
   const [shipmentItems, setShipmentItems] = useState<ProcurementShipmentItem[]>([]);
 
   async function load() {
-    setLoading(true);
+    if (!loadedOnce.current) setLoading(true);
 
     const { data: moduleRow } = await supabase
       .schema("nuxorb").from("company_modules")
@@ -243,9 +249,11 @@ export function useComprasData(companyId: string) {
     }
 
     setLoading(false);
+    loadedOnce.current = true;
   }
 
   useEffect(() => {
+    loadedOnce.current = false;
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [companyId]);

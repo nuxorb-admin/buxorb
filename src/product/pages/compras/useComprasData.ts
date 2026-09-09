@@ -12,6 +12,9 @@ import type {
   PagoCompra,
   ProcurementInventoryMovement,
   ProcurementProduct,
+  ProcurementShipment,
+  ProcurementShipmentCost,
+  ProcurementShipmentItem,
   ProcurementUnit,
   ProcurementWarehouse,
   Proveedor,
@@ -67,6 +70,10 @@ export function useComprasData(companyId: string) {
   const [inventarioPorAlmacen, setInventarioPorAlmacen] = useState<Record<string, number>>({});
   const [unidadesCatalogo, setUnidadesCatalogo] = useState<ProcurementUnit[]>([]);
   const [almacenes, setAlmacenes] = useState<ProcurementWarehouse[]>([]);
+  const [prorrateoActivo, setProrrateoActivo] = useState(false);
+  const [shipments, setShipments] = useState<ProcurementShipment[]>([]);
+  const [shipmentCosts, setShipmentCosts] = useState<ProcurementShipmentCost[]>([]);
+  const [shipmentItems, setShipmentItems] = useState<ProcurementShipmentItem[]>([]);
 
   async function load() {
     setLoading(true);
@@ -107,6 +114,8 @@ export function useComprasData(companyId: string) {
       { data: movimientoRows },
       { data: unidadRows },
       { data: almacenRows },
+      { data: prorrateoAddonRow },
+      { data: shipmentRows },
     ] = await Promise.all([
       supabase.from("procurement_suppliers").select("*").eq("company_id", companyId).order("razon_social"),
       supabase.from("departments").select("*").eq("company_id", companyId).order("nombre"),
@@ -133,6 +142,19 @@ export function useComprasData(companyId: string) {
       supabase.from("procurement_inventory_movements").select("*").eq("company_id", companyId),
       supabase.from("procurement_units").select("*").order("orden"),
       supabase.from("procurement_warehouses").select("*").eq("company_id", companyId).order("created_at"),
+      supabase
+        .schema("nuxorb")
+        .from("company_addons")
+        .select("addon")
+        .eq("company_id", companyId)
+        .eq("addon", "prorrateo")
+        .eq("active", true)
+        .maybeSingle(),
+      supabase
+        .from("procurement_shipments")
+        .select("*, procurement_shipment_costs(*), procurement_shipment_items(*)")
+        .eq("company_id", companyId)
+        .order("created_at", { ascending: false }),
     ]);
 
     setProveedores(proveedorRows ?? []);
@@ -161,6 +183,26 @@ export function useComprasData(companyId: string) {
     setInventarioPorAlmacen(stockPorAlmacen);
     setUnidadesCatalogo(unidadRows ?? []);
     setAlmacenes(almacenRows ?? []);
+    setProrrateoActivo(!!prorrateoAddonRow);
+    const shipmentsBase =
+      (shipmentRows as (ProcurementShipment & {
+        procurement_shipment_costs: ProcurementShipmentCost[];
+        procurement_shipment_items: ProcurementShipmentItem[];
+      })[] | null) ?? [];
+    setShipments(
+      shipmentsBase.map((s) => ({
+        id: s.id,
+        company_id: s.company_id,
+        nombre: s.nombre,
+        criterio: s.criterio,
+        estado: s.estado,
+        created_by: s.created_by,
+        created_at: s.created_at,
+        applied_at: s.applied_at,
+      })),
+    );
+    setShipmentCosts(shipmentsBase.flatMap((s) => s.procurement_shipment_costs));
+    setShipmentItems(shipmentsBase.flatMap((s) => s.procurement_shipment_items));
 
     const proveedorIds = (proveedorRows ?? []).map((p) => p.id);
     if (proveedorIds.length > 0) {
@@ -230,6 +272,10 @@ export function useComprasData(companyId: string) {
     unidadesCatalogo,
     almacenes,
     almacenImplicitoId: almacenes.find((a) => a.es_implicito)?.id ?? null,
+    prorrateoActivo,
+    shipments,
+    shipmentCosts,
+    shipmentItems,
     reload: load,
   };
 }
@@ -275,6 +321,22 @@ function factorConversion(unidadLinea: string | null, unidadProducto: string, ca
   return uLinea.factor_base / uProducto.factor_base;
 }
 
+// Evidencia del addon Prorrateo — embarques ya 'aplicado' que tocaron este
+// producto. Se suma como una fuente de evidencia más (no se le suma un
+// número aparte a costo_referencia, que se recalcula desde cero cada vez
+// — ver 0060_prorrateo_embarques.sql). La cantidad del embarque se asume
+// ya en la unidad del producto (el embarque no pide/convierte unidad,
+// alcance v1).
+async function lineasProrrateoAplicadas(productoId: string) {
+  const { data } = await supabase
+    .from("procurement_shipment_items")
+    .select("cantidad, costo_asignado, procurement_shipments!inner(estado)")
+    .eq("producto_id", productoId)
+    .eq("procurement_shipments.estado", "aplicado")
+    .not("costo_asignado", "is", null);
+  return data ?? [];
+}
+
 export async function recalcularCostoReferencia(productoId: string, unidadesCatalogo: ProcurementUnit[]) {
   const { data: producto } = await supabase
     .from("procurement_products")
@@ -283,7 +345,10 @@ export async function recalcularCostoReferencia(productoId: string, unidadesCata
     .single();
   if (!producto) return;
 
-  const rows = await lineasConEvidencia(productoId);
+  const [rows, prorrateoRows] = await Promise.all([
+    lineasConEvidencia(productoId),
+    lineasProrrateoAplicadas(productoId),
+  ]);
 
   let costoTotal = 0;
   let cantidadConvertidaTotal = 0;
@@ -291,6 +356,10 @@ export async function recalcularCostoReferencia(productoId: string, unidadesCata
     const factor = factorConversion(r.unidad, producto.unidad, unidadesCatalogo);
     costoTotal += Number(r.cantidad) * Number(r.precio_unitario);
     cantidadConvertidaTotal += Number(r.cantidad) * factor;
+  }
+  for (const p of prorrateoRows) {
+    costoTotal += Number(p.costo_asignado);
+    cantidadConvertidaTotal += Number(p.cantidad);
   }
   if (cantidadConvertidaTotal <= 0) return;
 

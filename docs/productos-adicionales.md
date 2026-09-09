@@ -59,11 +59,7 @@ Acceso del empleado desde su celular (sin ocupar seats del módulo): consulta de
 
 ## 5. Inventario
 [[compras y proveedores]]
-**Requiere:** módulo Compras y Proveedores (consume la vista `entradas_compra`) **Cobro propuesto:** mensual (pricing pendiente) **Estado:** candidato — desarrollar cuando haya demanda; definir alcance v1
-
-**Qué hace:** control de existencias alimentado por las recepciones de compras (entradas automáticas) y salidas capturadas por el negocio. Se mantiene como producto separado porque su lógica varía fuertemente por giro (comercializadora: SKUs y almacenes; restaurante: recetas y mermas; servicios: no aplica), mientras que el módulo de compras es universal.
-
-**Alcance v1 tentativo (por validar):** catálogo de artículos, entradas desde compras recibidas, salidas manuales, existencia actual y alerta de mínimos. Variantes por giro (recetas, multi-almacén) vía Enterprise hasta que haya demanda recurrente.
+**Estado:** ⚠️ absorbido dentro del módulo Compras y Proveedores — ya no es un producto adicional aparte (catálogo de productos + existencia en Essential, almacenes/traspasos/ajustes/valor de inventario en Professional). Ver `compras-proveedores-modulo-v1.md` sección 7. Esta ficha se deja como registro histórico de la decisión original de v0.1, ya descartada.
 
 ---
 
@@ -72,4 +68,16 @@ Acceso del empleado desde su celular (sin ocupar seats del módulo): consulta de
 **Requiere:** módulo Compras y Proveedores **Cobro propuesto:** mensual o por documento (pendiente del piloto del pipeline LLM)
 
 Más lecturas de tickets con IA que las incluidas en el nivel contratado (mismo modelo que Conciliación con PDF ampliada). Detalle en `compras-proveedores-modulo.md` sección 5. El pipeline documento → JSON es infraestructura interna Nuxorb, compartida con la conciliación PDF de Tesorería.
+
+---
+
+## 7. Prorrateo de costos
+[[compras y proveedores]]
+**Requiere:** módulo Compras y Proveedores activo, con catálogo de productos **Cobro propuesto:** pendiente **Estado:** construido (v1)
+
+**Qué hace:** reparte los costos conjuntos de un embarque (envío, impuestos, logística — capturados a mano por el equipo, sin detección automática) entre los productos que viajaron juntos, y suma el resultado al `costo_referencia` de cada producto, para que el costo refleje el gasto real de traerlo, no solo su precio de factura.
+
+Surgió de una plática real con un cliente que importa mercancía y necesitaba repartir por **peso volumétrico** — pero el criterio de reparto es **configurable por embarque**, no fijo a ese caso: peso volumétrico, peso real, valor de mercancía, cantidad de unidades, o manual. Cada producto puede llevar un `peso_volumetrico`/`peso` opcional en el catálogo de Compras.
+
+Vive como un tab dentro de Compras y Proveedores ("Prorrateo"), no como nav propia — es la primera vez que un producto adicional se muestra así (el resto, como Lealtad o Agentes IA, tienen su propia entrada de nav). Detalle técnico completo en `compras-proveedores-modulo-v1.md` sección 9.
 

@@ -30,4 +30,5 @@ export const ADDON_CATEGORY: Record<CompanyAddonName, InternalCategory> = {
   chatbot_cobranza: "crm",
   agentes_ia: "otro",
   lealtad: "crm",
+  prorrateo: "erp",
 };

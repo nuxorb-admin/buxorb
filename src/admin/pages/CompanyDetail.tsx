@@ -56,9 +56,18 @@ const ADDON_LABELS: Record<CompanyAddonName, string> = {
   chatbot_cobranza: "Chatbot de cobranza",
   agentes_ia: "Agentes IA",
   lealtad: "Lealtad",
+  prorrateo: "Prorrateo de costos",
 };
 
 const ADDON_ORDER = Object.keys(ADDON_LABELS) as CompanyAddonName[];
+
+// Requisito de módulo del core por producto adicional — hoy solo
+// Prorrateo lo necesita (reparte costos sobre el catálogo de productos de
+// Compras, no tiene sentido sin ese módulo activo). Mismo patrón que
+// BUSINESS_LINE_REQUIRES abajo, primera vez que se aplica a un addon.
+const ADDON_REQUIRES: Partial<Record<CompanyAddonName, CompanyModuleName>> = {
+  prorrateo: "compras_proveedores",
+};
 
 const BUSINESS_LINE_LABELS: Record<BusinessLineKey, string> = {
   restaurantes: "Restaurantes",
@@ -426,14 +435,28 @@ export default function CompanyDetail() {
         <div className="grid gap-2 sm:grid-cols-2">
           {ADDON_ORDER.filter((a) => categoryFilter === "todos" || ADDON_CATEGORY[a] === categoryFilter).map((a) => {
             const active = addonSubs.some((s) => s.addon === a);
+            const requiredModule = ADDON_REQUIRES[a];
+            const meetsRequirement = !requiredModule || moduleSubs.some((s) => s.module === requiredModule && s.active);
             return (
               <label
                 key={a}
-                className="flex items-center gap-2 border border-ink/10 bg-white px-3 py-2 text-sm text-ink"
+                className={`flex items-center gap-2 border border-ink/10 bg-white px-3 py-2 text-sm text-ink ${
+                  !meetsRequirement ? "opacity-60" : ""
+                }`}
               >
-                <input type="checkbox" checked={active} onChange={(e) => toggleAddon(a, e.target.checked)} />
+                <input
+                  type="checkbox"
+                  checked={active}
+                  disabled={!meetsRequirement}
+                  onChange={(e) => toggleAddon(a, e.target.checked)}
+                />
                 {ADDON_LABELS[a]}
                 <Badge color={CATEGORY_BADGE_COLOR[ADDON_CATEGORY[a]]}>{CATEGORY_LABELS[ADDON_CATEGORY[a]]}</Badge>
+                {!meetsRequirement && requiredModule && (
+                  <span className="font-mono text-[0.58rem] text-orange">
+                    Requiere {MODULE_LABELS[requiredModule]} activo
+                  </span>
+                )}
               </label>
             );
           })}

@@ -7,8 +7,9 @@ import FacturasCxCTab from "./compras/FacturasCxCTab";
 import ProveedoresTab from "./compras/ProveedoresTab";
 import CatalogoTab from "./compras/CatalogoTab";
 import AlmacenesTab from "./compras/AlmacenesTab";
+import ProrrateoTab from "./compras/ProrrateoTab";
 
-type Tab = "ciclo" | "facturas" | "proveedores" | "catalogo" | "almacenes";
+type Tab = "ciclo" | "facturas" | "proveedores" | "catalogo" | "almacenes" | "prorrateo";
 
 export default function Compras() {
   const { scopeId: companyId } = useOutletContext<ProductContext>();
@@ -32,6 +33,10 @@ export default function Compras() {
     unidadesCatalogo,
     almacenes,
     almacenImplicitoId,
+    prorrateoActivo,
+    shipments,
+    shipmentCosts,
+    shipmentItems,
     reload,
   } = useComprasData(companyId);
   const [tab, setTab] = useState<Tab>("ciclo");
@@ -46,6 +51,7 @@ export default function Compras() {
     { id: "proveedores", label: "Proveedores" },
     { id: "catalogo", label: "Catálogo" },
     ...(limits.almacenesYTraspasos ? [{ id: "almacenes" as const, label: "Almacenes" }] : []),
+    ...(prorrateoActivo ? [{ id: "prorrateo" as const, label: "Prorrateo" }] : []),
   ];
 
   return (
@@ -130,6 +136,18 @@ export default function Compras() {
             almacenes={almacenes}
             inventarioPorAlmacen={inventarioPorAlmacen}
             limits={limits}
+            reload={reload}
+          />
+        )}
+        {tab === "prorrateo" && prorrateoActivo && (
+          <ProrrateoTab
+            companyId={companyId}
+            productos={productos}
+            facturas={facturas}
+            shipments={shipments}
+            shipmentCosts={shipmentCosts}
+            shipmentItems={shipmentItems}
+            unidadesCatalogo={unidadesCatalogo}
             reload={reload}
           />
         )}

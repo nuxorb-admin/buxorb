@@ -1,8 +1,8 @@
 # Módulo: Compras y Proveedores
 
-**Versión:** 0.3 (construido + ampliación de inventario planeada — ver notas de cambio)
-**Fecha:** 19 de julio de 2026 (v0.1) — actualizado 2 de agosto de 2026 (v0.2) — actualizado 28 de agosto de 2026 (v0.3)
-**Estado:** Construido y en producción (secciones 4, 5, 6 y el núcleo de 7). Pendiente: pricing y límites finos (ver `compras-pendientes.md`), los puntos marcados "V2" abajo, y la ampliación de inventario de la sección 7 (**planeada, no construida** — ver nota ahí).
+**Versión:** 0.4 (construido, incluyendo la ampliación de inventario y el addon Prorrateo de costos — ver notas de cambio)
+**Fecha:** 19 de julio de 2026 (v0.1) — actualizado 2 de agosto de 2026 (v0.2) — actualizado 28 de agosto de 2026 (v0.3) — sección 7 marcada como construida y sección 9 (Prorrateo) agregada el 8 de septiembre de 2026 (v0.4)
+**Estado:** Construido y en producción (secciones 4, 5, 6, 7 y 9 completas). Pendiente: pricing y límites finos (ver `compras-pendientes.md`) y los puntos marcados "V2" abajo.
 
 **Cambios de alcance respecto a v0.1 (decisiones tomadas durante la construcción):**
 - **Inventario SÍ quedó dentro de este módulo** (Professional), contradiciendo la nota de v0.1 de que era producto aparte — ver sección 7.1. No se construyó como addon separado.
@@ -227,7 +227,7 @@ Los datos bancarios (`clabe`, `banco`, `titular_cuenta`) son opcionales y no se 
 
 **Cambio de alcance respecto a v0.1:** originalmente esto se planeó como producto adicional aparte (`productos-adicionales.md`). Se decidió meterlo **dentro** de este módulo en vez de como addon independiente.
 
-**Cambio de alcance respecto a v0.2 (⏳ planeado, no construido):** el catálogo de productos y la existencia consolidada bajan de Professional a Essential. Lo que era el alcance completo de Professional en v0.2 (7.1) se conserva, y se amplía con almacenes/canales, traspasos, salidas con motivo, ajustes por conteo, alertas de mínimo y valor de inventario (7.2). Implica migrar el gate `catalogoProductos` de Professional a Essential — ver `compras-pendientes.md`.
+**Cambio de alcance respecto a v0.2 (construido):** el catálogo de productos y la existencia consolidada bajaron de Professional a Essential. Lo que era el alcance completo de Professional en v0.2 (7.1) se conserva, y se amplió con almacenes/canales, traspasos, salidas con motivo, ajustes por conteo, alertas de mínimo y valor de inventario (7.2, migraciones `0058_inventario_almacenes.sql` / `0059_inventario_rpc_traspasos_ajustes.sql`, tab "Almacenes" en `AlmacenesTab.tsx`). El gate `catalogoProductos` ya se quitó de `limits.ts`.
 
 ### 7.1 Qué se construyó (hoy, gateado a Professional vía `catalogoProductos`)
 - **Catálogo de productos** (`producto`): SKU (obligatorio, único por empresa), nombre, descripción, unidad de medida, activo/inactivo.
@@ -237,7 +237,7 @@ Los datos bancarios (`clabe`, `banco`, `titular_cuenta`) son opcionales y no se 
 - **Conciliación factura/ticket↔catálogo** ("Asignar SKU's por conceptos" / "Asignar SKU"): al cargar una factura por XML, o al capturar un ticket, sus conceptos se ligan a productos del catálogo — con sugerencia automática y opción de crear el producto ahí mismo si no existe.
 - **Inventario (kardex):** cada recepción (total o parcial) de un renglón con producto asignado genera una entrada en `movimiento_inventario` (entrada/salida). La existencia de cada producto es la suma de sus movimientos, no una columna que se actualiza a mano.
 
-### 7.2 Ampliación planeada ⏳ (no construida)
+### 7.2 Ampliación de almacenes y traspasos (construida)
 
 **Baja a Essential:**
 - Catálogo de productos (igual que 7.1) + campo nuevo `precio_venta` (decimal, opcional)
@@ -255,7 +255,7 @@ Los datos bancarios (`clabe`, `banco`, `titular_cuenta`) son opcionales y no se 
 
 **Fuera de alcance v1 (candidato a producto adicional):** sync automática de existencias con marketplaces vía sus APIs. Los almacenes tipo canal se actualizan por traspaso manual en v1 — ver "Conectores de marketplace" abajo.
 
-### 7.3 Campos de datos — ampliación planeada
+### 7.3 Campos de datos — ampliación de almacenes
 
 **`producto`**: + `precio_venta` (decimal, opcional), + `stock_minimo` (decimal, opcional, Professional).
 
@@ -282,13 +282,33 @@ Se documentan en `productos-adicionales.md`:
 
 ---
 
-## 9. Automatizaciones N8N asociadas
+## 9. Producto adicional: Prorrateo de costos
+
+**Origen:** plática real con un cliente que importa mercancía y necesita repartir los costos conjuntos de un embarque (envío, impuestos, logística — capturados a mano, sin detección automática) entre los productos que viajaron juntos, para que el costo de cada uno refleje el gasto real de traerlo, no solo su precio de factura. El cliente pidió repartir por peso volumétrico; el criterio quedó **configurable**, no fijo a ese caso — ver abajo.
+
+**Cómo se integra al costeo:** `costo_referencia` no es un valor acumulado a mano — es un recálculo completo (`recalcularCostoReferencia` en `useComprasData.ts`) que suma TODA la evidencia de un producto cada vez que se llama (líneas de factura/ticket ya conciliadas). Por eso el prorrateo no le suma un número aparte a `costo_referencia` — eso se borraría en la siguiente reconciliación de otra factura para el mismo SKU. Se modela como **una fuente de evidencia más**: los `procurement_shipment_items` de embarques ya `aplicado` se suman al mismo cálculo (numerador = `costo_asignado`, denominador = `cantidad`), así el ajuste sobrevive a cualquier recálculo futuro.
+
+**Conceptos nuevos** (migración `0060_prorrateo_embarques.sql`):
+- `procurement_products` gana `peso_volumetrico` y `peso` (ambos opcionales, fijos por producto — no varían por embarque).
+- `procurement_shipments` (el "embarque"): nombre, `criterio` (`peso_volumetrico`/`peso_real`/`valor_mercancia`/`cantidad_unidades`/`manual`), estado `borrador`/`aplicado`.
+- `procurement_shipment_costs`: los montos a repartir, capturados a mano (concepto + monto, opcionalmente ligado a una factura ya cargada solo para trazabilidad).
+- `procurement_shipment_items`: qué productos viajaron, su `valor_reparto` (autollenado según el criterio elegido — `peso_volumetrico × cantidad`, `peso × cantidad`, o `cantidad`; `valor_mercancia` y `manual` se capturan a mano, ver Pendiente V2) y su `costo_asignado` final una vez aplicado.
+
+**Todo criterio se reduce a lo mismo:** costo proporcional a un "valor de reparto" por producto — solo cambia de dónde sale ese valor. Siempre queda editable a mano, incluso cuando se autollena.
+
+**UI:** tab "Prorrateo" dentro de Compras y Proveedores (`ProrrateoTab.tsx`), gateado por el addon activo (`company_addons`), no por nivel — primer tab de Compras que se muestra así en vez de por tier. Es también el primer producto adicional que aparece como tab de un módulo core en vez de tener su propia entrada de nav (Lealtad/Agentes IA sí la tienen) — se decidió así porque depende por completo de datos que Compras ya carga.
+
+Un embarque `aplicado` queda de solo lectura (registro histórico) — no se puede editar ni deshacer.
+
+---
+
+## 10. Automatizaciones N8N asociadas
 
 Pendiente de diseño. Candidatos: alerta de pagos por vencer (correo/WhatsApp al responsable), envío automático de OC al proveedor, recordatorio de compras pendientes de factura al cierre de mes (deducibles), aviso al aprobador cuando hay compras en su bandeja.
 
 ---
 
-## 10. Pendiente para V2
+## 11. Pendiente para V2
 
 Explícitamente pospuesto — no es que se haya intentado y quedó a medias, es una decisión de quedarse ahí por ahora:
 
@@ -298,9 +318,12 @@ Explícitamente pospuesto — no es que se haya intentado y quedó a medias, es 
 - **Dashboard/ranking de proveedores:** no hay una vista dedicada de ranking por volumen/cumplimiento/variación de precios — los indicadores viven en la fila de cada proveedor, no agregados.
 - **`categoria_gasto_default` del proveedor:** la columna existe pero no se captura en el formulario; su propósito original (heredar categoría al proyectado de Tesorería) perdió sentido al eliminarse el puente `mov_esperados` — habría que redefinir para qué se usaría antes de exponerla.
 - **Proyecciones de flujo de caja hacia Tesorería:** cómo debe verse ahora que no existe el puente `mov_esperados` (tema abierto, a definir en conjunto con Tesorería).
-- **Automatizaciones N8N** (sección 9): sin diseñar.
+- **Automatizaciones N8N** (sección 10): sin diseñar.
 - **Sync automática de existencias con marketplaces vía API:** ver 7.4, "Conectores de marketplace".
 - **Alertas de mínimo por almacén** (v1 es solo a nivel global de producto).
+- **Prorrateo — criterio "valor de mercancía" autollenado:** hoy se captura a mano igual que "manual"; requeriría ligar el embarque a líneas de factura específicas para tomar el valor real de mercancía de ahí.
+- **Prorrateo — deshacer un embarque aplicado:** hoy es de solo lectura permanente una vez aplicado; no hay forma de revertir el ajuste a `costo_referencia` desde la UI.
+- **Prorrateo — dimensiones del producto:** solo se guarda el valor final de `peso_volumetrico`, no largo/ancho/alto por separado; una calculadora en el formulario sería un cambio de UI aislado.
 
 **Resuelto (ya no está pendiente, se construyó tras el borrador inicial de esta lista):**
 - **Conversión entre unidades de medida** al calcular el costo promedio: cada línea de factura/ticket guarda en qué unidad vino (`unidad`, con sugerencia automática desde `ClaveUnidad`/`Unidad` del CFDI), y `procurement_units.factor_base` normaliza esa cantidad a la unidad del producto en catálogo antes de promediar (ej. factura en kg, catálogo en g). Sin factor definido (caja, paquete — contenido variable por producto) o entre categorías distintas, se asume 1:1 igual que antes.

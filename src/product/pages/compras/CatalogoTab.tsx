@@ -196,6 +196,8 @@ function ProductoModal({
   const [costoReferencia, setCostoReferencia] = useState(String(producto?.costo_referencia ?? "0"));
   const [precioVenta, setPrecioVenta] = useState(producto?.precio_venta != null ? String(producto.precio_venta) : "");
   const [stockMinimo, setStockMinimo] = useState(producto?.stock_minimo != null ? String(producto.stock_minimo) : "");
+  const [pesoVolumetrico, setPesoVolumetrico] = useState(producto?.peso_volumetrico != null ? String(producto.peso_volumetrico) : "");
+  const [peso, setPeso] = useState(producto?.peso != null ? String(producto.peso) : "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -215,6 +217,8 @@ function ProductoModal({
       unidad,
       precio_venta: precioVenta.trim() ? Number(precioVenta) : null,
       stock_minimo: limits.almacenesYTraspasos && stockMinimo.trim() ? Number(stockMinimo) : null,
+      peso_volumetrico: pesoVolumetrico.trim() ? Number(pesoVolumetrico) : null,
+      peso: peso.trim() ? Number(peso) : null,
     };
     const { error: dbError } = producto
       ? await supabase.from("procurement_products").update(camposComunes).eq("id", producto.id)
@@ -300,6 +304,26 @@ function ProductoModal({
             />
           )}
         </div>
+        <div className="flex gap-2">
+          <input
+            type="number"
+            value={pesoVolumetrico}
+            onChange={(e) => setPesoVolumetrico(e.target.value)}
+            placeholder="Peso volumétrico (opcional)"
+            className="w-1/2 border border-ink/15 bg-sand-2 px-3 py-2 text-sm text-ink focus:border-teal focus:outline-none"
+          />
+          <input
+            type="number"
+            value={peso}
+            onChange={(e) => setPeso(e.target.value)}
+            placeholder="Peso real (opcional)"
+            className="w-1/2 border border-ink/15 bg-sand-2 px-3 py-2 text-sm text-ink focus:border-teal focus:outline-none"
+          />
+        </div>
+        <p className="font-mono text-[0.6rem] text-muted">
+          Peso volumétrico y peso real son opcionales — solo se usan para el reparto de costos de "Prorrateo" si ese
+          producto adicional está activo.
+        </p>
         <p className="font-mono text-[0.6rem] text-muted">
           {producto
             ? "El costo se recalcula solo, como promedio ponderado de las facturas/tickets que se le vayan asignando a este SKU — no se edita a mano."

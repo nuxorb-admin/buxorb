@@ -20,7 +20,8 @@ export type CompanyAddonName =
   | "timbrado_cfdi"
   | "chatbot_cobranza"
   | "agentes_ia"
-  | "lealtad";
+  | "lealtad"
+  | "prorrateo";
 export type ProductLine = "saas";
 export type TreasuryEntryType = "ingreso" | "egreso";
 export type ProfileKind = "team" | "client";
@@ -408,7 +409,43 @@ export interface ProcurementProduct {
   costo_referencia: number;
   precio_venta: number | null;
   stock_minimo: number | null;
+  /** Fijo por producto (no varía por embarque) — usado por el addon Prorrateo. */
+  peso_volumetrico: number | null;
+  peso: number | null;
   activo: boolean;
+  created_at: string;
+}
+
+export type ShipmentCriterio = "peso_volumetrico" | "peso_real" | "valor_mercancia" | "cantidad_unidades" | "manual";
+export type ShipmentEstado = "borrador" | "aplicado";
+
+export interface ProcurementShipment {
+  id: string;
+  company_id: string;
+  nombre: string;
+  criterio: ShipmentCriterio;
+  estado: ShipmentEstado;
+  created_by: string | null;
+  created_at: string;
+  applied_at: string | null;
+}
+
+export interface ProcurementShipmentCost {
+  id: string;
+  shipment_id: string;
+  concepto: string;
+  monto: number;
+  factura_id: string | null;
+  created_at: string;
+}
+
+export interface ProcurementShipmentItem {
+  id: string;
+  shipment_id: string;
+  producto_id: string;
+  cantidad: number;
+  valor_reparto: number | null;
+  costo_asignado: number | null;
   created_at: string;
 }
 

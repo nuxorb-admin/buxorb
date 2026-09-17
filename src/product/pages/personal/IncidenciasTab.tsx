@@ -21,6 +21,20 @@ const TIPO_LABEL: Record<IncidenciaTipo, string> = {
 
 const REQUIERE_APROBACION: IncidenciaTipo[] = ["vacaciones", "permiso_con_goce", "permiso_sin_goce"];
 
+function sinAcentos(s: string): string {
+  return s.normalize("NFD").replace(/[̀-ͯ]/g, "");
+}
+
+function normalizeTipo(raw: string | undefined): IncidenciaTipo | null {
+  if (!raw?.trim()) return null;
+  const norm = sinAcentos(raw.trim().toLowerCase()).replace(/\s+/g, "_");
+  return (
+    (Object.keys(TIPO_LABEL) as IncidenciaTipo[]).find(
+      (tipo) => tipo === norm || sinAcentos(TIPO_LABEL[tipo].toLowerCase()).replace(/\s+/g, "_") === norm,
+    ) ?? null
+  );
+}
+
 function antiguedadAnios(fechaIngreso: string): number {
   return Math.floor((Date.now() - new Date(fechaIngreso).getTime()) / (1000 * 60 * 60 * 24 * 365.25));
 }
@@ -375,21 +389,29 @@ function ImportIncidenciasModal({
 
   const dataRows = rows.slice(1);
   const matched = dataRows
-    .map((r) => ({ row: r, empleado: empleados.find((e) => e.nombre_completo.toLowerCase() === r[0]?.trim().toLowerCase()) }))
-    .filter((m) => m.empleado && m.row[1]?.trim());
+    .map((r) => ({
+      row: r,
+      empleado: empleados.find((e) => e.nombre_completo.toLowerCase() === r[0]?.trim().toLowerCase()),
+      tipo: normalizeTipo(r[1]),
+    }))
+    .filter((m): m is { row: string[]; empleado: Empleado; tipo: IncidenciaTipo } => !!m.empleado && !!m.tipo);
 
   async function confirm() {
     setSaving(true);
-    await supabase.from("hr_incidents").insert(
+    const { error: insertError } = await supabase.from("hr_incidents").insert(
       matched.map((m) => ({
-        empleado_id: m.empleado!.id,
-        tipo: m.row[1] as IncidenciaTipo,
+        empleado_id: m.empleado.id,
+        tipo: m.tipo,
         fecha: m.row[2] || new Date().toISOString().slice(0, 10),
-        horas: m.row[1] === "hora_extra" ? Number(m.row[3]) || null : null,
+        horas: m.tipo === "hora_extra" ? Number(m.row[3]) || null : null,
         origen,
       })),
     );
     setSaving(false);
+    if (insertError) {
+      setError(`No se pudo registrar: ${insertError.message}`);
+      return;
+    }
     onImported();
     onClose();
   }

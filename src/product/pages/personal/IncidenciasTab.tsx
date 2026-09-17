@@ -4,7 +4,7 @@ import type { Empleado, HrSettings, Incidencia, IncidenciaTipo, SaldoVacaciones 
 import type { PersonalTierLimits } from "./limits";
 import { diasVacacionesLFT } from "./calculoNomina";
 import { aniversarioActual, registrarDiaGozado } from "./vacaciones";
-import { parseCsv } from "../treasury/parseCsv";
+import { parseCsv, parseXlsxToRows } from "../treasury/parseCsv";
 import Modal from "../../../admin/components/Modal";
 import Badge from "../../../admin/components/Badge";
 
@@ -355,10 +355,20 @@ function ImportIncidenciasModal({
 }) {
   const [rows, setRows] = useState<string[][]>([]);
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   async function onFile(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
+    setError(null);
+    if (file.name.toLowerCase().endsWith(".xlsx")) {
+      try {
+        setRows(await parseXlsxToRows(file));
+      } catch {
+        setError("No se pudo leer el archivo Excel");
+      }
+      return;
+    }
     const text = await file.text();
     setRows(parseCsv(text));
   }
@@ -390,7 +400,8 @@ function ImportIncidenciasModal({
         <p className="font-mono text-[0.66rem] text-muted">
           Columnas: nombre del empleado (tal cual en el expediente), tipo, fecha, horas (solo hora_extra).
         </p>
-        <input type="file" accept=".csv" onChange={onFile} className="w-full border border-ink/15 bg-sand-2 px-3 py-2 text-sm text-ink" />
+        <input type="file" accept=".csv,text/csv,.xlsx" onChange={onFile} className="w-full border border-ink/15 bg-sand-2 px-3 py-2 text-sm text-ink" />
+        {error && <p className="text-xs text-red-600">{error}</p>}
         {dataRows.length > 0 && (
           <>
             <p className="font-mono text-[0.62rem] text-muted">

@@ -80,6 +80,13 @@ export default function IncidenciasTab({
     reload();
   }
 
+  async function eliminar(inc: Incidencia) {
+    const empleado = empleados.find((e) => e.id === inc.empleado_id);
+    if (!confirm(`¿Eliminar esta incidencia de ${empleado?.nombre_completo ?? "este empleado"} (${TIPO_LABEL[inc.tipo]} · ${inc.fecha})?`)) return;
+    await supabase.from("hr_incidents").delete().eq("id", inc.id);
+    reload();
+  }
+
   return (
     <div>
       {limits.solicitudAprobacionVacaciones && pendientesAprobacion.length > 0 && (
@@ -165,6 +172,11 @@ export default function IncidenciasTab({
                   <Badge color={i.aprobado_por ? "teal" : "orange"}>{i.aprobado_por ? "aprobada" : "pendiente"}</Badge>
                 )}
                 <Badge color="muted">{i.origen}</Badge>
+                {i.estado !== "aplicada_en_nomina" && (
+                  <button onClick={() => eliminar(i)} className="font-mono text-[0.62rem] uppercase text-red-600 hover:underline">
+                    Eliminar
+                  </button>
+                )}
               </div>
             </div>
           );

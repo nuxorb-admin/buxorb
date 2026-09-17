@@ -80,7 +80,12 @@ function calcularConceptosEmpleado(
   subsidioEmpleo: SubsidioEmpleo | null,
   retardosPorFalta: number,
 ): ConceptoMonto[] {
-  const dias = diasEnPeriodo(periodo.fecha_inicio, periodo.fecha_fin);
+  // Si el empleado entró o salió a mitad del periodo, solo se paga (y se
+  // prorratean ISR/subsidio/IMSS) por los días realmente trabajados dentro
+  // del periodo, no por el periodo completo.
+  const inicioEfectivo = emp.fecha_ingreso > periodo.fecha_inicio ? emp.fecha_ingreso : periodo.fecha_inicio;
+  const finEfectivo = emp.fecha_baja && emp.fecha_baja < periodo.fecha_fin ? emp.fecha_baja : periodo.fecha_fin;
+  const dias = inicioEfectivo <= finEfectivo ? diasEnPeriodo(inicioEfectivo, finEfectivo) : 0;
   const enPeriodo = incidenciasEmpleado.filter((i) => i.fecha >= periodo.fecha_inicio && i.fecha <= periodo.fecha_fin);
   const diasFaltaDirecta = enPeriodo.filter((i) => i.tipo === "falta" || i.tipo === "permiso_sin_goce").length;
   // Regla configurable (Professional): cada bloque de N retardos del

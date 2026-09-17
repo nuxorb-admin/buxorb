@@ -65,6 +65,8 @@ export default function CompanyUsersRoles({
   const [loading, setLoading] = useState(true);
   const [showNewRole, setShowNewRole] = useState(false);
   const [showNewUser, setShowNewUser] = useState(false);
+  const [resetTarget, setResetTarget] = useState<UserRow | null>(null);
+  const [editTarget, setEditTarget] = useState<UserRow | null>(null);
   const [tempCredentials, setTempCredentials] = useState<{ email: string; tempPassword: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -204,6 +206,30 @@ export default function CompanyUsersRoles({
     load();
   }
 
+  async function resetPassword(userId: string, password: string) {
+    setError(null);
+    const { data, error: fnError } = await supabase.functions.invoke("reset-company-user-password", {
+      body: { user_id: userId, password: password || undefined },
+    });
+    if (fnError || data?.error) {
+      setError(data?.error ?? fnError?.message ?? "No se pudo cambiar la contraseña");
+      return;
+    }
+    setTempCredentials({ email: data.email, tempPassword: data.tempPassword });
+  }
+
+  async function updateUser(userId: string, form: { full_name: string; email: string; role_id: string }) {
+    setError(null);
+    const { data, error: fnError } = await supabase.functions.invoke("update-company-user", {
+      body: { user_id: userId, full_name: form.full_name, email: form.email, role_id: form.role_id },
+    });
+    if (fnError || data?.error) {
+      setError(data?.error ?? fnError?.message ?? "No se pudo actualizar el usuario");
+      return;
+    }
+    load();
+  }
+
   if (loading) return <p className="font-mono text-xs text-muted">Cargando…</p>;
 
   return (
@@ -275,7 +301,25 @@ export default function CompanyUsersRoles({
                   {roles.find((r) => r.id === u.role_id)?.name || "Sin rol"}
                 </p>
               </div>
-              {u.is_owner && <Badge color="orange">Owner</Badge>}
+              <div className="flex items-center gap-3">
+                {u.is_owner && <Badge color="orange">Owner</Badge>}
+                {canManage && (
+                  <>
+                    <button
+                      onClick={() => setEditTarget(u)}
+                      className="font-mono text-[0.62rem] uppercase text-teal hover:underline"
+                    >
+                      Editar
+                    </button>
+                    <button
+                      onClick={() => setResetTarget(u)}
+                      className="font-mono text-[0.62rem] uppercase text-teal hover:underline"
+                    >
+                      Cambiar contraseña
+                    </button>
+                  </>
+                )}
+              </div>
             </div>
           ))}
         </div>
@@ -314,8 +358,31 @@ export default function CompanyUsersRoles({
         />
       )}
 
+      {editTarget && (
+        <EditUserModal
+          user={editTarget}
+          roles={roles}
+          onClose={() => setEditTarget(null)}
+          onSave={async (form) => {
+            await updateUser(editTarget.user_id, form);
+            setEditTarget(null);
+          }}
+        />
+      )}
+
+      {resetTarget && (
+        <ResetPasswordModal
+          user={resetTarget}
+          onClose={() => setResetTarget(null)}
+          onReset={async (password) => {
+            await resetPassword(resetTarget.user_id, password);
+            setResetTarget(null);
+          }}
+        />
+      )}
+
       {tempCredentials && (
-        <Modal title="Usuario creado" onClose={() => setTempCredentials(null)}>
+        <Modal title="Contraseña" onClose={() => setTempCredentials(null)}>
           <p className="text-sm text-muted">
             Copia esta contraseña ahora — no se vuelve a mostrar. Compártela con el cliente por
             un medio seguro.
@@ -394,6 +461,100 @@ function NewRoleModal({
         <FieldInput label="Nombre del rol" value={name} onChange={setName} required placeholder="Cajero" />
         <button type="submit" disabled={saving} className="btn btn-primary w-full">
           {saving ? "Guardando…" : "Crear rol"}
+        </button>
+      </form>
+    </Modal>
+  );
+}
+
+function EditUserModal({
+  user,
+  roles,
+  onClose,
+  onSave,
+}: {
+  user: UserRow;
+  roles: CompanyRole[];
+  onClose: () => void;
+  onSave: (form: { full_name: string; email: string; role_id: string }) => Promise<void>;
+}) {
+  const [form, setForm] = useState({
+    full_name: user.profile?.full_name ?? "",
+    email: user.profile?.email ?? "",
+    role_id: user.role_id ?? "",
+  });
+  const [saving, setSaving] = useState(false);
+
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    await onSave(form);
+    setSaving(false);
+  }
+
+  return (
+    <Modal title="Editar usuario" onClose={onClose}>
+      <form onSubmit={submit} className="space-y-3">
+        <FieldInput label="Nombre" value={form.full_name} onChange={(v) => setForm({ ...form, full_name: v })} required />
+        <FieldInput label="Correo" type="email" value={form.email} onChange={(v) => setForm({ ...form, email: v })} required />
+        {!user.is_owner && (
+          <div>
+            <label className="mb-1 block font-mono text-[0.62rem] font-bold uppercase tracking-[0.12em] text-muted">
+              Rol
+            </label>
+            <select
+              value={form.role_id}
+              onChange={(e) => setForm({ ...form, role_id: e.target.value })}
+              className="w-full border border-ink/15 bg-sand-2 px-3 py-2 font-sans text-sm text-ink focus:border-teal focus:outline-none"
+            >
+              <option value="">Sin rol</option>
+              {roles.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+        <button type="submit" disabled={saving} className="btn btn-primary w-full">
+          {saving ? "Guardando…" : "Guardar cambios"}
+        </button>
+      </form>
+    </Modal>
+  );
+}
+
+function ResetPasswordModal({
+  user,
+  onClose,
+  onReset,
+}: {
+  user: UserRow;
+  onClose: () => void;
+  onReset: (password: string) => Promise<void>;
+}) {
+  const [password, setPassword] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    await onReset(password);
+    setSaving(false);
+  }
+
+  return (
+    <Modal title={`Cambiar contraseña — ${user.profile?.full_name || user.profile?.email || "usuario"}`} onClose={onClose}>
+      <form onSubmit={submit} className="space-y-3">
+        <FieldInput
+          label="Nueva contraseña (opcional)"
+          type="text"
+          value={password}
+          onChange={setPassword}
+          placeholder="Vacío = se genera una automática"
+        />
+        <button type="submit" disabled={saving} className="btn btn-primary w-full">
+          {saving ? "Guardando…" : "Cambiar contraseña"}
         </button>
       </form>
     </Modal>

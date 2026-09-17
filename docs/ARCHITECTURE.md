@@ -232,6 +232,36 @@ su `profiles.kind = 'client'`, y lo liga en `company_users`. Se llama desde
 página "Usuarios y roles" del portal del tenant) vía
 `supabase.functions.invoke("create-company-user", ...)`.
 
+### Edge Function: `update-company-user`
+
+`supabase/functions/update-company-user/` — editar el nombre, correo o rol
+de un usuario existente requiere la *service role key* igual que las otras
+dos funciones de esta sección: cambiar el correo de otra persona necesita
+`auth.admin.updateUserById`, y actualizar su `profiles.full_name`/`email`
+necesita saltarse la policy "profiles: self update" (solo permite que cada
+uno edite su propio registro). Recibe `{ user_id, full_name?, email?,
+role_id? }`, con la misma validación de quien llama (equipo o owner de la
+empresa del usuario objetivo) que `reset-company-user-password`. El
+`is_owner` de un usuario no se puede tocar desde aquí — a propósito, para no
+mezclar "editar datos" con "cambiar quién es el dueño de la cuenta". Se
+llama desde `CompanyUsersRoles.tsx` vía
+`supabase.functions.invoke("update-company-user", ...)` — botón "Editar"
+por usuario en la lista, junto a "Cambiar contraseña".
+
+### Edge Function: `reset-company-user-password`
+
+`supabase/functions/reset-company-user-password/` — cambiar la contraseña de
+un usuario existente también requiere la *service role key* (`auth.admin.updateUserById`),
+así que vive en el servidor igual que `create-company-user`. Recibe
+`{ user_id, password? }` (si `password` viene vacío, genera una temporal),
+identifica a quien llama por su JWT, resuelve a qué empresa pertenece el
+usuario objetivo vía `company_users`, y valida que quien llama sea del
+equipo o el owner de esa empresa antes de cambiar la contraseña. Se llama
+desde `CompanyUsersRoles.tsx` (mismo componente compartido entre
+`/admin/companies/:id` y "Usuarios y roles" del portal del tenant) vía
+`supabase.functions.invoke("reset-company-user-password", ...)` — botón
+"Cambiar contraseña" por usuario en la lista.
+
 ### Edge Function: `parse-bank-statement`
 
 `supabase/functions/parse-bank-statement/` — lectura por IA de estados de
@@ -287,9 +317,11 @@ proyecto con el CLI (`npx supabase link --project-ref <ref>`), también se
 puede con `npx supabase db push` — como cada archivo es idempotente, es
 seguro correrlo aunque parte ya esté aplicada.
 
-La Edge Function se despliega aparte (no la corre `db push`):
+Las Edge Functions se despliegan aparte (no las corre `db push`):
 ```bash
 npx supabase functions deploy create-company-user
+npx supabase functions deploy update-company-user
+npx supabase functions deploy reset-company-user-password
 ```
 No hace falta configurar ningún secreto — Supabase le inyecta automáticamente
 `SUPABASE_URL` y `SUPABASE_SERVICE_ROLE_KEY` a toda Edge Function.
@@ -322,6 +354,8 @@ src/
 
 supabase/migrations/           # DDL + RLS, numerado, idempotente
 supabase/functions/create-company-user/     # Edge Function: crea usuarios de empresa (service role)
+supabase/functions/update-company-user/     # Edge Function: edita nombre/correo/rol de un usuario de empresa (service role)
+supabase/functions/reset-company-user-password/  # Edge Function: cambia password de un usuario de empresa (service role)
 supabase/functions/parse-bank-statement/    # Edge Function: IA para conciliación de Tesorería (Professional)
 docs/*-modulo-v1.md            # especificación funcional detallada de cada módulo (fuente de verdad al construir)
 docs/ARQUITECTURA.md           # visión a futuro (multi-tenant real, fuera de alcance hoy)

@@ -148,6 +148,7 @@ export default function ExpedienteTab({
         <DetalleEmpleadoModal
           companyId={companyId}
           empleado={detalle}
+          departamentos={departamentos}
           historialSueldo={historialSueldo.filter((h) => h.empleado_id === detalle.id)}
           documentos={documentos.filter((d) => d.empleado_id === detalle.id)}
           saldoVacaciones={
@@ -439,6 +440,7 @@ function BajaModal({ empleado, onClose, onSaved }: { empleado: Empleado; onClose
 function DetalleEmpleadoModal({
   companyId,
   empleado,
+  departamentos,
   historialSueldo,
   documentos,
   saldoVacaciones,
@@ -448,6 +450,7 @@ function DetalleEmpleadoModal({
 }: {
   companyId: string;
   empleado: Empleado;
+  departamentos: DepartamentoPersonal[];
   historialSueldo: HistorialSueldo[];
   documentos: DocumentoEmpleado[];
   saldoVacaciones: SaldoVacaciones | null;
@@ -457,6 +460,7 @@ function DetalleEmpleadoModal({
 }) {
   const [nuevoSueldo, setNuevoSueldo] = useState(String(empleado.sueldo_diario));
   const [saving, setSaving] = useState(false);
+  const [editando, setEditando] = useState(false);
 
   useEffect(() => {
     ensureSaldoVacaciones(empleado.id, empleado.fecha_ingreso).then((saldo) => {
@@ -480,14 +484,32 @@ function DetalleEmpleadoModal({
 
   return (
     <Modal title={empleado.nombre_completo} onClose={onClose}>
-      <div className="space-y-1 font-mono text-xs text-muted">
-        <p>RFC: {empleado.rfc || "—"} · CURP: {empleado.curp || "—"} · NSS: {empleado.nss || "—"}</p>
-        <p>Ingreso: {empleado.fecha_ingreso} · Contrato: {empleado.tipo_contrato}</p>
-        <p>Sueldo diario actual: {money(empleado.sueldo_diario)}</p>
-        <p>
-          Vacaciones: {saldoVacaciones ? `${disponibles} de ${saldoVacaciones.dias_derecho} días disponibles` : "sin derecho todavía (menos de 1 año de antigüedad)"}
-        </p>
-      </div>
+      {editando ? (
+        <EditarEmpleadoForm
+          empleado={empleado}
+          departamentos={departamentos}
+          limits={limits}
+          onCancel={() => setEditando(false)}
+          onSaved={() => {
+            setEditando(false);
+            onSaved();
+          }}
+        />
+      ) : (
+        <div className="space-y-1 font-mono text-xs text-muted">
+          <div className="flex items-center justify-between">
+            <p>RFC: {empleado.rfc || "—"} · CURP: {empleado.curp || "—"} · NSS: {empleado.nss || "—"}</p>
+            <button onClick={() => setEditando(true)} className="font-mono text-[0.62rem] uppercase text-teal hover:underline">
+              Editar información
+            </button>
+          </div>
+          <p>Ingreso: {empleado.fecha_ingreso} · Contrato: {empleado.tipo_contrato}</p>
+          <p>Sueldo diario actual: {money(empleado.sueldo_diario)}</p>
+          <p>
+            Vacaciones: {saldoVacaciones ? `${disponibles} de ${saldoVacaciones.dias_derecho} días disponibles` : "sin derecho todavía (menos de 1 año de antigüedad)"}
+          </p>
+        </div>
+      )}
 
       {limits.departamentosYHistorialSueldo && (
         <>
@@ -517,6 +539,132 @@ function DetalleEmpleadoModal({
 
       <DocumentosEmpleado companyId={companyId} empleado={empleado} documentos={documentos} onSaved={onSaved} />
     </Modal>
+  );
+}
+
+function EditarEmpleadoForm({
+  empleado,
+  departamentos,
+  limits,
+  onCancel,
+  onSaved,
+}: {
+  empleado: Empleado;
+  departamentos: DepartamentoPersonal[];
+  limits: PersonalTierLimits;
+  onCancel: () => void;
+  onSaved: () => void;
+}) {
+  const [form, setForm] = useState({
+    nombre_completo: empleado.nombre_completo,
+    rfc: empleado.rfc ?? "",
+    curp: empleado.curp ?? "",
+    nss: empleado.nss ?? "",
+    fecha_ingreso: empleado.fecha_ingreso,
+    tipo_contrato: empleado.tipo_contrato,
+    fecha_fin_contrato: empleado.fecha_fin_contrato ?? "",
+    periodicidad_pago: empleado.periodicidad_pago,
+    departamento_id: empleado.departamento_id ?? "",
+    cuenta_deposito: empleado.cuenta_deposito ?? "",
+  });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    setError(null);
+    const { error: updateError } = await supabase
+      .from("hr_employees")
+      .update({
+        nombre_completo: form.nombre_completo,
+        rfc: form.rfc || null,
+        curp: form.curp || null,
+        nss: form.nss || null,
+        fecha_ingreso: form.fecha_ingreso,
+        tipo_contrato: form.tipo_contrato,
+        fecha_fin_contrato: form.tipo_contrato !== "indeterminado" ? form.fecha_fin_contrato || null : null,
+        periodicidad_pago: form.periodicidad_pago,
+        departamento_id: form.departamento_id || null,
+        cuenta_deposito: form.cuenta_deposito || null,
+      })
+      .eq("id", empleado.id);
+    setSaving(false);
+    if (updateError) {
+      setError(`No se pudo guardar: ${updateError.message}`);
+      return;
+    }
+    onSaved();
+  }
+
+  return (
+    <form onSubmit={submit} className="space-y-3">
+      <FieldInput label="Nombre completo" value={form.nombre_completo} onChange={(v) => setForm({ ...form, nombre_completo: v })} required />
+      <div className="grid grid-cols-3 gap-2">
+        <FieldInput label="RFC" value={form.rfc} onChange={(v) => setForm({ ...form, rfc: v })} />
+        <FieldInput label="CURP" value={form.curp} onChange={(v) => setForm({ ...form, curp: v })} />
+        <FieldInput label="NSS" value={form.nss} onChange={(v) => setForm({ ...form, nss: v })} />
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <FieldInput label="Fecha de ingreso" type="date" value={form.fecha_ingreso} onChange={(v) => setForm({ ...form, fecha_ingreso: v })} />
+        <div>
+          <label className="mb-1 block font-mono text-[0.62rem] uppercase tracking-[0.08em] text-muted">Tipo de contrato</label>
+          <select
+            value={form.tipo_contrato}
+            onChange={(e) => setForm({ ...form, tipo_contrato: e.target.value as TipoContrato })}
+            className="w-full border border-ink/15 bg-sand-2 px-3 py-2 text-sm text-ink focus:border-teal focus:outline-none"
+          >
+            <option value="indeterminado">Indeterminado</option>
+            <option value="determinado">Determinado</option>
+            <option value="prueba">Periodo de prueba</option>
+          </select>
+        </div>
+      </div>
+      {form.tipo_contrato !== "indeterminado" && (
+        <FieldInput
+          label="Fecha fin de contrato"
+          type="date"
+          value={form.fecha_fin_contrato}
+          onChange={(v) => setForm({ ...form, fecha_fin_contrato: v })}
+        />
+      )}
+      <div>
+        <label className="mb-1 block font-mono text-[0.62rem] uppercase tracking-[0.08em] text-muted">Periodicidad</label>
+        <select
+          value={form.periodicidad_pago}
+          onChange={(e) => setForm({ ...form, periodicidad_pago: e.target.value as PeriodicidadPago })}
+          className="w-full border border-ink/15 bg-sand-2 px-3 py-2 text-sm text-ink focus:border-teal focus:outline-none"
+        >
+          <option value="semanal">Semanal</option>
+          <option value="catorcenal">Catorcenal</option>
+          <option value="quincenal">Quincenal</option>
+        </select>
+      </div>
+      {limits.departamentosYHistorialSueldo && departamentos.length > 0 && (
+        <select
+          value={form.departamento_id}
+          onChange={(e) => setForm({ ...form, departamento_id: e.target.value })}
+          className="w-full border border-ink/15 bg-sand-2 px-3 py-2 text-sm text-ink focus:border-teal focus:outline-none"
+        >
+          <option value="">Sin departamento</option>
+          {departamentos.map((d) => (
+            <option key={d.id} value={d.id}>
+              {d.nombre}
+            </option>
+          ))}
+        </select>
+      )}
+      <FieldInput label="Cuenta de depósito (CLABE)" value={form.cuenta_deposito} onChange={(v) => setForm({ ...form, cuenta_deposito: v })} />
+      {error && <p className="font-mono text-[0.62rem] text-orange">{error}</p>}
+      <div className="flex gap-2">
+        <button type="button" onClick={onCancel} className="btn w-full">
+          Cancelar
+        </button>
+        <button type="submit" disabled={saving || !form.nombre_completo} className="btn btn-primary w-full">
+          {saving ? "Guardando…" : "Guardar cambios"}
+        </button>
+      </div>
+    </form>
   );
 }
 

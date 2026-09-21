@@ -57,6 +57,7 @@ const ADDON_LABELS: Record<CompanyAddonName, string> = {
   agentes_ia: "Agentes IA",
   lealtad: "Lealtad",
   prorrateo: "Prorrateo de costos",
+  shopify: "Conexión Shopify",
 };
 
 const ADDON_ORDER = Object.keys(ADDON_LABELS) as CompanyAddonName[];
@@ -249,6 +250,7 @@ export default function CompanyDetail() {
   const roleExtraCapabilities: { key: CompanyRoleModuleKey; label: string }[] = [
     ...(addonSubs.some((a) => a.addon === "agentes_ia" && a.active) ? [{ key: "agentes_ia" as CompanyRoleModuleKey, label: ADDON_LABELS.agentes_ia }] : []),
     ...(addonSubs.some((a) => a.addon === "lealtad" && a.active) ? [{ key: "lealtad" as CompanyRoleModuleKey, label: ADDON_LABELS.lealtad }] : []),
+    ...(addonSubs.some((a) => a.addon === "shopify" && a.active) ? [{ key: "shopify" as CompanyRoleModuleKey, label: ADDON_LABELS.shopify }] : []),
     ...(businessLines.some((b) => b.business_line === "restaurantes" && b.active)
       ? [{ key: "restaurantes" as CompanyRoleModuleKey, label: BUSINESS_LINE_LABELS.restaurantes }]
       : []),

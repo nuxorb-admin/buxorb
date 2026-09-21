@@ -8,6 +8,7 @@ export default function UsersRoles({
   moduleSeats,
   agentesActivo,
   lealtadActivo,
+  shopifyActivo,
   restaurantesActivo,
   maxUsers,
 }: {
@@ -17,12 +18,14 @@ export default function UsersRoles({
   moduleSeats?: Partial<Record<CompanyModuleName, number>>;
   agentesActivo: boolean;
   lealtadActivo: boolean;
+  shopifyActivo: boolean;
   restaurantesActivo: boolean;
   maxUsers: number;
 }) {
   const extraCapabilities: { key: CompanyRoleModuleKey; label: string }[] = [
     ...(agentesActivo ? [{ key: "agentes_ia" as CompanyRoleModuleKey, label: "Agentes IA" }] : []),
     ...(lealtadActivo ? [{ key: "lealtad" as CompanyRoleModuleKey, label: "Lealtad" }] : []),
+    ...(shopifyActivo ? [{ key: "shopify" as CompanyRoleModuleKey, label: "Shopify" }] : []),
     ...(restaurantesActivo ? [{ key: "restaurantes" as CompanyRoleModuleKey, label: "Restaurantes" }] : []),
   ];
 

@@ -21,7 +21,8 @@ export type CompanyAddonName =
   | "chatbot_cobranza"
   | "agentes_ia"
   | "lealtad"
-  | "prorrateo";
+  | "prorrateo"
+  | "shopify";
 export type ProductLine = "saas";
 export type TreasuryEntryType = "ingreso" | "egreso";
 export type ProfileKind = "team" | "client";
@@ -111,7 +112,7 @@ export interface CompanyRole {
  * del cliente (Agentes IA, Lealtad, Restaurantes) — misma tabla
  * company_role_modules, mismo mecanismo, ver 0054_role_permissions_extras.sql.
  */
-export type CompanyRoleModuleKey = CompanyModuleName | "agentes_ia" | "lealtad" | BusinessLineKey;
+export type CompanyRoleModuleKey = CompanyModuleName | "agentes_ia" | "lealtad" | "shopify" | BusinessLineKey;
 
 export interface CompanyRoleModule {
   role_id: string;
@@ -1164,4 +1165,63 @@ export interface Database {
       };
     };
   };
+}
+
+// ---------------------------------------------------------------
+// Conexión Shopify (producto adicional, solo lectura) — migración 0061
+// ---------------------------------------------------------------
+export type IntegrationProvider = "shopify";
+export type IntegrationStatus = "conectado" | "error";
+
+export interface IntegrationConnection {
+  id: string;
+  company_id: string;
+  provider: IntegrationProvider;
+  display_name: string;
+  shop_domain: string | null;
+  status: IntegrationStatus;
+  last_synced_at: string | null;
+  last_error: string | null;
+  created_at: string;
+}
+
+export interface ShopifyOrderLineItem {
+  title: string;
+  quantity: number;
+  sku: string | null;
+}
+
+export interface ShopifyOrder {
+  id: string;
+  company_id: string;
+  connection_id: string;
+  shopify_id: string;
+  name: string | null;
+  created_at_shopify: string | null;
+  financial_status: string | null;
+  fulfillment_status: string | null;
+  total: number | null;
+  currency: string | null;
+  line_items: ShopifyOrderLineItem[];
+}
+
+export interface ShopifyVariant {
+  id: string;
+  sku: string | null;
+  title: string;
+  price: number | null;
+  inventory_quantity: number | null;
+}
+
+export interface ShopifyProduct {
+  id: string;
+  company_id: string;
+  connection_id: string;
+  shopify_id: string;
+  title: string;
+  status: string | null;
+  vendor: string | null;
+  product_type: string | null;
+  image_url: string | null;
+  variants: ShopifyVariant[];
 }

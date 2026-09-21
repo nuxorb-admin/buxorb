@@ -12,6 +12,8 @@ import UsersRoles from "./pages/UsersRoles";
 import Agentes from "./pages/Agentes";
 import Lealtad from "./pages/Lealtad";
 import Restaurantes from "./pages/Restaurantes";
+import Shopify from "./pages/Shopify";
+import Conexiones from "./pages/Conexiones";
 import LoyaltyEnroll from "../public/LoyaltyEnroll";
 import { TenantAuthProvider, useTenantAuth } from "./TenantAuthProvider";
 import TenantLogin from "./TenantLogin";
@@ -97,6 +99,7 @@ function TenantPortalGate({ tenant, subdomain }: { tenant: TenantInfo; subdomain
   const [needsSetup, setNeedsSetup] = useState<boolean | undefined>(undefined);
   const [agentesActivo, setAgentesActivo] = useState(false);
   const [lealtadActivo, setLealtadActivo] = useState(false);
+  const [shopifyActivo, setShopifyActivo] = useState(false);
   const [restaurantesTier, setRestaurantesTier] = useState<BusinessLineTier | null>(null);
 
   // Independiente de la membresía: un usuario recién creado (create-company-user)
@@ -169,6 +172,16 @@ function TenantPortalGate({ tenant, subdomain }: { tenant: TenantInfo; subdomain
         .maybeSingle();
       setLealtadActivo(!!lealtadRow);
 
+      const { data: shopifyRow } = await supabase
+        .schema("nuxorb")
+        .from("company_addons")
+        .select("addon")
+        .eq("company_id", tenant.id)
+        .eq("addon", "shopify")
+        .eq("active", true)
+        .maybeSingle();
+      setShopifyActivo(!!shopifyRow);
+
       const { data: businessLineRow } = await supabase
         .schema("nuxorb")
         .from("ldn_company_business_lines")
@@ -227,11 +240,13 @@ function TenantPortalGate({ tenant, subdomain }: { tenant: TenantInfo; subdomain
   // permiso marcado en company_role_modules (ver Usuarios y roles).
   const canSeeAgentes = agentesActivo && (membership.isOwner || roleCapabilities.includes("agentes_ia"));
   const canSeeLealtad = lealtadActivo && (membership.isOwner || roleCapabilities.includes("lealtad"));
+  const canSeeShopify = shopifyActivo && (membership.isOwner || roleCapabilities.includes("shopify"));
   const canSeeRestaurantes = !!restaurantesTier && (membership.isOwner || roleCapabilities.includes("restaurantes"));
   const restaurantesLimits = canSeeRestaurantes && restaurantesTier ? limitsForTier(restaurantesTier) : null;
   const extraNav: ExtraNavItem[] = [
     ...(canSeeAgentes ? [{ to: "agentes", label: "Agentes IA" }] : []),
     ...(canSeeLealtad ? [{ to: "lealtad", label: "Lealtad" }] : []),
+    ...(canSeeShopify ? [{ to: "shopify", label: "Shopify" }] : []),
     ...(restaurantesLimits
       ? [
           {
@@ -247,6 +262,7 @@ function TenantPortalGate({ tenant, subdomain }: { tenant: TenantInfo; subdomain
           },
         ]
       : []),
+    ...(membership.isOwner && shopifyActivo ? [{ to: "conexiones", label: "Conexiones" }] : []),
     ...(membership.isOwner ? [{ to: "usuarios", label: "Usuarios y roles" }] : []),
   ];
 
@@ -274,6 +290,8 @@ function TenantPortalGate({ tenant, subdomain }: { tenant: TenantInfo; subdomain
               <Navigate to="agentes" replace />
             ) : canSeeLealtad ? (
               <Navigate to="lealtad" replace />
+            ) : canSeeShopify ? (
+              <Navigate to="shopify" replace />
             ) : canSeeRestaurantes ? (
               <Navigate to="restaurantes/comandas" replace />
             ) : membership.isOwner ? (
@@ -291,6 +309,10 @@ function TenantPortalGate({ tenant, subdomain }: { tenant: TenantInfo; subdomain
         {canSeeLealtad && (
           <Route path="lealtad" element={<Lealtad companyId={tenant.id} companyName={tenant.name} subdomain={subdomain} />} />
         )}
+        {canSeeShopify && <Route path="shopify" element={<Shopify companyId={tenant.id} />} />}
+        {membership.isOwner && shopifyActivo && (
+          <Route path="conexiones" element={<Conexiones companyId={tenant.id} shopifyActivo={shopifyActivo} />} />
+        )}
         {canSeeRestaurantes && restaurantesTier && (
           <Route path="restaurantes/*" element={<Restaurantes companyId={tenant.id} tier={restaurantesTier} />} />
         )}
@@ -305,6 +327,7 @@ function TenantPortalGate({ tenant, subdomain }: { tenant: TenantInfo; subdomain
                 moduleSeats={moduleSeats}
                 agentesActivo={agentesActivo}
                 lealtadActivo={lealtadActivo}
+                shopifyActivo={shopifyActivo}
                 restaurantesActivo={!!restaurantesTier}
                 maxUsers={tenant.max_users}
               />

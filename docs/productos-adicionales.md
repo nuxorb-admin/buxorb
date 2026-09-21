@@ -81,3 +81,13 @@ Surgió de una plática real con un cliente que importa mercancía y necesitaba 
 
 Vive como un tab dentro de Compras y Proveedores ("Prorrateo"), no como nav propia — es la primera vez que un producto adicional se muestra así (el resto, como Lealtad o Agentes IA, tienen su propia entrada de nav). Detalle técnico completo en `compras-proveedores-modulo-v1.md` sección 9.
 
+
+---
+
+## 8. Conexión Shopify
+[[ventas y cxc]] [[compras y proveedores]]
+**Requiere:** ningún módulo del core (vive en su propia nav "Shopify") **Cobro propuesto:** pendiente **Estado:** construido (v1, solo lectura)
+
+**Qué hace:** conecta la tienda Shopify del cliente para ver dentro de Nuxorb sus pedidos (últimos 60 días), productos e inventario por variante. Solo lectura: el cliente marca únicamente permisos `read_*` al crear su app de Shopify.
+
+Es el primer producto adicional que se configura desde el propio portal del cliente: el owner lo conecta en **"Conexiones"** (dominio + Client ID + Client secret de la app que crea en su Dev Dashboard). Nuxorb solo activa el addon desde el admin. Detalle técnico, alcance y pendiente v2 (escritura, webhooks, sync programada, historial > 60 días) en `conexion-shopify-v1.md`.

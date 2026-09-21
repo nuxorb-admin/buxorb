@@ -179,6 +179,8 @@ número — nunca se edita uno ya aplicado.
 | `company_roles` | Roles definidos por cada empresa (ej. "Administrador", "Cajero") | Equipo: todo. Miembros: lectura propia. Owner de esa empresa: escritura |
 | `company_role_modules` | Qué puede ver cada rol (many-to-many rol↔"módulo") — cubre los 4 módulos del core **y también** Agentes IA / Lealtad / Restaurantes (mismo check constraint ampliado, ver 0054), con la misma granularidad todo-o-nada por producto. Sin fila para una empresa/rol = no lo ve, salvo el owner que siempre ve todo | Igual que `company_roles` — al marcar/crear se valida contra `company_modules.seats` (ver `CompanyUsersRoles.tsx`, no es un límite de RLS; el gateo real de estos productos adicionales/líneas de negocio vive en `TenantPortal.tsx`, no en RLS) |
 | `company_users` | Usuarios de una empresa: `user_id` (auth.users) + `role_id` + `is_owner`. El primer usuario de cada empresa (el que se le entrega al cliente) es `is_owner = true` y ve todos los módulos activos sin importar su rol | Igual que `company_roles` |
+| `integration_connections` / `integration_credentials` | Conexiones de una empresa con herramientas externas (hoy solo Shopify, producto adicional `shopify`). Lo visible (nombre, estado, última sincronización) va aparte de las credenciales, que **no tienen ninguna policy** (solo las lee la service role de las Edge Functions, mismo patrón que `whatsapp_credentials`) | Equipo: todo. Miembros: lectura de la conexión. Owner: borrar (desconectar). Credenciales: nadie por PostgREST |
+| `shopify_orders` / `shopify_products` | Espejo de solo lectura de lo que trae `shopify-sync` (pedidos de los últimos 60 días; productos con variantes e inventario). Prefijos propios `integration_`/`shopify_`, no cuelgan de un módulo | Equipo: todo. Miembros: solo lectura de su empresa |
 | `treasury_accounts` / `treasury_categories` / `treasury_movements` / `treasury_statement_imports` | Esquema de producción de Tesorería, por `company_id` real (no `scope_id`) | Equipo: todo. Miembros de esa empresa: todo lo de su empresa |
 | `demo_crm_deals` / `demo_erp_inventory_movements` | Sin uso — quedaron de un prototipo anterior de "CRM/ERP como líneas de producto aparte", descartado (ver contexto arriba) | Sin código que las lea/escriba |
 
@@ -231,6 +233,20 @@ su `profiles.kind = 'client'`, y lo liga en `company_users`. Se llama desde
 `CompanyUsersRoles.tsx` (usado tanto en `/admin/companies/:id` como en la
 página "Usuarios y roles" del portal del tenant) vía
 `supabase.functions.invoke("create-company-user", ...)`.
+
+### Edge Functions: `shopify-connect` y `shopify-sync`
+
+`supabase/functions/shopify-connect/` valida las credenciales de una tienda
+Shopify (Client ID + Client secret, `grant_type=client_credentials`), prueba
+una query `{ shop { name } }` y guarda la conexión + credenciales; solo la
+llama el owner de la empresa (o el equipo) y exige el addon `shopify` activo.
+`supabase/functions/shopify-sync/` renueva el token si venció (dura 24 h),
+trae por GraphQL pedidos (últimos 60 días) y productos con variantes, y los
+upserta en `shopify_*`. Ambas devuelven los errores de negocio como `{ error }`
+con HTTP 200 para que el mensaje llegue a la pantalla. `shopify.ts` está
+duplicado en cada carpeta (las Edge Functions no comparten módulos) y tiene
+la constante `SHOPIFY_API_VERSION`, que hay que subir cuando Shopify retire la
+versión vigente. Detalle en `conexion-shopify-v1.md`.
 
 ### Edge Function: `update-company-user`
 
@@ -322,6 +338,8 @@ Las Edge Functions se despliegan aparte (no las corre `db push`):
 npx supabase functions deploy create-company-user
 npx supabase functions deploy update-company-user
 npx supabase functions deploy reset-company-user-password
+npx supabase functions deploy shopify-connect
+npx supabase functions deploy shopify-sync
 ```
 No hace falta configurar ningún secreto — Supabase le inyecta automáticamente
 `SUPABASE_URL` y `SUPABASE_SERVICE_ROLE_KEY` a toda Edge Function.
@@ -356,6 +374,8 @@ supabase/migrations/           # DDL + RLS, numerado, idempotente
 supabase/functions/create-company-user/     # Edge Function: crea usuarios de empresa (service role)
 supabase/functions/update-company-user/     # Edge Function: edita nombre/correo/rol de un usuario de empresa (service role)
 supabase/functions/reset-company-user-password/  # Edge Function: cambia password de un usuario de empresa (service role)
+supabase/functions/shopify-connect/  # Edge Function: conecta una tienda Shopify (service role)
+supabase/functions/shopify-sync/     # Edge Function: sincroniza pedidos/productos de Shopify (service role)
 supabase/functions/parse-bank-statement/    # Edge Function: IA para conciliación de Tesorería (Professional)
 docs/*-modulo-v1.md            # especificación funcional detallada de cada módulo (fuente de verdad al construir)
 docs/ARQUITECTURA.md           # visión a futuro (multi-tenant real, fuera de alcance hoy)

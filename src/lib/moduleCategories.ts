@@ -31,4 +31,5 @@ export const ADDON_CATEGORY: Record<CompanyAddonName, InternalCategory> = {
   agentes_ia: "otro",
   lealtad: "crm",
   prorrateo: "erp",
+  shopify: "otro",
 };

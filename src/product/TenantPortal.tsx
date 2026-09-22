@@ -12,6 +12,7 @@ import UsersRoles from "./pages/UsersRoles";
 import Agentes from "./pages/Agentes";
 import Lealtad from "./pages/Lealtad";
 import Restaurantes from "./pages/Restaurantes";
+import Citas from "./pages/Citas";
 import Shopify from "./pages/Shopify";
 import Conexiones from "./pages/Conexiones";
 import LoyaltyEnroll from "../public/LoyaltyEnroll";
@@ -101,6 +102,7 @@ function TenantPortalGate({ tenant, subdomain }: { tenant: TenantInfo; subdomain
   const [lealtadActivo, setLealtadActivo] = useState(false);
   const [shopifyActivo, setShopifyActivo] = useState(false);
   const [restaurantesTier, setRestaurantesTier] = useState<BusinessLineTier | null>(null);
+  const [citasTier, setCitasTier] = useState<BusinessLineTier | null>(null);
 
   // Independiente de la membresía: un usuario recién creado (create-company-user)
   // tiene needs_setup=true hasta que captura su correo real + su propia
@@ -192,6 +194,16 @@ function TenantPortalGate({ tenant, subdomain }: { tenant: TenantInfo; subdomain
         .maybeSingle();
       setRestaurantesTier((businessLineRow?.tier as BusinessLineTier) ?? null);
 
+      const { data: citasLineRow } = await supabase
+        .schema("nuxorb")
+        .from("ldn_company_business_lines")
+        .select("tier")
+        .eq("company_id", tenant.id)
+        .eq("business_line", "citas")
+        .eq("active", true)
+        .maybeSingle();
+      setCitasTier((citasLineRow?.tier as BusinessLineTier) ?? null);
+
       // Se calculan primero los módulos y hasta el final se marca membership +
       // modulesLoaded juntos, para que nunca haya un render intermedio con
       // membership ya resuelto pero navModules todavía vacío (eso mandaba a
@@ -243,6 +255,7 @@ function TenantPortalGate({ tenant, subdomain }: { tenant: TenantInfo; subdomain
   const canSeeShopify = shopifyActivo && (membership.isOwner || roleCapabilities.includes("shopify"));
   const canSeeRestaurantes = !!restaurantesTier && (membership.isOwner || roleCapabilities.includes("restaurantes"));
   const restaurantesLimits = canSeeRestaurantes && restaurantesTier ? limitsForTier(restaurantesTier) : null;
+  const canSeeCitas = !!citasTier && (membership.isOwner || roleCapabilities.includes("citas"));
   const extraNav: ExtraNavItem[] = [
     ...(canSeeAgentes ? [{ to: "agentes", label: "Agentes IA" }] : []),
     ...(canSeeLealtad ? [{ to: "lealtad", label: "Lealtad" }] : []),
@@ -258,6 +271,18 @@ function TenantPortalGate({ tenant, subdomain }: { tenant: TenantInfo; subdomain
               { to: "restaurantes/caja", label: "Caja" },
               { to: "restaurantes/menu", label: "Menú" },
               ...(restaurantesLimits.reservaciones ? [{ to: "restaurantes/reservaciones", label: "Reservaciones" }] : []),
+            ],
+          },
+        ]
+      : []),
+    ...(canSeeCitas
+      ? [
+          {
+            label: "Citas",
+            children: [
+              { to: "citas/agenda", label: "Agenda" },
+              { to: "citas/servicios", label: "Servicios" },
+              { to: "citas/horarios", label: "Horarios" },
             ],
           },
         ]
@@ -294,6 +319,8 @@ function TenantPortalGate({ tenant, subdomain }: { tenant: TenantInfo; subdomain
               <Navigate to="shopify" replace />
             ) : canSeeRestaurantes ? (
               <Navigate to="restaurantes/comandas" replace />
+            ) : canSeeCitas ? (
+              <Navigate to="citas/agenda" replace />
             ) : membership.isOwner ? (
               <Navigate to="usuarios" replace />
             ) : (
@@ -316,6 +343,7 @@ function TenantPortalGate({ tenant, subdomain }: { tenant: TenantInfo; subdomain
         {canSeeRestaurantes && restaurantesTier && (
           <Route path="restaurantes/*" element={<Restaurantes companyId={tenant.id} tier={restaurantesTier} />} />
         )}
+        {canSeeCitas && citasTier && <Route path="citas/*" element={<Citas companyId={tenant.id} tier={citasTier} />} />}
         {membership.isOwner && (
           <Route
             path="usuarios"
@@ -329,6 +357,7 @@ function TenantPortalGate({ tenant, subdomain }: { tenant: TenantInfo; subdomain
                 lealtadActivo={lealtadActivo}
                 shopifyActivo={shopifyActivo}
                 restaurantesActivo={!!restaurantesTier}
+                citasActivo={!!citasTier}
                 maxUsers={tenant.max_users}
               />
             }

@@ -122,13 +122,14 @@ Además de **Suscripción Nuxorb** (`nuxorb.company_modules`, 4 módulos fijos
 con nivel cada uno) y **Productos adicionales** (`nuxorb.company_addons`,
 feature suelta on/off), existe un tercer eje: **Líneas de negocio**
 (`nuxorb.ldn_company_business_lines`) — suites completas por giro de
-negocio (ej. "Restaurantes"), empaquetadas como bundle con **un solo nivel
-para toda la línea**, no por módulo individual dentro de ella. Se activa en
-`CompanyDetail.tsx` junto a los otros dos ejes. Convención de nombres de
-tabla: prefijo `ldn_` + prefijo de la línea específica
-(`ldn_restaurant_*` para Restaurantes), separado de los prefijos de módulo
-del core. Detalle de la primera línea en
-[`docs/lineas-de-negocio-restaurantes-v1.md`](lineas-de-negocio-restaurantes-v1.md).
+negocio (ej. "Restaurantes", "Citas"), empaquetadas como bundle con **un
+solo nivel para toda la línea**, no por módulo individual dentro de ella. Se
+activa en `CompanyDetail.tsx` junto a los otros dos ejes. Convención de
+nombres de tabla: prefijo `ldn_` + prefijo de la línea específica
+(`ldn_restaurant_*` para Restaurantes, `ldn_citas_*` para Citas), separado
+de los prefijos de módulo del core. Detalle de cada línea en
+[`docs/lineas-de-negocio-restaurantes-v1.md`](lineas-de-negocio-restaurantes-v1.md)
+y [`docs/lineas-de-negocio-citas-v1.md`](lineas-de-negocio-citas-v1.md).
 
 ### Categoría interna (CRM/ERP/Otro) — solo metadata de catálogo
 
@@ -176,8 +177,9 @@ número — nunca se edita uno ya aplicado.
 | `company_addons` | Los 8 productos adicionales del pricing, por empresa | Equipo: todo |
 | `ldn_company_business_lines` | Qué línea de negocio (ej. `restaurantes`) + qué nivel tiene activa cada empresa — tercer eje de producto, ver arriba | Equipo: todo. Miembros de esa empresa: lectura propia |
 | `ldn_restaurant_*` (8 tablas: `menu_items`, `tables`, `orders`, `order_items`, `cash_sessions`, `tickets`, `ticket_payments`, `reservations`) | Datos operativos de la línea "Restaurantes" | Equipo: todo. Miembros de esa empresa: todo lo de su empresa |
+| `ldn_citas_*` (4 tablas: `services`, `service_employees`, `schedules`, `appointments`) | Datos operativos de la línea "Citas" — el catálogo reusa `sales_products_services`, "quién atiende" es un `auth.users` vía `company_users`, no un `hr_employee`. `appointments` tiene un `exclude using gist` (requiere `btree_gist`) para que un empleado no quede doble-agendado, a nivel de base de datos | Equipo: todo. Miembros de esa empresa: todo lo de su empresa |
 | `company_roles` | Roles definidos por cada empresa (ej. "Administrador", "Cajero") | Equipo: todo. Miembros: lectura propia. Owner de esa empresa: escritura |
-| `company_role_modules` | Qué puede ver cada rol (many-to-many rol↔"módulo") — cubre los 4 módulos del core **y también** Agentes IA / Lealtad / Restaurantes (mismo check constraint ampliado, ver 0054), con la misma granularidad todo-o-nada por producto. Sin fila para una empresa/rol = no lo ve, salvo el owner que siempre ve todo | Igual que `company_roles` — al marcar/crear se valida contra `company_modules.seats` (ver `CompanyUsersRoles.tsx`, no es un límite de RLS; el gateo real de estos productos adicionales/líneas de negocio vive en `TenantPortal.tsx`, no en RLS) |
+| `company_role_modules` | Qué puede ver cada rol (many-to-many rol↔"módulo") — cubre los 4 módulos del core **y también** Agentes IA / Lealtad / Restaurantes / Shopify / Citas (mismo check constraint ampliado, ver 0054/0062), con la misma granularidad todo-o-nada por producto. Sin fila para una empresa/rol = no lo ve, salvo el owner que siempre ve todo | Igual que `company_roles` — al marcar/crear se valida contra `company_modules.seats` (ver `CompanyUsersRoles.tsx`, no es un límite de RLS; el gateo real de estos productos adicionales/líneas de negocio vive en `TenantPortal.tsx`, no en RLS) |
 | `company_users` | Usuarios de una empresa: `user_id` (auth.users) + `role_id` + `is_owner`. El primer usuario de cada empresa (el que se le entrega al cliente) es `is_owner = true` y ve todos los módulos activos sin importar su rol | Igual que `company_roles` |
 | `integration_connections` / `integration_credentials` | Conexiones de una empresa con herramientas externas (hoy solo Shopify, producto adicional `shopify`). Lo visible (nombre, estado, última sincronización) va aparte de las credenciales, que **no tienen ninguna policy** (solo las lee la service role de las Edge Functions, mismo patrón que `whatsapp_credentials`) | Equipo: todo. Miembros: lectura de la conexión. Owner: borrar (desconectar). Credenciales: nadie por PostgREST |
 | `shopify_orders` / `shopify_products` | Espejo de solo lectura de lo que trae `shopify-sync` (pedidos de los últimos 60 días; productos con variantes e inventario). Prefijos propios `integration_`/`shopify_`, no cuelgan de un módulo | Equipo: todo. Miembros: solo lectura de su empresa |

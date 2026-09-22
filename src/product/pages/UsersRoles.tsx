@@ -10,6 +10,7 @@ export default function UsersRoles({
   lealtadActivo,
   shopifyActivo,
   restaurantesActivo,
+  citasActivo,
   maxUsers,
 }: {
   companyId: string;
@@ -20,6 +21,7 @@ export default function UsersRoles({
   lealtadActivo: boolean;
   shopifyActivo: boolean;
   restaurantesActivo: boolean;
+  citasActivo: boolean;
   maxUsers: number;
 }) {
   const extraCapabilities: { key: CompanyRoleModuleKey; label: string }[] = [
@@ -27,6 +29,7 @@ export default function UsersRoles({
     ...(lealtadActivo ? [{ key: "lealtad" as CompanyRoleModuleKey, label: "Lealtad" }] : []),
     ...(shopifyActivo ? [{ key: "shopify" as CompanyRoleModuleKey, label: "Shopify" }] : []),
     ...(restaurantesActivo ? [{ key: "restaurantes" as CompanyRoleModuleKey, label: "Restaurantes" }] : []),
+    ...(citasActivo ? [{ key: "citas" as CompanyRoleModuleKey, label: "Citas" }] : []),
   ];
 
   return (

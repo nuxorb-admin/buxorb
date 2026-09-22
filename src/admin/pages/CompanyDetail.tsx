@@ -72,6 +72,7 @@ const ADDON_REQUIRES: Partial<Record<CompanyAddonName, CompanyModuleName>> = {
 
 const BUSINESS_LINE_LABELS: Record<BusinessLineKey, string> = {
   restaurantes: "Restaurantes",
+  citas: "Citas",
 };
 
 const BUSINESS_LINE_ORDER = Object.keys(BUSINESS_LINE_LABELS) as BusinessLineKey[];
@@ -81,6 +82,7 @@ const BUSINESS_LINE_ORDER = Object.keys(BUSINESS_LINE_LABELS) as BusinessLineKey
 // que no se puede activar sin ese módulo.
 const BUSINESS_LINE_REQUIRES: Record<BusinessLineKey, CompanyModuleName> = {
   restaurantes: "ventas_cxc",
+  citas: "ventas_cxc",
 };
 
 const CATEGORY_BADGE_COLOR: Record<InternalCategory, "teal" | "orange" | "muted"> = {
@@ -253,6 +255,9 @@ export default function CompanyDetail() {
     ...(addonSubs.some((a) => a.addon === "shopify" && a.active) ? [{ key: "shopify" as CompanyRoleModuleKey, label: ADDON_LABELS.shopify }] : []),
     ...(businessLines.some((b) => b.business_line === "restaurantes" && b.active)
       ? [{ key: "restaurantes" as CompanyRoleModuleKey, label: BUSINESS_LINE_LABELS.restaurantes }]
+      : []),
+    ...(businessLines.some((b) => b.business_line === "citas" && b.active)
+      ? [{ key: "citas" as CompanyRoleModuleKey, label: BUSINESS_LINE_LABELS.citas }]
       : []),
   ];
 

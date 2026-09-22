@@ -1012,7 +1012,7 @@ export interface LoyaltyMember {
 // CompanyModuleName/CompanyAddonName): suites completas por giro de
 // negocio, con un solo nivel por línea en vez de por módulo individual.
 // ---------------------------------------------------------
-export type BusinessLineKey = "restaurantes";
+export type BusinessLineKey = "restaurantes" | "citas";
 export type BusinessLineTier = CompanyModuleTier;
 
 export interface CompanyBusinessLine {
@@ -1147,6 +1147,53 @@ export interface RestaurantReservation {
   personas: number;
   fecha_hora: string;
   estado: RestaurantReservationStatus;
+  created_at: string;
+}
+
+// ---------------------------------------------------------
+// Línea de negocio "Citas" — agenda de servicios (salones, spas,
+// consultorios). El catálogo reusa sales_products_services (igual que el
+// menú de Restaurantes); "quién atiende" es un login de la empresa
+// (auth.users vía company_users), no un hr_employee.
+// ---------------------------------------------------------
+export type CitaEstado = "pendiente" | "confirmada" | "cancelada" | "completada" | "no_asistio";
+
+export interface LdnCitasService {
+  id: string;
+  company_id: string;
+  sales_product_id: string;
+  duracion_minutos: number;
+  activo: boolean;
+  created_at: string;
+}
+
+export interface LdnCitasServiceEmployee {
+  service_id: string;
+  empleado_id: string;
+}
+
+export interface LdnCitasSchedule {
+  id: string;
+  company_id: string;
+  empleado_id: string;
+  dia_semana: number;
+  hora_inicio: string;
+  hora_fin: string;
+  created_at: string;
+}
+
+export interface LdnCitasAppointment {
+  id: string;
+  company_id: string;
+  service_id: string;
+  empleado_id: string | null;
+  cliente_nombre: string;
+  telefono: string | null;
+  fecha_hora_inicio: string;
+  fecha_hora_fin: string;
+  estado: CitaEstado;
+  notas: string | null;
+  created_by: string | null;
   created_at: string;
 }
 
